@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-GB" xml:lang="en-GB"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Appendix C — Glossary – Longitudinal Data Analysis in R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../appendices/b-choosing.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-174fd6913be23cc9900c0b0ca550f0a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../book.css">
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../appendices/a-datasets.html">Appendices</a></li><li class="breadcrumb-item"><a href="../appendices/c-glossary.html"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">Glossary</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">Longitudinal Data Analysis in R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/neu-data/LDA/tree/main/book/en/" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+    <a href="../Longitudinal-Data-Analysis-in-R.pdf" title="Download PDF" class="quarto-navigation-tool px-1" aria-label="Download PDF"><i class="bi bi-file-pdf"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/00-refresher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Foundations refresher: R and regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Foundations of longitudinal data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-data-preparation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Preparing and exploring longitudinal data in R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-traditional-methods.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Linear mixed models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-linear-mixed-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Linear mixed-effects models</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-covariance-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Modelling covariance and choosing a model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-interpretation-prediction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Interpretation, contrasts and prediction</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Non-normal outcomes</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-gee.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Generalized estimating equations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-glmm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Generalized linear mixed models</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Extensions, missing data and practice</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-time-varying-nonlinear.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Time-varying predictors and nonlinear change</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Missing data and dropout</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-diagnostics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Diagnostics and troubleshooting</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-planning-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Advanced extensions</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-advanced.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Advanced extensions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/a-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">The course datasets</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/b-choosing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Choosing a method</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/c-glossary.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#a" id="toc-a" class="nav-link active" data-scroll-target="#a">A</a></li>
+  <li><a href="#b" id="toc-b" class="nav-link" data-scroll-target="#b">B</a></li>
+  <li><a href="#c" id="toc-c" class="nav-link" data-scroll-target="#c">C</a></li>
+  <li><a href="#d" id="toc-d" class="nav-link" data-scroll-target="#d">D</a></li>
+  <li><a href="#e" id="toc-e" class="nav-link" data-scroll-target="#e">E</a></li>
+  <li><a href="#f" id="toc-f" class="nav-link" data-scroll-target="#f">F</a></li>
+  <li><a href="#g" id="toc-g" class="nav-link" data-scroll-target="#g">G</a></li>
+  <li><a href="#h" id="toc-h" class="nav-link" data-scroll-target="#h">H</a></li>
+  <li><a href="#i" id="toc-i" class="nav-link" data-scroll-target="#i">I</a></li>
+  <li><a href="#j" id="toc-j" class="nav-link" data-scroll-target="#j">J</a></li>
+  <li><a href="#k" id="toc-k" class="nav-link" data-scroll-target="#k">K</a></li>
+  <li><a href="#l" id="toc-l" class="nav-link" data-scroll-target="#l">L</a></li>
+  <li><a href="#m" id="toc-m" class="nav-link" data-scroll-target="#m">M</a></li>
+  <li><a href="#n" id="toc-n" class="nav-link" data-scroll-target="#n">N</a></li>
+  <li><a href="#o" id="toc-o" class="nav-link" data-scroll-target="#o">O</a></li>
+  <li><a href="#p" id="toc-p" class="nav-link" data-scroll-target="#p">P</a></li>
+  <li><a href="#q" id="toc-q" class="nav-link" data-scroll-target="#q">Q</a></li>
+  <li><a href="#r" id="toc-r" class="nav-link" data-scroll-target="#r">R</a></li>
+  <li><a href="#s" id="toc-s" class="nav-link" data-scroll-target="#s">S</a></li>
+  <li><a href="#t" id="toc-t" class="nav-link" data-scroll-target="#t">T</a></li>
+  <li><a href="#u" id="toc-u" class="nav-link" data-scroll-target="#u">U</a></li>
+  <li><a href="#v" id="toc-v" class="nav-link" data-scroll-target="#v">V</a></li>
+  <li><a href="#w" id="toc-w" class="nav-link" data-scroll-target="#w">W</a></li>
+  <li><a href="#z" id="toc-z" class="nav-link" data-scroll-target="#z">Z</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../appendices/a-datasets.html">Appendices</a></li><li class="breadcrumb-item"><a href="../appendices/c-glossary.html"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">Glossary</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-glossary" class="quarto-section-identifier">Appendix C — Glossary</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Definitions follow the terminology and notation of the course style guide (<code>admin/style_guide.md</code>). The module numbers after each entry show where the term is introduced or developed; the course notes for those modules explain it with worked examples. Where two modules use a term in slightly different contexts, the definition here covers both.</p>
+<section id="a" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="a">A</h2>
+<dl>
+<dt><strong>Actual time</strong></dt>
+<dd>
+The time at which the measurement was actually taken, here months since randomisation calculated from dates (<code>month</code> in WALK). <em>(Module 2)</em>
+</dd>
+<dt><strong>Adaptive Gauss–Hermite quadrature (AGQ)</strong></dt>
+<dd>
+Numerical integration of the GLMM likelihood with several nodes centred and scaled at the peak of the integrand; in <code>glmer</code> available only for a single scalar random effect (<code>nAGQ</code> &gt; 1). <em>(Modules 8, 11)</em>
+</dd>
+<dt><strong>Akaike information criterion (AIC)</strong></dt>
+<dd>
+<span class="math inline">\(-2\log L + 2p\)</span>; smaller values indicate a better balance of fit and complexity. <em>(Module 5)</em>
+</dd>
+<dt><strong>allFit()</strong></dt>
+<dd>
+An lme4 function that refits a model with every available optimiser so that their log-likelihoods and estimates can be compared. <em>(Module 11)</em>
+</dd>
+<dt><strong>Analysis log</strong></dt>
+<dd>
+A dated record of each analytical decision, what prompted it, its status (pre-specified, data-driven but blind, post hoc) and its effect on the main estimate. <em>(Module 11)</em>
+</dd>
+<dt><strong>Analysis of covariance (ANCOVA, baseline-adjusted)</strong></dt>
+<dd>
+Regression of the follow-up outcome on group and the baseline value; in a randomised trial it is the most precise of the three single-follow-up analyses. <em>(Module 3)</em>
+</dd>
+<dt><strong>Anti-join</strong></dt>
+<dd>
+A join that returns the rows of one file that have no match in another; used to find unmatched identifiers. <em>(Module 2)</em>
+</dd>
+<dt><strong>Association parameter</strong></dt>
+<dd>
+In a joint model, the coefficient linking a feature of the biomarker trajectory (for example its current value) to the log hazard of the event. <em>(Module 13)</em>
+</dd>
+<dt><strong>Asymptotic exponential model</strong></dt>
+<dd>
+A curve that starts at a baseline level and approaches a plateau, <span class="math inline">\(\phi_0 - \phi_1(1 - e^{-t/\kappa})\)</span>, with plateau change <span class="math inline">\(\phi_1\)</span> and time constant <span class="math inline">\(\kappa\)</span>. <em>(Module 13)</em>
+</dd>
+<dt><strong>Attenuation</strong></dt>
+<dd>
+The shrinkage of population-average (marginal) logistic coefficients towards zero relative to subject-specific ones, approximately by the factor 1 / sqrt(1 + 0.346 tau^2). <em>(Module 8)</em>
+</dd>
+<dt><strong>Auxiliary variable</strong></dt>
+<dd>
+A variable used in the imputation model to predict missing values or missingness, but not part of the analysis model. <em>(Module 10)</em>
+</dd>
+</dl>
+</section>
+<section id="b" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="b">B</h2>
+<dl>
+<dt><strong>Balanced design</strong></dt>
+<dd>
+Every subject is scheduled to be measured at the same set of times. <em>(Module 1)</em>
+</dd>
+<dt><strong>Baseline-category logit model (multinomial logit)</strong></dt>
+<dd>
+A model for a nominal outcome in which the log-odds of each category versus a reference category has its own set of coefficients; with random effects it becomes a multinomial GLMM. <em>(Module 13)</em>
+</dd>
+<dt><strong>Basis dimension (k)</strong></dt>
+<dd>
+The maximum number of basis functions used to represent a smooth in <code>mgcv</code>; it sets an upper limit on the edf. <em>(Module 9)</em>
+</dd>
+<dt><strong>Basis function</strong></dt>
+<dd>
+A function of time (such as <span class="math inline">\(t\)</span>, <span class="math inline">\(t^2\)</span> or a spline column) used as a covariate so that a linear model can describe a curved trajectory. <em>(Module 9)</em>
+</dd>
+<dt><strong>Bayesian information criterion (BIC)</strong></dt>
+<dd>
+<span class="math inline">\(-2\log L + p\log n\)</span>; penalises extra parameters more strongly than AIC in large samples. <em>(Module 5)</em>
+</dd>
+<dt><strong>Best linear unbiased predictor (BLUP)</strong></dt>
+<dd>
+The predicted value of a subject’s random effects given the data and the fitted model. <em>(Module 4)</em>
+</dd>
+<dt><strong>Between-person (between-subject) effect</strong></dt>
+<dd>
+The expected difference in outcome between participants whose person means of the covariate differ by one unit. <em>(Module 9)</em>
+</dd>
+<dt><strong>Between-subject (between-person) variation</strong></dt>
+<dd>
+Variation of subjects’ own levels around the mean, estimated by the random-intercept variance <span class="math inline">\(\tau_0^2\)</span>. <em>(Module 1)</em>
+</dd>
+<dt><strong>Boundary problem</strong></dt>
+<dd>
+A hypothesis test in which the null value lies on the edge of the parameter space, such as a variance equal to zero; the usual chi-square reference distribution does not apply. <em>(Modules 4, 5)</em>
+</dd>
+<dt><strong>Burn-in</strong></dt>
+<dd>
+The initial MCMC iterations that are discarded because the chains may not yet have reached the posterior distribution. <em>(Module 13)</em>
+</dd>
+</dl>
+</section>
+<section id="c" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="c">C</h2>
+<dl>
+<dt><strong>Calibration</strong></dt>
+<dd>
+Agreement between predicted probabilities and observed proportions. <em>(Module 0)</em>
+</dd>
+<dt><strong>Categorical time</strong></dt>
+<dd>
+Time entered as a factor (one mean per visit and group), making no assumption about the shape of the trajectory. <em>(Module 4)</em>
+</dd>
+<dt><strong>Centring</strong></dt>
+<dd>
+Subtracting a reference value from a variable (for example time minus 12 months, or age minus 60) so that zero, and therefore the intercept and lower-order terms, refers to a meaningful value; the model’s fit is unchanged. <em>(Modules 0, 4, 6)</em>
+</dd>
+<dt><strong>Change-score analysis</strong></dt>
+<dd>
+Comparison of groups on the change from baseline to follow-up. <em>(Module 3)</em>
+</dd>
+<dt><strong>Cholesky-scaled marginal residuals</strong></dt>
+<dd>
+Marginal residuals multiplied by the inverse Cholesky factor of a participant’s fitted marginal covariance matrix; approximately independent standard normal values if the mean and covariance models are correct. <em>(Module 11)</em>
+</dd>
+<dt><strong>Cleaning log</strong></dt>
+<dd>
+A table recording each cleaning step and the number of records affected, so that the analysis file can be reproduced and audited. <em>(Module 2)</em>
+</dd>
+<dt><strong>Cluster</strong></dt>
+<dd>
+The independent unit in a GEE analysis; in longitudinal data, a participant and all of their observations. <em>(Module 7)</em>
+</dd>
+<dt><strong>Clustered data</strong></dt>
+<dd>
+Units grouped within higher-level units (for example patients within clinics) whose members resemble each other; a participant with repeated measurements is a cluster. <em>(Module 1)</em>
+</dd>
+<dt><strong>Cluster-randomised trial</strong></dt>
+<dd>
+A trial in which whole groups (clinics, schools) rather than individuals are allocated to arms, so that treatment is constant within each group. <em>(Module 13)</em>
+</dd>
+<dt><strong>Collider</strong></dt>
+<dd>
+A variable that is a common effect of two other variables on a path; conditioning on it creates an association between its causes. <em>(Module 13)</em>
+</dd>
+<dt><strong>Complete visit grid</strong></dt>
+<dd>
+Every randomised participant crossed with every scheduled visit, built from the design, used to reveal and classify missing visits. <em>(Module 2)</em>
+</dd>
+<dt><strong>Complete-case analysis</strong></dt>
+<dd>
+An analysis restricted to participants with complete data on the variables used; valid in general only under MCAR. <em>(Module 10)</em>
+</dd>
+<dt><strong>Composite strategy</strong></dt>
+<dd>
+Handling an intercurrent event by making its occurrence part of the outcome variable. <em>(Module 12)</em>
+</dd>
+<dt><strong>Compound symmetry (CS)</strong></dt>
+<dd>
+A structure with equal variances and the same correlation between every pair of occasions; implied by a random intercept alone. <em>(Modules 1, 3, 5)</em>
+</dd>
+<dt><strong>Conditional prediction (at b = 0)</strong></dt>
+<dd>
+The predicted probability or mean for a participant with random effects equal to zero, the median participant for a symmetric random-effects distribution. <em>(Module 8)</em>
+</dd>
+<dt><strong>Conditional residual</strong></dt>
+<dd>
+The observed outcome minus the participant’s own predicted value (fixed effects plus predicted random effects); it estimates the residual error and is shrunk towards zero. <em>(Module 11)</em>
+</dd>
+<dt><strong>Conditional variance of the BLUPs</strong></dt>
+<dd>
+The prediction-error variance of a participant’s predicted random effects, used for prediction intervals for participants already observed. <em>(Module 6)</em>
+</dd>
+<dt><strong>Conditional versus unconditional simulation (DHARMa)</strong></dt>
+<dd>
+Simulating new responses with the predicted random effects held fixed, or with new random effects drawn each time; participant-level checks need unconditional simulation. <em>(Modules 8, 11)</em>
+</dd>
+<dt><strong>Confidence interval</strong></dt>
+<dd>
+A range of values for a parameter that are compatible with the data, constructed so that 95% of such intervals contain the true value over repeated studies. <em>(Module 0)</em>
+</dd>
+<dt><strong>Confidence interval for a mean trajectory</strong></dt>
+<dd>
+An interval for the population mean outcome at each time, reflecting only the uncertainty in the estimated fixed effects. <em>(Module 6)</em>
+</dd>
+<dt><strong>Conflicting duplicate</strong></dt>
+<dd>
+Two or more different records for the same participant and visit. Resolved by querying the source or by a rule fixed in advance, and flagged. <em>(Module 2)</em>
+</dd>
+<dt><strong>Congenial imputation model</strong></dt>
+<dd>
+An imputation model that contains at least the variables and interactions of the analysis model. <em>(Module 10)</em>
+</dd>
+<dt><strong>Constrained longitudinal data analysis (cLDA)</strong></dt>
+<dd>
+A model for randomised trials in which all arms share a single mean at the pre-randomisation baseline. <em>(Module 6)</em>
+</dd>
+<dt><strong>Contextual effect</strong></dt>
+<dd>
+The between-person effect minus the within-person effect; the difference in outcome between two participants with the same current covariate value whose person means differ by one unit. <em>(Module 9)</em>
+</dd>
+<dt><strong>Continuous-time exponential correlation</strong></dt>
+<dd>
+Correlation <span class="math inline">\(\exp(-|t-s|/\phi)\)</span> that decays with the actual time between measurements; <span class="math inline">\(\phi\)</span> is the range. Equivalent to <code>corCAR1</code>. <em>(Module 5)</em>
+</dd>
+<dt><strong>Contrast</strong></dt>
+<dd>
+A linear combination of means with weights that sum to zero, such as a difference in mean change. <em>(Module 6)</em>
+</dd>
+<dt><strong>Convergence warning</strong></dt>
+<dd>
+A message that the optimiser’s stopping point may not be the maximum of the likelihood, usually because the gradient there exceeds a tolerance. It calls for checking the estimates, not for automatic acceptance or rejection. <em>(Modules 5, 11)</em>
+</dd>
+<dt><strong>Cook’s distance (for fixed effects)</strong></dt>
+<dd>
+The shift in all fixed effects when a participant is omitted, scaled by their estimated covariance matrix and divided by the number of fixed effects. <em>(Module 11)</em>
+</dd>
+<dt><strong>Covariance pattern model</strong></dt>
+<dd>
+A model with fixed effects and a structured residual covariance but no random effects, fitted for example with <code>nlme::gls()</code>. <em>(Module 5)</em>
+</dd>
+<dt><strong>Coverage</strong></dt>
+<dd>
+The proportion of simulated confidence intervals that contain the true value. <em>(Module 1)</em>
+</dd>
+<dt><strong>Cross-sectional data</strong></dt>
+<dd>
+Each unit is measured once. <em>(Module 1)</em>
+</dd>
+<dt><strong>Cumulative logit</strong></dt>
+<dd>
+The log-odds of being in category k or below, <span class="math inline">\(\operatorname{logit} P(Y \le k)\)</span>; the basis of proportional odds models. <em>(Module 13)</em>
+</dd>
+<dt><strong>Cumulative odds ratio</strong></dt>
+<dd>
+The odds ratio for being in a higher rather than a lower category, which under proportional odds is the same for every cut-point. <em>(Module 13)</em>
+</dd>
+<dt><strong>Cumulative-logit mixed model (cumulative link mixed model)</strong></dt>
+<dd>
+A model for a repeated ordinal outcome that combines cumulative logits with random effects, fitted in R with <code>ordinal::clmm()</code>. <em>(Module 13)</em>
+</dd>
+<dt><strong>Cut-point (threshold)</strong></dt>
+<dd>
+In a cumulative-logit model, one of the K − 1 ordered values <span class="math inline">\(\theta_k\)</span> that separate adjacent categories of the outcome on the latent scale; the cut-points replace a single intercept. <em>(Module 13)</em>
+</dd>
+</dl>
+</section>
+<section id="d" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="d">D</h2>
+<dl>
+<dt><strong>Data query</strong></dt>
+<dd>
+A documented request to a study site to confirm or correct a questionable value. <em>(Module 2)</em>
+</dd>
+<dt><strong>Delta adjustment</strong></dt>
+<dd>
+A sensitivity analysis that shifts imputed values (for example post-dropout values) by a fixed amount δ from their MAR prediction. <em>(Module 10)</em>
+</dd>
+<dt><strong>Design effect</strong></dt>
+<dd>
+The factor, about <span class="math inline">\(1+(m-1)\rho_I\)</span>, by which correlation inflates the variance of a between-subject comparison relative to independent observations. <em>(Module 1)</em>
+</dd>
+<dt><strong>DFBETA</strong></dt>
+<dd>
+The change in a specific estimate when one participant (or observation) is omitted. <em>(Module 11)</em>
+</dd>
+<dt><strong>Difference in mean change</strong></dt>
+<dd>
+The mean change from baseline in one group minus the mean change in another; the primary estimand of WALK. <em>(Modules 1, 4, 6)</em>
+</dd>
+<dt><strong>Direct effect</strong></dt>
+<dd>
+The part of a treatment effect that does not act through a specified mediator; estimating it requires assumptions beyond randomisation. <em>(Module 9)</em>
+</dd>
+<dt><strong>Directed acyclic graph (DAG)</strong></dt>
+<dd>
+A diagram of assumed causal relationships between variables, with arrows from causes to effects and no cycles. <em>(Module 13)</em>
+</dd>
+<dt><strong>Dropout</strong></dt>
+<dd>
+Permanent loss to follow-up after some visit, giving a monotone missing-data pattern. In WALK, a participant whose last attended visit is before month 12. <em>(Modules 1, 2, 10)</em>
+</dd>
+<dt><strong>Dunnett adjustment</strong></dt>
+<dd>
+A multiplicity adjustment for comparisons of several groups with a common control that uses the joint distribution of the test statistics. <em>(Module 6)</em>
+</dd>
+<dt><strong>Dynamic prediction</strong></dt>
+<dd>
+An individual’s predicted future biomarker values or event risk that is updated each time a new measurement becomes available. <em>(Module 13)</em>
+</dd>
+</dl>
+</section>
+<section id="e" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="e">E</h2>
+<dl>
+<dt><strong>Effective degrees of freedom (edf)</strong></dt>
+<dd>
+A measure of the complexity of a penalised smooth; an edf of 1 corresponds to a straight line. <em>(Module 9)</em>
+</dd>
+<dt><strong>Epsilon (sphericity)</strong></dt>
+<dd>
+A measure of departure from sphericity; 1 means sphericity holds. <em>(Module 3)</em>
+</dd>
+<dt><strong>Estimand</strong></dt>
+<dd>
+A precise description of the treatment effect to be estimated, defined in ICH E9(R1) by treatment conditions, population, variable, handling of intercurrent events and population-level summary. <em>(Modules 1, 12)</em>
+</dd>
+<dt><strong>Estimated marginal means (EMMs)</strong></dt>
+<dd>
+Model-based means for combinations of factors, obtained with <code>emmeans</code>, from which contrasts such as the difference in mean change are computed. <em>(Modules 4, 6)</em>
+</dd>
+<dt><strong>Estimating equation</strong></dt>
+<dd>
+An equation, such as the sum over clusters of D’ V^-1 (y - mu) = 0, whose solution defines the estimator; it need not come from a likelihood. <em>(Module 7)</em>
+</dd>
+<dt><strong>Exact duplicate</strong></dt>
+<dd>
+A record identical in every field to another record, after formatting has been standardised. One copy is removed. <em>(Module 2)</em>
+</dd>
+<dt><strong>Exchangeable working correlation</strong></dt>
+<dd>
+Equal correlation between every pair of observations within a cluster. <em>(Module 7)</em>
+</dd>
+</dl>
+</section>
+<section id="f" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="f">F</h2>
+<dl>
+<dt><strong>Factor / reference level</strong></dt>
+<dd>
+A categorical variable stored with ordered levels; the first level is the reference category against which regression coefficients compare the others. <em>(Module 0)</em>
+</dd>
+<dt><strong>Familywise error rate (FWER)</strong></dt>
+<dd>
+The probability of at least one false rejection among a family of hypothesis tests. <em>(Modules 3, 6)</em>
+</dd>
+<dt><strong>First-order autoregressive structure, AR(1)</strong></dt>
+<dd>
+A structure in which the correlation between measurements <span class="math inline">\(k\)</span> positions apart is <span class="math inline">\(\rho^k\)</span>. <em>(Module 5)</em>
+</dd>
+<dt><strong>Firth’s penalised likelihood</strong></dt>
+<dd>
+Maximisation of the log-likelihood plus half the log-determinant of the Fisher information; it gives finite estimates under separation and reduces small-sample bias. <em>(Module 11)</em>
+</dd>
+<dt><strong>Fixed effects</strong></dt>
+<dd>
+The regression coefficients <span class="math inline">\(\boldsymbol\beta\)</span> describing the mean outcome and how it depends on covariates; in a linear mixed model they have both a population-average and a subject-specific interpretation. <em>(Modules 1, 4)</em>
+</dd>
+<dt><strong>Fixed-sequence (hierarchical) testing</strong></dt>
+<dd>
+Testing prespecified hypotheses in order, each at the full α, stopping at the first non-rejection. <em>(Module 6)</em>
+</dd>
+<dt><strong>Follow-up schedule</strong></dt>
+<dd>
+The planned times of the measurement occasions and the length of follow-up. <em>(Module 12)</em>
+</dd>
+<dt><strong>Follow-up-only analysis</strong></dt>
+<dd>
+Comparison of groups on the outcome at a single follow-up time, ignoring baseline. <em>(Module 3)</em>
+</dd>
+<dt><strong>Fraction of missing information</strong></dt>
+<dd>
+The proportion of the total variance of an MI estimate that is due to missing data. <em>(Module 10)</em>
+</dd>
+<dt><strong>Front-loading</strong></dt>
+<dd>
+Placing more measurement occasions early in follow-up, where change is expected to be fastest. <em>(Module 12)</em>
+</dd>
+<dt><strong>Functional form (joint model)</strong></dt>
+<dd>
+The feature of the biomarker trajectory that enters the hazard, such as the current value, the current slope or the cumulative area. <em>(Module 13)</em>
+</dd>
+</dl>
+</section>
+<section id="g" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="g">G</h2>
+<dl>
+<dt><strong><span class="math inline">\(G\)</span> matrix</strong></dt>
+<dd>
+The covariance matrix of the random effects <span class="math inline">\(\mathbf{b}_i\)</span>. <em>(Module 4)</em>
+</dd>
+<dt><strong>Generalized additive mixed model (GAMM)</strong></dt>
+<dd>
+A mixed model in which some covariate effects are smooth functions estimated with a roughness penalty, for example <code>mgcv::gamm()</code>. <em>(Module 9)</em>
+</dd>
+<dt><strong>Generalized estimating equations (GEE)</strong></dt>
+<dd>
+A method that estimates the coefficients of a marginal mean model by solving estimating equations that weight each cluster’s residuals by a working covariance, with standard errors from the sandwich estimator. <em>(Module 7)</em>
+</dd>
+<dt><strong>Generalized linear mixed model (GLMM)</strong></dt>
+<dd>
+A generalized linear model whose linear predictor includes random effects, so that observations are independent given each participant’s random effects. <em>(Module 8)</em>
+</dd>
+<dt><strong>G-methods</strong></dt>
+<dd>
+Methods for time-varying treatments and confounders: inverse probability weighting of marginal structural models, the parametric g-formula and g-estimation of structural nested models. <em>(Module 13)</em>
+</dd>
+<dt><strong>Gradient (in model fitting)</strong></dt>
+<dd>
+The slope of the log-likelihood with respect to the parameters; zero at a maximum. <em>(Module 11)</em>
+</dd>
+<dt><strong>Greenhouse–Geisser correction</strong></dt>
+<dd>
+Multiplies the degrees of freedom of within-subject F-tests by an estimate of epsilon (between 1/(k - 1) and 1) to correct for non-sphericity; somewhat conservative. <em>(Module 3)</em>
+</dd>
+</dl>
+</section>
+<section id="h" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="h">H</h2>
+<dl>
+<dt><strong>here()</strong></dt>
+<dd>
+A function from the here package that builds file paths relative to the project root. <em>(Module 12)</em>
+</dd>
+<dt><strong>Heterogeneous variances</strong></dt>
+<dd>
+Residual variances that differ between occasions or groups; modelled with <code>varIdent()</code>. <em>(Module 5)</em>
+</dd>
+<dt><strong>Holm procedure</strong></dt>
+<dd>
+A stepwise Bonferroni-type adjustment that tests ordered p-values at α/m, α/(m − 1), and so on; uniformly more powerful than Bonferroni. <em>(Module 6)</em>
+</dd>
+<dt><strong>Homoscedasticity</strong></dt>
+<dd>
+Constant residual variance across fitted values. <em>(Module 0)</em>
+</dd>
+<dt><strong>Huynh–Feldt correction</strong></dt>
+<dd>
+A less conservative estimate of the same epsilon, never smaller than the Greenhouse–Geisser value and truncated at 1. <em>(Module 3)</em>
+</dd>
+<dt><strong>Hypothetical strategy</strong></dt>
+<dd>
+Handling an intercurrent event by targeting the outcome that would have been observed had the event not occurred. <em>(Module 12)</em>
+</dd>
+</dl>
+</section>
+<section id="i" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="i">I</h2>
+<dl>
+<dt><strong>Ignorability</strong></dt>
+<dd>
+The condition (MAR plus separability of parameters) under which likelihood-based inference can ignore the missingness mechanism. <em>(Module 10)</em>
+</dd>
+<dt><strong>Independence assumption</strong></dt>
+<dd>
+The assumption that residuals of different observations are unrelated; violated by repeated measurements on the same subject. <em>(Module 0)</em>
+</dd>
+<dt><strong>Individual trajectory panels</strong></dt>
+<dd>
+Small separate plots of the outcome over time for selected participants. <em>(Module 2)</em>
+</dd>
+<dt><strong>Influential participant</strong></dt>
+<dd>
+A participant whose removal changes a reported estimate materially, judged relative to the estimate’s standard error. <em>(Module 11)</em>
+</dd>
+<dt><strong>Informative visit timing (outcome-dependent visit process)</strong></dt>
+<dd>
+A situation in which the timing or frequency of measurements depends on the outcome, for example more frequent visits after a poor result. <em>(Modules 1, 10)</em>
+</dd>
+<dt><strong>Interaction</strong></dt>
+<dd>
+A term that allows the effect of one predictor to depend on the value of another. In a trial with repeated measurements, the arm-by-time interaction carries the treatment effect on change. <em>(Modules 0, 3)</em>
+</dd>
+<dt><strong>Interaction contrast</strong></dt>
+<dd>
+A contrast that crosses two sets of contrasts, for example “each visit minus baseline” with “each arm minus control”, giving differences in change at every visit. <em>(Module 6)</em>
+</dd>
+<dt><strong>Intercept</strong></dt>
+<dd>
+The mean outcome when all predictors equal zero. <em>(Module 0)</em>
+</dd>
+<dt><strong>Intercurrent event</strong></dt>
+<dd>
+An event after randomisation (such as stopping treatment or taking rescue medication) that affects the existence or interpretation of the outcome; distinct from missing data. <em>(Module 12)</em>
+</dd>
+<dt><strong>Intermittent missingness</strong></dt>
+<dd>
+A missed measurement occasion after which the participant returns to the study. <em>(Modules 1, 2, 10)</em>
+</dd>
+<dt><strong>Intraclass correlation (ICC)</strong></dt>
+<dd>
+In a random-intercept model, <span class="math inline">\(\tau_0^2/(\tau_0^2 + \sigma^2)\)</span>: the share of variance between subjects and the implied correlation between any two measurements of a subject. A random-slope model has no single ICC. <em>(Modules 1, 4)</em>
+</dd>
+<dt><strong>Inverse probability of treatment weighting (IPTW)</strong></dt>
+<dd>
+Weighting each participant by the inverse of the probability of the treatment (history) they received given their covariates, to create a pseudo-population without measured confounding. <em>(Module 13)</em>
+</dd>
+<dt><strong>Inverse-probability weighting (IPW)</strong></dt>
+<dd>
+Weighting each observed outcome by the inverse of its estimated probability of being observed (for dropout, of remaining in the study up to that visit), so that observed data represent the full population under MAR. <em>(Module 7)</em>
+</dd>
+</dl>
+</section>
+<section id="j" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="j">J</h2>
+<dl>
+<dt><strong>Joint model (longitudinal and time-to-event)</strong></dt>
+<dd>
+A model that links a mixed model for a repeated biomarker and a survival model for an event through shared random effects, so that the hazard depends on the biomarker’s true trajectory. <em>(Module 13)</em>
+</dd>
+</dl>
+</section>
+<section id="k" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="k">K</h2>
+<dl>
+<dt><strong>Key (subject–visit key)</strong></dt>
+<dd>
+The combination of variables, here participant identifier and visit, that must identify exactly one row in a long dataset. <em>(Module 2)</em>
+</dd>
+<dt><strong>Knot</strong></dt>
+<dd>
+A time point at which a piecewise or spline function is allowed to change its slope or curvature. <em>(Module 9)</em>
+</dd>
+</dl>
+</section>
+<section id="l" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="l">L</h2>
+<dl>
+<dt><strong>Laplace approximation</strong></dt>
+<dd>
+An approximation to the GLMM likelihood that replaces the integrand over the random effects by a normal curve at its peak; equivalent to adaptive quadrature with one point. <em>(Module 8)</em>
+</dd>
+<dt><strong>Last observation carried forward (LOCF)</strong></dt>
+<dd>
+Single imputation that replaces missing values after dropout with the last observed value; generally biased and overconfident. <em>(Module 10)</em>
+</dd>
+<dt><strong>Latent-scale ICC</strong></dt>
+<dd>
+For a logistic random-intercept model, tau^2 / (tau^2 + pi^2/3), the share of variation in the latent propensity that lies between participants. <em>(Module 8)</em>
+</dd>
+<dt><strong>Leave-one-participant-out (LOO) analysis</strong></dt>
+<dd>
+Refitting a model once for each participant with that participant’s data omitted, to measure influence. <em>(Module 11)</em>
+</dd>
+<dt><strong>Linear mixed-effects model (LMM)</strong></dt>
+<dd>
+A regression model for a continuous outcome that combines fixed effects for the mean with random effects for subject-specific departures from it; also called a multilevel or hierarchical linear model. <em>(Module 4)</em>
+</dd>
+<dt><strong>Linear regression</strong></dt>
+<dd>
+A model for the mean of a continuous outcome as a linear function of predictors, with independent, constant-variance residuals. <em>(Module 0)</em>
+</dd>
+<dt><strong>Listwise deletion</strong></dt>
+<dd>
+Removing every subject with any missing value from the analysis; also called complete-case analysis. <em>(Module 3)</em>
+</dd>
+<dt><strong>Logistic regression</strong></dt>
+<dd>
+A model for a binary outcome in which the log-odds of the outcome are linear in the predictors. <em>(Module 0)</em>
+</dd>
+<dt><strong>Long format</strong></dt>
+<dd>
+A data layout with one row per observation (participant and measurement occasion), with columns for the identifier, time and outcome. Required by mixed models, GEE and most longitudinal plots. <em>(Modules 1, 2)</em>
+</dd>
+<dt><strong>Longitudinal data</strong></dt>
+<dd>
+Repeated measurements on the same subjects over time, where change over time is of interest. <em>(Module 1)</em>
+</dd>
+<dt><strong>Lord’s paradox</strong></dt>
+<dd>
+In non-randomised comparisons, change-score analysis and ANCOVA can lead to different conclusions from the same data because they answer different questions. <em>(Module 3)</em>
+</dd>
+</dl>
+</section>
+<section id="m" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="m">M</h2>
+<dl>
+<dt><strong>Main effect (in a model with an interaction)</strong></dt>
+<dd>
+The effect of one variable when the other variables in the interaction equal zero or their reference level; for example, the arm difference at month 0. <em>(Modules 0, 3)</em>
+</dd>
+<dt><strong>Mancl-DeRouen correction</strong></dt>
+<dd>
+A small-sample bias correction of the sandwich that inflates each cluster’s residuals by the inverse of one minus its leverage; for a linear model it equals the leave-one-cluster-out jackknife variance. <em>(Module 7)</em>
+</dd>
+<dt><strong>Many-to-one join</strong></dt>
+<dd>
+A join in which many rows of one file (visits) match exactly one row of another (participants). In <code>dplyr</code> it is checked with <code>relationship = "many-to-one"</code>. <em>(Module 2)</em>
+</dd>
+<dt><strong>Marginal covariance (<span class="math inline">\(V_i\)</span>)</strong></dt>
+<dd>
+The covariance matrix of a participant’s repeated measurements after averaging over the random effects, <span class="math inline">\(V_i = Z_iGZ_i^\top + R_i\)</span>. <em>(Modules 4, 5)</em>
+</dd>
+<dt><strong>Marginal model</strong></dt>
+<dd>
+A model for the population mean of the outcome given covariates, E(Y | x), without conditioning on participant-specific random effects. <em>(Module 7)</em>
+</dd>
+<dt><strong>Marginal residual</strong></dt>
+<dd>
+The observed outcome minus the population-average prediction from the fixed effects alone; it contains both the participant’s random effects and the residual error, so marginal residuals of one participant are correlated. <em>(Module 11)</em>
+</dd>
+<dt><strong>Marginal structural model (MSM)</strong></dt>
+<dd>
+A model for the mean potential outcome as a function of treatment history, estimated in a population reweighted to remove measured confounding. <em>(Module 13)</em>
+</dd>
+<dt><strong>Markov chain Monte Carlo (MCMC)</strong></dt>
+<dd>
+A simulation method that draws samples from a posterior distribution; results depend on the chains having converged. <em>(Module 13)</em>
+</dd>
+<dt><strong>Mauchly’s test</strong></dt>
+<dd>
+A test of sphericity; it has low power in small samples and rejects trivially in large ones. <em>(Module 3)</em>
+</dd>
+<dt><strong>Maximum likelihood (ML)</strong></dt>
+<dd>
+Estimation that maximises the full likelihood; variance components are biased downward in small samples; needed to compare models with different fixed effects. <em>(Module 4)</em>
+</dd>
+<dt><strong>Measurement occasion</strong></dt>
+<dd>
+The time at which a measurement was actually taken, <span class="math inline">\(t_{ij}\)</span>. <em>(Module 1)</em>
+</dd>
+<dt><strong>Mediator</strong></dt>
+<dd>
+A variable on the causal pathway from treatment to outcome; adjusting for it removes the part of the treatment effect that acts through it. <em>(Module 9)</em>
+</dd>
+<dt><strong>Missing at random (MAR)</strong></dt>
+<dd>
+Given the observed data, the probability of missingness does not depend on the unobserved values. <em>(Module 10)</em>
+</dd>
+<dt><strong>Missing completely at random (MCAR)</strong></dt>
+<dd>
+The probability of missingness does not depend on any outcome values, observed or unobserved (it may depend on covariates in the model). <em>(Module 10)</em>
+</dd>
+<dt><strong>Missing not at random (MNAR)</strong></dt>
+<dd>
+The probability of missingness depends on unobserved values even after conditioning on the observed data. <em>(Module 10)</em>
+</dd>
+<dt><strong>Missingness map</strong></dt>
+<dd>
+A tile plot of participants (rows) by scheduled visits (columns) showing which measurements are observed. <em>(Module 2)</em>
+</dd>
+<dt><strong>Missingness pattern</strong></dt>
+<dd>
+The set of observed and missing occasions for a participant, for example <code>OOO...</code> for dropout after the third visit. <em>(Module 10)</em>
+</dd>
+<dt><strong>Mixed model for repeated measures (MMRM)</strong></dt>
+<dd>
+A model with a saturated visit-by-group mean and an unstructured residual covariance, common in clinical trials with a fixed visit schedule. <em>(Module 5)</em>
+</dd>
+<dt><strong>Mixture chi-square distribution</strong></dt>
+<dd>
+The null distribution of a likelihood-ratio statistic for a boundary hypothesis, for example <span class="math inline">\(\tfrac12\chi^2_0 + \tfrac12\chi^2_1\)</span> for a single variance. <em>(Module 5)</em>
+</dd>
+<dt><strong>Model-based (naive) standard error</strong></dt>
+<dd>
+A standard error that assumes the working covariance is correct; in geepack stored in <code>fit$geese$vbeta.naiv</code>. <em>(Module 7)</em>
+</dd>
+<dt><strong>Monte Carlo standard error (MCSE)</strong></dt>
+<dd>
+The standard error of a quantity estimated by simulation that is due to the finite number of simulated datasets; for a power estimate p from n_sims trials it is sqrt(p(1 - p) / n_sims). <em>(Modules 1, 12)</em>
+</dd>
+<dt><strong>Multilevel (two-level) imputation</strong></dt>
+<dd>
+Imputation of long-format data with a mixed model that represents the clustering of occasions within participants, for example <code>2l.norm</code> in <code>mice</code>. <em>(Module 10)</em>
+</dd>
+<dt><strong>Multiple imputation (MI)</strong></dt>
+<dd>
+Replacing each missing value with several draws from its predictive distribution, analysing each completed data set and combining the results with Rubin’s rules. <em>(Module 10)</em>
+</dd>
+<dt><strong>Multiplicity</strong></dt>
+<dd>
+The increase in the chance of at least one false-positive result when many tests are performed. <em>(Module 3)</em>
+</dd>
+</dl>
+</section>
+<section id="n" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="n">N</h2>
+<dl>
+<dt><strong>Natural cubic spline</strong></dt>
+<dd>
+A smooth curve made of cubic pieces joined at knots and constrained to be linear beyond the outer knots; <code>splines::ns()</code> in R. <em>(Module 9)</em>
+</dd>
+<dt><strong>Negative binomial (nbinom2)</strong></dt>
+<dd>
+A count distribution with variance mu + mu^2/theta, where theta is the size (dispersion) parameter; reduces to Poisson as theta grows. <em>(Module 8)</em>
+</dd>
+<dt><strong>Nominal effect (partial proportional odds)</strong></dt>
+<dd>
+A covariate allowed to have a different coefficient at each cut-point; used to relax or test the proportional odds assumption. <em>(Module 13)</em>
+</dd>
+<dt><strong>Nominal (multinomial) outcome</strong></dt>
+<dd>
+A categorical outcome whose categories have no natural order. <em>(Module 13)</em>
+</dd>
+<dt><strong>Nonlinear mixed-effects model</strong></dt>
+<dd>
+A mixed model in which the mean function is nonlinear in at least one parameter (for example a time constant inside an exponential), so it cannot be written as <span class="math inline">\(X\boldsymbol\beta + Z\mathbf{b}\)</span>; fitted in R with <code>nlme::nlme()</code>. <em>(Module 13)</em>
+</dd>
+<dt><strong>Normal Q–Q plot</strong></dt>
+<dd>
+A plot of ordered standardised residuals against normal quantiles used to check normality of the residuals. <em>(Module 0)</em>
+</dd>
+<dt><strong>Normalized residuals</strong></dt>
+<dd>
+Residuals transformed by the inverse of the estimated covariance, which should be independent with unit variance if the covariance model is correct. <em>(Module 5)</em>
+</dd>
+<dt><strong>Nugget</strong></dt>
+<dd>
+The proportion of the residual variance that is uncorrelated, usually interpreted as measurement error. <em>(Module 5)</em>
+</dd>
+</dl>
+</section>
+<section id="o" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="o">O</h2>
+<dl>
+<dt><strong>Observation</strong></dt>
+<dd>
+One measurement of the outcome; one row of a long-format dataset, written <span class="math inline">\(y_{ij}\)</span>. <em>(Module 1)</em>
+</dd>
+<dt><strong>Observed mean</strong></dt>
+<dd>
+The mean outcome at a visit among participants measured at that visit; it estimates E(Y | observed), which differs from the mean of all randomised participants when missingness depends on the outcome history. <em>(Module 2)</em>
+</dd>
+<dt><strong>Odds / odds ratio</strong></dt>
+<dd>
+Odds are <span class="math inline">\(p/(1-p)\)</span>; an odds ratio is the ratio of the odds in two groups, the exponentiated logistic coefficient. <em>(Module 0)</em>
+</dd>
+<dt><strong>Offset</strong></dt>
+<dd>
+A term in the linear predictor with coefficient fixed at 1, such as log(exposure), so that the model describes a rate. <em>(Module 8)</em>
+</dd>
+<dt><strong>Ordinal outcome</strong></dt>
+<dd>
+A categorical outcome whose categories have a natural order (for example none, mild, moderate, severe) but whose spacing is not defined. <em>(Module 13)</em>
+</dd>
+<dt><strong>Overdispersion</strong></dt>
+<dd>
+More variation in a count or binomial outcome than the assumed distribution allows; it makes model-based standard errors too small. <em>(Modules 8, 11)</em>
+</dd>
+</dl>
+</section>
+<section id="p" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="p">P</h2>
+<dl>
+<dt><strong>Paired t-test</strong></dt>
+<dd>
+A test of whether the mean within-person difference between two occasions is zero; it answers a within-group question. <em>(Module 3)</em>
+</dd>
+<dt><strong>Parametric bootstrap</strong></dt>
+<dd>
+Simulating new datasets from a fitted model, refitting, and using the distribution of the recomputed quantity to form intervals (<code>lme4::bootMer</code>). <em>(Module 8)</em>
+</dd>
+<dt><strong>Parsimony</strong></dt>
+<dd>
+Preferring the simplest model that describes the data adequately for the question at hand. <em>(Module 5)</em>
+</dd>
+<dt><strong>Participant-flow table</strong></dt>
+<dd>
+A table of the number (and percentage of those randomised) of participants seen at each scheduled visit, by group. <em>(Module 2)</em>
+</dd>
+<dt><strong>Pattern plot (dropout-pattern plot)</strong></dt>
+<dd>
+Mean outcome profiles plotted separately for groups of participants defined by the time of their last attended visit. <em>(Module 2)</em>
+</dd>
+<dt><strong>Pattern-mixture model</strong></dt>
+<dd>
+A model that specifies the outcome distribution separately for each missingness pattern; delta adjustment is a simple example. <em>(Module 10)</em>
+</dd>
+<dt><strong>Person mean</strong></dt>
+<dd>
+The mean of a time-varying covariate over a participant’s observed occasions; it varies only between participants. <em>(Module 9)</em>
+</dd>
+<dt><strong>Person-mean centring</strong></dt>
+<dd>
+Subtracting each participant’s person mean from their values of a time-varying covariate, so that the deviation varies only within participants. <em>(Module 9)</em>
+</dd>
+<dt><strong>Piecewise linear model (linear spline)</strong></dt>
+<dd>
+A trajectory made of straight-line segments joined at knots, for example <span class="math inline">\(t\)</span> and <span class="math inline">\((t - 3)_+\)</span>. <em>(Module 9)</em>
+</dd>
+<dt><strong>Pipe (<code>|&gt;</code>)</strong></dt>
+<dd>
+Passes the result on its left as the first argument of the function on its right. <em>(Module 0)</em>
+</dd>
+<dt><strong>Planning values</strong></dt>
+<dd>
+The assumed effect size and variance parameters used in a sample-size or power calculation. <em>(Module 12)</em>
+</dd>
+<dt><strong>Plausibility (range) check</strong></dt>
+<dd>
+A check that values lie within limits fixed in advance; values outside are treated as errors and queried. <em>(Module 2)</em>
+</dd>
+<dt><strong>Population-average (marginal) effect</strong></dt>
+<dd>
+An effect that compares mean outcomes (proportions, mean counts) between populations defined by covariate values. <em>(Modules 1, 7)</em>
+</dd>
+<dt><strong>Population-average (marginal) interpretation</strong></dt>
+<dd>
+The meaning of the model averaged over subjects; coincides with the subject-specific one for the fixed effects of a linear mixed model. <em>(Module 4)</em>
+</dd>
+<dt><strong>Population-average (marginal) prediction</strong></dt>
+<dd>
+A prediction with the random effects set to zero, <span class="math inline">\(\mathbf{x}^\top\hat{\boldsymbol\beta}\)</span>; the expected outcome for the population with given covariates. <em>(Modules 6, 8)</em>
+</dd>
+<dt><strong>Positivity</strong></dt>
+<dd>
+The requirement that every participant has a non-zero probability of each relevant event (being observed, for weighted GEE; receiving each treatment level given their history, for marginal structural models), so that inverse probability weights stay bounded. <em>(Modules 7, 13)</em>
+</dd>
+<dt><strong>Potential outcome</strong></dt>
+<dd>
+The outcome a participant would have had under a specified treatment or treatment history, whether or not that treatment was received. <em>(Module 13)</em>
+</dd>
+<dt><strong>Power</strong></dt>
+<dd>
+The probability that the planned analysis rejects the null hypothesis when a specified alternative is true. <em>(Module 12)</em>
+</dd>
+<dt><strong>Predicted probability</strong></dt>
+<dd>
+The probability of the outcome implied by a logistic model for a given covariate profile, obtained with the inverse logit. <em>(Module 0)</em>
+</dd>
+<dt><strong>Prediction interval</strong></dt>
+<dd>
+An interval expected to contain a single new observation with stated probability; it includes between-participant and residual variation as well as uncertainty about the mean. <em>(Modules 0, 6)</em>
+</dd>
+<dt><strong>Proportional odds assumption</strong></dt>
+<dd>
+The assumption that each covariate has the same odds ratio at every cut-point, so one coefficient describes “higher versus lower” categories whatever the cut-off. <em>(Module 13)</em>
+</dd>
+<dt><strong>p-value</strong></dt>
+<dd>
+The probability of an estimate at least as extreme as the one observed if the true parameter were zero (or another null value). <em>(Module 0)</em>
+</dd>
+</dl>
+</section>
+<section id="q" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="q">Q</h2>
+<dl>
+<dt><strong>QIC / CIC</strong></dt>
+<dd>
+Quasi-likelihood information criterion for GEE and its penalty term; QIC is a weak guide for choosing the working correlation. <em>(Module 7)</em>
+</dd>
+</dl>
+</section>
+<section id="r" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="r">R</h2>
+<dl>
+<dt><strong>R² (coefficient of determination)</strong></dt>
+<dd>
+The proportion of the outcome’s variance explained by the model. <em>(Module 0)</em>
+</dd>
+<dt><strong>R project</strong></dt>
+<dd>
+A folder with an <code>.Rproj</code> file; opening it sets the working directory to the project root so that relative paths work. <em>(Modules 0, 12)</em>
+</dd>
+<dt><strong>Random effects</strong></dt>
+<dd>
+Subject-specific deviations from the mean trajectory (for example <span class="math inline">\(b_{0i}\)</span>, <span class="math inline">\(b_{1i}\)</span>), treated as draws from a distribution whose variance is estimated. <em>(Module 4)</em>
+</dd>
+<dt><strong>Random intercept</strong></dt>
+<dd>
+A subject-specific deviation <span class="math inline">\(b_{0i}\)</span> of the subject’s level from the mean, shared by all of that subject’s observations. <em>(Modules 1, 4)</em>
+</dd>
+<dt><strong>Random slope</strong></dt>
+<dd>
+A random effect that lets a subject’s rate of change over time differ from the mean rate of change. <em>(Module 4)</em>
+</dd>
+<dt><strong>Range (<span class="math inline">\(\phi\)</span>)</strong></dt>
+<dd>
+The time scale of an exponential correlation; the correlated part falls by a factor <span class="math inline">\(e\)</span> over one range. <em>(Module 5)</em>
+</dd>
+<dt><strong>Rate ratio</strong></dt>
+<dd>
+The ratio of event rates between two conditions; for a log link with a random intercept it is the same for individuals and for the population. <em>(Module 8)</em>
+</dd>
+<dt><strong>Reference grid</strong></dt>
+<dd>
+The set of covariate combinations (for example every arm at every visit) at which <code>emmeans</code> computes model predictions. <em>(Module 6)</em>
+</dd>
+<dt><strong>Regression coefficient</strong></dt>
+<dd>
+The difference in the mean outcome for a one-unit difference in a predictor, holding the other predictors fixed. <em>(Module 0)</em>
+</dd>
+<dt><strong>Regression dilution</strong></dt>
+<dd>
+Attenuation of an estimated association towards zero because the covariate is measured with error or is out of date. <em>(Module 13)</em>
+</dd>
+<dt><strong>Regression to the mean</strong></dt>
+<dd>
+The tendency of subjects selected for extreme values to have values nearer the mean when measured again, because part of the extreme value was chance. <em>(Module 3)</em>
+</dd>
+<dt><strong>Relative path (<code>here()</code>)</strong></dt>
+<dd>
+A file path built from the project root, so that code runs unchanged on any computer. <em>(Module 0)</em>
+</dd>
+<dt><strong>renv</strong></dt>
+<dd>
+An R package that gives a project its own package library and records package versions in a lockfile (<code>renv.lock</code>); <code>renv::init()</code>, <code>renv::snapshot()</code> and <code>renv::restore()</code> start, update and recreate the environment. <em>(Module 12)</em>
+</dd>
+<dt><strong>Repeated measures</strong></dt>
+<dd>
+More than one measurement of the outcome on the same unit, whether or not time order is of interest. <em>(Module 1)</em>
+</dd>
+<dt><strong>Repeated-measures ANOVA (RM-ANOVA)</strong></dt>
+<dd>
+Analysis of variance for outcomes measured at the same fixed occasions on every subject, with between-subject and within-subject error strata; it requires complete data. <em>(Module 3)</em>
+</dd>
+<dt><strong>Reporting checklist</strong></dt>
+<dd>
+A list of items (design, estimand, model, assumptions, missing data, results, reproducibility) that a complete report of a longitudinal analysis should contain. <em>(Module 12)</em>
+</dd>
+<dt><strong>Reproducibility</strong></dt>
+<dd>
+The property that another analyst, given the data and code, obtains the same results. <em>(Module 12)</em>
+</dd>
+<dt><strong>Reshaping (pivoting)</strong></dt>
+<dd>
+Converting between long and wide formats, in R with <code>tidyr::pivot_longer()</code> and <code>tidyr::pivot_wider()</code>. <em>(Module 2)</em>
+</dd>
+<dt><strong>Residual</strong></dt>
+<dd>
+The difference between an observed outcome and its fitted value; its standard deviation is the residual standard error. <em>(Module 0)</em>
+</dd>
+<dt><strong>Residual correlation structure</strong></dt>
+<dd>
+A rule that specifies the correlation between the residual errors of a participant’s measurements, such as compound symmetry, AR(1), exponential or unstructured. <em>(Module 5)</em>
+</dd>
+<dt><strong>Residual error</strong></dt>
+<dd>
+The deviation of a single measurement from the subject’s own trajectory; its variance is <span class="math inline">\(\sigma^2\)</span>. <em>(Module 4)</em>
+</dd>
+<dt><strong>Residual-versus-fitted plot</strong></dt>
+<dd>
+A plot of residuals against fitted values used to check the mean structure and constant variance. <em>(Module 0)</em>
+</dd>
+<dt><strong>Restricted maximum likelihood (REML)</strong></dt>
+<dd>
+Estimation of variance components from the likelihood of residual contrasts, which accounts for the degrees of freedom used by the fixed effects; the default for reporting. <em>(Module 4)</em>
+</dd>
+<dt><strong>Reverse causation</strong></dt>
+<dd>
+An association that arises because the outcome influences the covariate rather than the other way round. <em>(Module 9)</em>
+</dd>
+<dt><strong>Rhat (Gelman-Rubin statistic)</strong></dt>
+<dd>
+A convergence diagnostic that compares variation within and between MCMC chains; values close to 1 (below about 1.05) indicate agreement. <em>(Module 13)</em>
+</dd>
+<dt><strong>Robust (sandwich) standard error</strong></dt>
+<dd>
+A standard error from B^-1 M B^-1, where the “meat” M uses the empirical outer products of cluster residuals; valid whatever the true correlation when there are many clusters. <em>(Module 7)</em>
+</dd>
+<dt><strong>Rubin’s rules</strong></dt>
+<dd>
+The formulas that combine multiple-imputation results: the average estimate, and a total variance equal to the within-imputation variance plus (1 + 1/m) times the between-imputation variance. <em>(Module 10)</em>
+</dd>
+</dl>
+</section>
+<section id="s" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="s">S</h2>
+<dl>
+<dt><strong>Satterthwaite approximation</strong></dt>
+<dd>
+A method for approximate degrees of freedom of t- and F-tests in mixed models, used by <code>lmerTest</code>. <em>(Module 4)</em>
+</dd>
+<dt><strong>Saturated mean model</strong></dt>
+<dd>
+A mean model with one parameter per group and visit, able to reproduce any pattern of means. <em>(Module 4)</em>
+</dd>
+<dt><strong>Scale (dispersion) parameter in GEE</strong></dt>
+<dd>
+The multiplier phi of the variance function; for a Poisson GEE a value above 1 indicates overdispersion. <em>(Module 7)</em>
+</dd>
+<dt><strong>Scaled (quantile) residuals (DHARMa)</strong></dt>
+<dd>
+The position of each observed value within the distribution of values simulated from the fitted model; uniform on (0, 1) if the model is correct, for any outcome type. <em>(Modules 8, 11)</em>
+</dd>
+<dt><strong>Scale-location plot</strong></dt>
+<dd>
+A plot of the square root of the absolute standardised residuals against fitted values, used to check whether the residual variance changes with the level of the outcome. <em>(Module 11)</em>
+</dd>
+<dt><strong>Scheduled time</strong></dt>
+<dd>
+The time at which a visit was planned by the protocol (<code>month_sched</code> in WALK). <em>(Modules 1, 2)</em>
+</dd>
+<dt><strong>Semivariogram</strong></dt>
+<dd>
+A plot of half the mean squared difference between pairs of residuals from the same participant against their time separation; flat at 1 for normalized residuals when no correlation remains. <em>(Module 5)</em>
+</dd>
+<dt><strong>Sensitivity analysis</strong></dt>
+<dd>
+An analysis that relaxes a specific assumption of the primary analysis to show how much the conclusion depends on it. <em>(Module 12)</em>
+</dd>
+<dt><strong>Separability (distinctness) of parameters</strong></dt>
+<dd>
+The parameters of the outcome model and of the missingness model have no common elements or joint constraints. <em>(Module 10)</em>
+</dd>
+<dt><strong>Separation</strong></dt>
+<dd>
+A pattern in binary data in which a predictor or combination of predictors perfectly predicts the outcome, so the maximum-likelihood estimate is infinite. <em>(Module 11)</em>
+</dd>
+<dt><strong>Sequential exchangeability</strong></dt>
+<dd>
+The assumption that, at each time, treatment is independent of the potential outcomes given the measured past (no unmeasured confounding of treatment decisions). <em>(Module 13)</em>
+</dd>
+<dt><strong>Serial correlation</strong></dt>
+<dd>
+Correlation between measurements on the same participant that decreases as the time between them increases. <em>(Module 5)</em>
+</dd>
+<dt><strong>sessionInfo()</strong></dt>
+<dd>
+An R function that reports the R version, platform and attached package versions. <em>(Module 12)</em>
+</dd>
+<dt><strong>Shrinkage factor</strong></dt>
+<dd>
+The weight lambda_i given to a participant’s own data in their BLUP; it lies between 0 and 1. <em>(Module 11)</em>
+</dd>
+<dt><strong>Shrinkage (partial pooling)</strong></dt>
+<dd>
+The pulling of subject-specific predictions toward the mean, stronger when a subject has few or noisy observations. <em>(Modules 4, 11)</em>
+</dd>
+<dt><strong>Simple effect</strong></dt>
+<dd>
+The effect of one variable at a specific value of another variable with which it interacts; in an interaction model, each “main effect” is a simple effect at the reference value of the other variable. <em>(Module 6)</em>
+</dd>
+<dt><strong>Simulation-based power</strong></dt>
+<dd>
+Power estimated as the proportion of simulated trials, generated from a planning model and analysed with the planned method, in which the null hypothesis is rejected. <em>(Module 12)</em>
+</dd>
+<dt><strong>Singular fit</strong></dt>
+<dd>
+A mixed-model fit in which the estimated random-effects covariance matrix is not of full rank, for example a variance of zero or a correlation of ±1. <em>(Modules 4, 5, 11)</em>
+</dd>
+<dt><strong>Spaghetti plot</strong></dt>
+<dd>
+A plot with one line per participant showing the outcome over time. <em>(Module 2)</em>
+</dd>
+<dt><strong>Sphericity</strong></dt>
+<dd>
+The condition that the variance of the difference between any two occasions is the same for all pairs; required for the within-subject F-tests of RM-ANOVA. <em>(Module 3)</em>
+</dd>
+<dt><strong>Stabilised weight</strong></dt>
+<dd>
+An inverse probability weight whose numerator is the probability of the received treatment given treatment history only; it keeps weights near 1 and reduces their variability. <em>(Module 13)</em>
+</dd>
+<dt><strong>Standardised conditional residual</strong></dt>
+<dd>
+A conditional residual divided by the estimated residual SD. <em>(Module 11)</em>
+</dd>
+<dt><strong>Starting values</strong></dt>
+<dd>
+Initial guesses for the parameters of an iterative fitting algorithm; nonlinear models need them and may converge to different solutions from poor starts. <em>(Module 13)</em>
+</dd>
+<dt><strong>Statistical analysis plan (SAP)</strong></dt>
+<dd>
+A dated, detailed description of the planned analyses, finalised before the data that bear on the main comparison are seen. <em>(Module 12)</em>
+</dd>
+<dt><strong>S_tt (spread of measurement times)</strong></dt>
+<dd>
+The sum of squared deviations of the measurement times from their mean; the larger it is, the more precisely an individual slope is estimated. <em>(Module 12)</em>
+</dd>
+<dt><strong>Subject (participant)</strong></dt>
+<dd>
+The unit measured repeatedly and assumed independent of other subjects, indexed <span class="math inline">\(i\)</span>. <em>(Module 1)</em>
+</dd>
+<dt><strong>Subject-specific (conditional) effect</strong></dt>
+<dd>
+An effect that compares expected outcomes for the same participant (same random effects) under different covariate values. <em>(Module 8)</em>
+</dd>
+<dt><strong>Subject-specific (conditional) interpretation</strong></dt>
+<dd>
+The meaning of the model for a subject with given random effects. <em>(Module 4)</em>
+</dd>
+<dt><strong>Subject-specific (conditional) prediction</strong></dt>
+<dd>
+A prediction that adds a participant’s predicted random effects, <span class="math inline">\(\mathbf{x}^\top\hat{\boldsymbol\beta} + \mathbf{z}^\top\hat{\mathbf{b}}_i\)</span>. <em>(Module 6)</em>
+</dd>
+</dl>
+</section>
+<section id="t" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="t">T</h2>
+<dl>
+<dt><strong>Three-level model</strong></dt>
+<dd>
+A mixed model with random effects at three nested levels, for example visits within participants within clinics. <em>(Module 13)</em>
+</dd>
+<dt><strong>Time constant</strong></dt>
+<dd>
+In an exponential approach to a plateau, the time by which about 63% of the eventual change has occurred; about 95% has occurred by three time constants. <em>(Module 13)</em>
+</dd>
+<dt><strong>Time-dependent Cox model</strong></dt>
+<dd>
+A proportional hazards model whose covariates change over follow-up; with a biomarker measured at visits it usually carries the last observed value forward. <em>(Module 13)</em>
+</dd>
+<dt><strong>Time-invariant covariate</strong></dt>
+<dd>
+A covariate that takes one value per participant for the whole study, such as arm, sex or baseline age. <em>(Module 9)</em>
+</dd>
+<dt><strong>Time-varying confounding</strong></dt>
+<dd>
+Confounding by a variable that changes over time, influences later treatment and the outcome, and may itself be affected by earlier treatment. <em>(Modules 9, 13)</em>
+</dd>
+<dt><strong>Time-varying covariate</strong></dt>
+<dd>
+A covariate that can take a different value at each measurement occasion, such as daily steps or time itself. <em>(Module 9)</em>
+</dd>
+<dt><strong>Tipping point</strong></dt>
+<dd>
+The smallest departure from MAR (value of δ) at which the study conclusion changes. <em>(Module 10)</em>
+</dd>
+<dt><strong>Total effect</strong></dt>
+<dd>
+The effect of treatment on the outcome through all pathways; in a randomised trial, the effect of randomisation to an arm. <em>(Module 9)</em>
+</dd>
+<dt><strong>Trace plot</strong></dt>
+<dd>
+A plot of sampled parameter values against iteration for each MCMC chain, used to check mixing and convergence. <em>(Module 13)</em>
+</dd>
+<dt><strong>Treatment-policy strategy</strong></dt>
+<dd>
+Handling an intercurrent event by using the outcome whether or not the event occurred. <em>(Module 12)</em>
+</dd>
+<dt><strong>Type I error</strong></dt>
+<dd>
+Rejecting a true null hypothesis; its rate should equal the nominal significance level. <em>(Module 12)</em>
+</dd>
+</dl>
+</section>
+<section id="u" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="u">U</h2>
+<dl>
+<dt><strong>Unbalanced design</strong></dt>
+<dd>
+Subjects have different numbers or timings of measurements, through design, missed visits or dropout. <em>(Module 1)</em>
+</dd>
+<dt><strong>Unequal follow-up</strong></dt>
+<dd>
+Subjects are observed over different lengths of time. <em>(Module 1)</em>
+</dd>
+<dt><strong>Unequal measurement intervals</strong></dt>
+<dd>
+Gaps between measurement occasions that differ in length, by design (months 0, 1, 3, 6, …) or because actual visit times vary. <em>(Module 9)</em>
+</dd>
+<dt><strong>Unstructured covariance</strong></dt>
+<dd>
+A covariance with a separate variance for each occasion and a separate covariance for each pair; <span class="math inline">\(n(n+1)/2\)</span> parameters for <span class="math inline">\(n\)</span> occasions. <em>(Module 5)</em>
+</dd>
+</dl>
+</section>
+<section id="v" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="v">V</h2>
+<dl>
+<dt><strong>Variance components</strong></dt>
+<dd>
+The variances and covariances of the random effects (<span class="math inline">\(\tau_0^2\)</span>, <span class="math inline">\(\tau_1^2\)</span>, <span class="math inline">\(\tau_{01}\)</span>) and the residual variance <span class="math inline">\(\sigma^2\)</span>. <em>(Modules 1, 4)</em>
+</dd>
+<dt><strong>Variance partition</strong></dt>
+<dd>
+The division of the total outcome variance into the shares attributable to each level of a multilevel model. <em>(Module 13)</em>
+</dd>
+<dt><strong>Version control (Git)</strong></dt>
+<dd>
+A system that records every change to files with a message, so that any earlier state can be recovered and the version that produced a result can be identified. <em>(Module 12)</em>
+</dd>
+<dt><strong>Visit</strong></dt>
+<dd>
+A scheduled contact defined by the study protocol (for example month 6). <em>(Module 1)</em>
+</dd>
+<dt><strong>Visit window</strong></dt>
+<dd>
+The protocol’s permitted range around a scheduled visit date. Visits outside it are out-of-window visits. <em>(Modules 2, 12)</em>
+</dd>
+</dl>
+</section>
+<section id="w" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="w">W</h2>
+<dl>
+<dt><strong>Weighted GEE</strong></dt>
+<dd>
+GEE with inverse-probability weights, normally with an independence working correlation; valid under MAR if the dropout model is correct. <em>(Module 7)</em>
+</dd>
+<dt><strong>Wide format</strong></dt>
+<dd>
+A data layout with one row per participant and one column per scheduled visit for each repeated variable. It can hold only the scheduled time, not each participant’s actual time. <em>(Module 2)</em>
+</dd>
+<dt><strong>Within-group change</strong></dt>
+<dd>
+The mean change over time in one group; it mixes any treatment effect with regression to the mean and other time effects. <em>(Module 3)</em>
+</dd>
+<dt><strong>Within-person (within-subject) effect</strong></dt>
+<dd>
+The expected change in a participant’s outcome when their covariate is one unit above their own average. <em>(Module 9)</em>
+</dd>
+<dt><strong>Within-subject (within-person) variation</strong></dt>
+<dd>
+Variation of a subject’s measurements around their own level, estimated by the residual variance <span class="math inline">\(\sigma^2\)</span>. <em>(Module 1)</em>
+</dd>
+<dt><strong>Working correlation</strong></dt>
+<dd>
+The analyst’s assumed correlation matrix for observations within a cluster in GEE (independence, exchangeable, AR(1), unstructured); it affects efficiency but not the consistency of the estimates. <em>(Module 7)</em>
+</dd>
+</dl>
+</section>
+<section id="z" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="z">Z</h2>
+<dl>
+<dt><strong>Zero inflation</strong></dt>
+<dd>
+More zero counts than the count model predicts. It can be modelled as a separate process producing structural zeros (<code>ziformula</code> in glmmTMB), but it is often a symptom of overdispersion, so compare with a negative binomial model first. <em>(Modules 8, 11)</em>
+</dd>
+</dl>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/neu-data\.github\.io\/LDA\/book\/en\/_book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../appendices/b-choosing.html" class="pagination-link" aria-label="Choosing a method">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Choosing a method</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

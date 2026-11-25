@@ -1,0 +1,856 @@
+# Glossary {#sec-glossary}
+
+
+Definitions follow the terminology and notation of the course style guide (`admin/style_guide.md`). The module numbers after each entry show where the term is introduced or developed; the course notes for those modules explain it with worked examples. Where two modules use a term in slightly different contexts, the definition here covers both.
+
+## A {.unnumbered}
+
+**Actual time**
+:   The time at which the measurement was actually taken, here months since randomisation calculated from dates (`month` in WALK). *(Module 2)*
+
+**Adaptive Gauss–Hermite quadrature (AGQ)**
+:   Numerical integration of the GLMM likelihood with several nodes centred and scaled at the peak of the integrand; in `glmer` available only for a single scalar random effect (`nAGQ` > 1). *(Modules 8, 11)*
+
+**Akaike information criterion (AIC)**
+:   $-2\log L + 2p$; smaller values indicate a better balance of fit and complexity. *(Module 5)*
+
+**allFit()**
+:   An lme4 function that refits a model with every available optimiser so that their log-likelihoods and estimates can be compared. *(Module 11)*
+
+**Analysis log**
+:   A dated record of each analytical decision, what prompted it, its status (pre-specified, data-driven but blind, post hoc) and its effect on the main estimate. *(Module 11)*
+
+**Analysis of covariance (ANCOVA, baseline-adjusted)**
+:   Regression of the follow-up outcome on group and the baseline value; in a randomised trial it is the most precise of the three single-follow-up analyses. *(Module 3)*
+
+**Anti-join**
+:   A join that returns the rows of one file that have no match in another; used to find unmatched identifiers. *(Module 2)*
+
+**Association parameter**
+:   In a joint model, the coefficient linking a feature of the biomarker trajectory (for example its current value) to the log hazard of the event. *(Module 13)*
+
+**Asymptotic exponential model**
+:   A curve that starts at a baseline level and approaches a plateau, $\phi_0 - \phi_1(1 - e^{-t/\kappa})$, with plateau change $\phi_1$ and time constant $\kappa$. *(Module 13)*
+
+**Attenuation**
+:   The shrinkage of population-average (marginal) logistic coefficients towards zero relative to subject-specific ones, approximately by the factor 1 / sqrt(1 + 0.346 tau^2). *(Module 8)*
+
+**Auxiliary variable**
+:   A variable used in the imputation model to predict missing values or missingness, but not part of the analysis model. *(Module 10)*
+
+## B {.unnumbered}
+
+**Balanced design**
+:   Every subject is scheduled to be measured at the same set of times. *(Module 1)*
+
+**Baseline-category logit model (multinomial logit)**
+:   A model for a nominal outcome in which the log-odds of each category versus a reference category has its own set of coefficients; with random effects it becomes a multinomial GLMM. *(Module 13)*
+
+**Basis dimension (k)**
+:   The maximum number of basis functions used to represent a smooth in `mgcv`; it sets an upper limit on the edf. *(Module 9)*
+
+**Basis function**
+:   A function of time (such as $t$, $t^2$ or a spline column) used as a covariate so that a linear model can describe a curved trajectory. *(Module 9)*
+
+**Bayesian information criterion (BIC)**
+:   $-2\log L + p\log n$; penalises extra parameters more strongly than AIC in large samples. *(Module 5)*
+
+**Best linear unbiased predictor (BLUP)**
+:   The predicted value of a subject's random effects given the data and the fitted model. *(Module 4)*
+
+**Between-person (between-subject) effect**
+:   The expected difference in outcome between participants whose person means of the covariate differ by one unit. *(Module 9)*
+
+**Between-subject (between-person) variation**
+:   Variation of subjects' own levels around the mean, estimated by the random-intercept variance $\tau_0^2$. *(Module 1)*
+
+**Boundary problem**
+:   A hypothesis test in which the null value lies on the edge of the parameter space, such as a variance equal to zero; the usual chi-square reference distribution does not apply. *(Modules 4, 5)*
+
+**Burn-in**
+:   The initial MCMC iterations that are discarded because the chains may not yet have reached the posterior distribution. *(Module 13)*
+
+## C {.unnumbered}
+
+**Calibration**
+:   Agreement between predicted probabilities and observed proportions. *(Module 0)*
+
+**Categorical time**
+:   Time entered as a factor (one mean per visit and group), making no assumption about the shape of the trajectory. *(Module 4)*
+
+**Centring**
+:   Subtracting a reference value from a variable (for example time minus 12 months, or age minus 60) so that zero, and therefore the intercept and lower-order terms, refers to a meaningful value; the model's fit is unchanged. *(Modules 0, 4, 6)*
+
+**Change-score analysis**
+:   Comparison of groups on the change from baseline to follow-up. *(Module 3)*
+
+**Cholesky-scaled marginal residuals**
+:   Marginal residuals multiplied by the inverse Cholesky factor of a participant's fitted marginal covariance matrix; approximately independent standard normal values if the mean and covariance models are correct. *(Module 11)*
+
+**Cleaning log**
+:   A table recording each cleaning step and the number of records affected, so that the analysis file can be reproduced and audited. *(Module 2)*
+
+**Cluster**
+:   The independent unit in a GEE analysis; in longitudinal data, a participant and all of their observations. *(Module 7)*
+
+**Clustered data**
+:   Units grouped within higher-level units (for example patients within clinics) whose members resemble each other; a participant with repeated measurements is a cluster. *(Module 1)*
+
+**Cluster-randomised trial**
+:   A trial in which whole groups (clinics, schools) rather than individuals are allocated to arms, so that treatment is constant within each group. *(Module 13)*
+
+**Collider**
+:   A variable that is a common effect of two other variables on a path; conditioning on it creates an association between its causes. *(Module 13)*
+
+**Complete visit grid**
+:   Every randomised participant crossed with every scheduled visit, built from the design, used to reveal and classify missing visits. *(Module 2)*
+
+**Complete-case analysis**
+:   An analysis restricted to participants with complete data on the variables used; valid in general only under MCAR. *(Module 10)*
+
+**Composite strategy**
+:   Handling an intercurrent event by making its occurrence part of the outcome variable. *(Module 12)*
+
+**Compound symmetry (CS)**
+:   A structure with equal variances and the same correlation between every pair of occasions; implied by a random intercept alone. *(Modules 1, 3, 5)*
+
+**Conditional prediction (at b = 0)**
+:   The predicted probability or mean for a participant with random effects equal to zero, the median participant for a symmetric random-effects distribution. *(Module 8)*
+
+**Conditional residual**
+:   The observed outcome minus the participant's own predicted value (fixed effects plus predicted random effects); it estimates the residual error and is shrunk towards zero. *(Module 11)*
+
+**Conditional variance of the BLUPs**
+:   The prediction-error variance of a participant's predicted random effects, used for prediction intervals for participants already observed. *(Module 6)*
+
+**Conditional versus unconditional simulation (DHARMa)**
+:   Simulating new responses with the predicted random effects held fixed, or with new random effects drawn each time; participant-level checks need unconditional simulation. *(Modules 8, 11)*
+
+**Confidence interval**
+:   A range of values for a parameter that are compatible with the data, constructed so that 95% of such intervals contain the true value over repeated studies. *(Module 0)*
+
+**Confidence interval for a mean trajectory**
+:   An interval for the population mean outcome at each time, reflecting only the uncertainty in the estimated fixed effects. *(Module 6)*
+
+**Conflicting duplicate**
+:   Two or more different records for the same participant and visit. Resolved by querying the source or by a rule fixed in advance, and flagged. *(Module 2)*
+
+**Congenial imputation model**
+:   An imputation model that contains at least the variables and interactions of the analysis model. *(Module 10)*
+
+**Constrained longitudinal data analysis (cLDA)**
+:   A model for randomised trials in which all arms share a single mean at the pre-randomisation baseline. *(Module 6)*
+
+**Contextual effect**
+:   The between-person effect minus the within-person effect; the difference in outcome between two participants with the same current covariate value whose person means differ by one unit. *(Module 9)*
+
+**Continuous-time exponential correlation**
+:   Correlation $\exp(-|t-s|/\phi)$ that decays with the actual time between measurements; $\phi$ is the range. Equivalent to `corCAR1`. *(Module 5)*
+
+**Contrast**
+:   A linear combination of means with weights that sum to zero, such as a difference in mean change. *(Module 6)*
+
+**Convergence warning**
+:   A message that the optimiser's stopping point may not be the maximum of the likelihood, usually because the gradient there exceeds a tolerance. It calls for checking the estimates, not for automatic acceptance or rejection. *(Modules 5, 11)*
+
+**Cook's distance (for fixed effects)**
+:   The shift in all fixed effects when a participant is omitted, scaled by their estimated covariance matrix and divided by the number of fixed effects. *(Module 11)*
+
+**Covariance pattern model**
+:   A model with fixed effects and a structured residual covariance but no random effects, fitted for example with `nlme::gls()`. *(Module 5)*
+
+**Coverage**
+:   The proportion of simulated confidence intervals that contain the true value. *(Module 1)*
+
+**Cross-sectional data**
+:   Each unit is measured once. *(Module 1)*
+
+**Cumulative logit**
+:   The log-odds of being in category k or below, $\operatorname{logit} P(Y \le k)$; the basis of proportional odds models. *(Module 13)*
+
+**Cumulative odds ratio**
+:   The odds ratio for being in a higher rather than a lower category, which under proportional odds is the same for every cut-point. *(Module 13)*
+
+**Cumulative-logit mixed model (cumulative link mixed model)**
+:   A model for a repeated ordinal outcome that combines cumulative logits with random effects, fitted in R with `ordinal::clmm()`. *(Module 13)*
+
+**Cut-point (threshold)**
+:   In a cumulative-logit model, one of the K − 1 ordered values $\theta_k$ that separate adjacent categories of the outcome on the latent scale; the cut-points replace a single intercept. *(Module 13)*
+
+## D {.unnumbered}
+
+**Data query**
+:   A documented request to a study site to confirm or correct a questionable value. *(Module 2)*
+
+**Delta adjustment**
+:   A sensitivity analysis that shifts imputed values (for example post-dropout values) by a fixed amount δ from their MAR prediction. *(Module 10)*
+
+**Design effect**
+:   The factor, about $1+(m-1)\rho_I$, by which correlation inflates the variance of a between-subject comparison relative to independent observations. *(Module 1)*
+
+**DFBETA**
+:   The change in a specific estimate when one participant (or observation) is omitted. *(Module 11)*
+
+**Difference in mean change**
+:   The mean change from baseline in one group minus the mean change in another; the primary estimand of WALK. *(Modules 1, 4, 6)*
+
+**Direct effect**
+:   The part of a treatment effect that does not act through a specified mediator; estimating it requires assumptions beyond randomisation. *(Module 9)*
+
+**Directed acyclic graph (DAG)**
+:   A diagram of assumed causal relationships between variables, with arrows from causes to effects and no cycles. *(Module 13)*
+
+**Dropout**
+:   Permanent loss to follow-up after some visit, giving a monotone missing-data pattern. In WALK, a participant whose last attended visit is before month 12. *(Modules 1, 2, 10)*
+
+**Dunnett adjustment**
+:   A multiplicity adjustment for comparisons of several groups with a common control that uses the joint distribution of the test statistics. *(Module 6)*
+
+**Dynamic prediction**
+:   An individual's predicted future biomarker values or event risk that is updated each time a new measurement becomes available. *(Module 13)*
+
+## E {.unnumbered}
+
+**Effective degrees of freedom (edf)**
+:   A measure of the complexity of a penalised smooth; an edf of 1 corresponds to a straight line. *(Module 9)*
+
+**Epsilon (sphericity)**
+:   A measure of departure from sphericity; 1 means sphericity holds. *(Module 3)*
+
+**Estimand**
+:   A precise description of the treatment effect to be estimated, defined in ICH E9(R1) by treatment conditions, population, variable, handling of intercurrent events and population-level summary. *(Modules 1, 12)*
+
+**Estimated marginal means (EMMs)**
+:   Model-based means for combinations of factors, obtained with `emmeans`, from which contrasts such as the difference in mean change are computed. *(Modules 4, 6)*
+
+**Estimating equation**
+:   An equation, such as the sum over clusters of D' V^-1 (y - mu) = 0, whose solution defines the estimator; it need not come from a likelihood. *(Module 7)*
+
+**Exact duplicate**
+:   A record identical in every field to another record, after formatting has been standardised. One copy is removed. *(Module 2)*
+
+**Exchangeable working correlation**
+:   Equal correlation between every pair of observations within a cluster. *(Module 7)*
+
+## F {.unnumbered}
+
+**Factor / reference level**
+:   A categorical variable stored with ordered levels; the first level is the reference category against which regression coefficients compare the others. *(Module 0)*
+
+**Familywise error rate (FWER)**
+:   The probability of at least one false rejection among a family of hypothesis tests. *(Modules 3, 6)*
+
+**First-order autoregressive structure, AR(1)**
+:   A structure in which the correlation between measurements $k$ positions apart is $\rho^k$. *(Module 5)*
+
+**Firth's penalised likelihood**
+:   Maximisation of the log-likelihood plus half the log-determinant of the Fisher information; it gives finite estimates under separation and reduces small-sample bias. *(Module 11)*
+
+**Fixed effects**
+:   The regression coefficients $\boldsymbol\beta$ describing the mean outcome and how it depends on covariates; in a linear mixed model they have both a population-average and a subject-specific interpretation. *(Modules 1, 4)*
+
+**Fixed-sequence (hierarchical) testing**
+:   Testing prespecified hypotheses in order, each at the full α, stopping at the first non-rejection. *(Module 6)*
+
+**Follow-up schedule**
+:   The planned times of the measurement occasions and the length of follow-up. *(Module 12)*
+
+**Follow-up-only analysis**
+:   Comparison of groups on the outcome at a single follow-up time, ignoring baseline. *(Module 3)*
+
+**Fraction of missing information**
+:   The proportion of the total variance of an MI estimate that is due to missing data. *(Module 10)*
+
+**Front-loading**
+:   Placing more measurement occasions early in follow-up, where change is expected to be fastest. *(Module 12)*
+
+**Functional form (joint model)**
+:   The feature of the biomarker trajectory that enters the hazard, such as the current value, the current slope or the cumulative area. *(Module 13)*
+
+## G {.unnumbered}
+
+**$G$ matrix**
+:   The covariance matrix of the random effects $\mathbf{b}_i$. *(Module 4)*
+
+**Generalized additive mixed model (GAMM)**
+:   A mixed model in which some covariate effects are smooth functions estimated with a roughness penalty, for example `mgcv::gamm()`. *(Module 9)*
+
+**Generalized estimating equations (GEE)**
+:   A method that estimates the coefficients of a marginal mean model by solving estimating equations that weight each cluster's residuals by a working covariance, with standard errors from the sandwich estimator. *(Module 7)*
+
+**Generalized linear mixed model (GLMM)**
+:   A generalized linear model whose linear predictor includes random effects, so that observations are independent given each participant's random effects. *(Module 8)*
+
+**G-methods**
+:   Methods for time-varying treatments and confounders: inverse probability weighting of marginal structural models, the parametric g-formula and g-estimation of structural nested models. *(Module 13)*
+
+**Gradient (in model fitting)**
+:   The slope of the log-likelihood with respect to the parameters; zero at a maximum. *(Module 11)*
+
+**Greenhouse–Geisser correction**
+:   Multiplies the degrees of freedom of within-subject F-tests by an estimate of epsilon (between 1/(k - 1) and 1) to correct for non-sphericity; somewhat conservative. *(Module 3)*
+
+## H {.unnumbered}
+
+**here()**
+:   A function from the here package that builds file paths relative to the project root. *(Module 12)*
+
+**Heterogeneous variances**
+:   Residual variances that differ between occasions or groups; modelled with `varIdent()`. *(Module 5)*
+
+**Holm procedure**
+:   A stepwise Bonferroni-type adjustment that tests ordered p-values at α/m, α/(m − 1), and so on; uniformly more powerful than Bonferroni. *(Module 6)*
+
+**Homoscedasticity**
+:   Constant residual variance across fitted values. *(Module 0)*
+
+**Huynh–Feldt correction**
+:   A less conservative estimate of the same epsilon, never smaller than the Greenhouse–Geisser value and truncated at 1. *(Module 3)*
+
+**Hypothetical strategy**
+:   Handling an intercurrent event by targeting the outcome that would have been observed had the event not occurred. *(Module 12)*
+
+## I {.unnumbered}
+
+**Ignorability**
+:   The condition (MAR plus separability of parameters) under which likelihood-based inference can ignore the missingness mechanism. *(Module 10)*
+
+**Independence assumption**
+:   The assumption that residuals of different observations are unrelated; violated by repeated measurements on the same subject. *(Module 0)*
+
+**Individual trajectory panels**
+:   Small separate plots of the outcome over time for selected participants. *(Module 2)*
+
+**Influential participant**
+:   A participant whose removal changes a reported estimate materially, judged relative to the estimate's standard error. *(Module 11)*
+
+**Informative visit timing (outcome-dependent visit process)**
+:   A situation in which the timing or frequency of measurements depends on the outcome, for example more frequent visits after a poor result. *(Modules 1, 10)*
+
+**Interaction**
+:   A term that allows the effect of one predictor to depend on the value of another. In a trial with repeated measurements, the arm-by-time interaction carries the treatment effect on change. *(Modules 0, 3)*
+
+**Interaction contrast**
+:   A contrast that crosses two sets of contrasts, for example "each visit minus baseline" with "each arm minus control", giving differences in change at every visit. *(Module 6)*
+
+**Intercept**
+:   The mean outcome when all predictors equal zero. *(Module 0)*
+
+**Intercurrent event**
+:   An event after randomisation (such as stopping treatment or taking rescue medication) that affects the existence or interpretation of the outcome; distinct from missing data. *(Module 12)*
+
+**Intermittent missingness**
+:   A missed measurement occasion after which the participant returns to the study. *(Modules 1, 2, 10)*
+
+**Intraclass correlation (ICC)**
+:   In a random-intercept model, $\tau_0^2/(\tau_0^2 + \sigma^2)$: the share of variance between subjects and the implied correlation between any two measurements of a subject. A random-slope model has no single ICC. *(Modules 1, 4)*
+
+**Inverse probability of treatment weighting (IPTW)**
+:   Weighting each participant by the inverse of the probability of the treatment (history) they received given their covariates, to create a pseudo-population without measured confounding. *(Module 13)*
+
+**Inverse-probability weighting (IPW)**
+:   Weighting each observed outcome by the inverse of its estimated probability of being observed (for dropout, of remaining in the study up to that visit), so that observed data represent the full population under MAR. *(Module 7)*
+
+## J {.unnumbered}
+
+**Joint model (longitudinal and time-to-event)**
+:   A model that links a mixed model for a repeated biomarker and a survival model for an event through shared random effects, so that the hazard depends on the biomarker's true trajectory. *(Module 13)*
+
+## K {.unnumbered}
+
+**Key (subject–visit key)**
+:   The combination of variables, here participant identifier and visit, that must identify exactly one row in a long dataset. *(Module 2)*
+
+**Knot**
+:   A time point at which a piecewise or spline function is allowed to change its slope or curvature. *(Module 9)*
+
+## L {.unnumbered}
+
+**Laplace approximation**
+:   An approximation to the GLMM likelihood that replaces the integrand over the random effects by a normal curve at its peak; equivalent to adaptive quadrature with one point. *(Module 8)*
+
+**Last observation carried forward (LOCF)**
+:   Single imputation that replaces missing values after dropout with the last observed value; generally biased and overconfident. *(Module 10)*
+
+**Latent-scale ICC**
+:   For a logistic random-intercept model, tau^2 / (tau^2 + pi^2/3), the share of variation in the latent propensity that lies between participants. *(Module 8)*
+
+**Leave-one-participant-out (LOO) analysis**
+:   Refitting a model once for each participant with that participant's data omitted, to measure influence. *(Module 11)*
+
+**Linear mixed-effects model (LMM)**
+:   A regression model for a continuous outcome that combines fixed effects for the mean with random effects for subject-specific departures from it; also called a multilevel or hierarchical linear model. *(Module 4)*
+
+**Linear regression**
+:   A model for the mean of a continuous outcome as a linear function of predictors, with independent, constant-variance residuals. *(Module 0)*
+
+**Listwise deletion**
+:   Removing every subject with any missing value from the analysis; also called complete-case analysis. *(Module 3)*
+
+**Logistic regression**
+:   A model for a binary outcome in which the log-odds of the outcome are linear in the predictors. *(Module 0)*
+
+**Long format**
+:   A data layout with one row per observation (participant and measurement occasion), with columns for the identifier, time and outcome. Required by mixed models, GEE and most longitudinal plots. *(Modules 1, 2)*
+
+**Longitudinal data**
+:   Repeated measurements on the same subjects over time, where change over time is of interest. *(Module 1)*
+
+**Lord's paradox**
+:   In non-randomised comparisons, change-score analysis and ANCOVA can lead to different conclusions from the same data because they answer different questions. *(Module 3)*
+
+## M {.unnumbered}
+
+**Main effect (in a model with an interaction)**
+:   The effect of one variable when the other variables in the interaction equal zero or their reference level; for example, the arm difference at month 0. *(Modules 0, 3)*
+
+**Mancl-DeRouen correction**
+:   A small-sample bias correction of the sandwich that inflates each cluster's residuals by the inverse of one minus its leverage; for a linear model it equals the leave-one-cluster-out jackknife variance. *(Module 7)*
+
+**Many-to-one join**
+:   A join in which many rows of one file (visits) match exactly one row of another (participants). In `dplyr` it is checked with `relationship = "many-to-one"`. *(Module 2)*
+
+**Marginal covariance ($V_i$)**
+:   The covariance matrix of a participant's repeated measurements after averaging over the random effects, $V_i = Z_iGZ_i^\top + R_i$. *(Modules 4, 5)*
+
+**Marginal model**
+:   A model for the population mean of the outcome given covariates, E(Y | x), without conditioning on participant-specific random effects. *(Module 7)*
+
+**Marginal residual**
+:   The observed outcome minus the population-average prediction from the fixed effects alone; it contains both the participant's random effects and the residual error, so marginal residuals of one participant are correlated. *(Module 11)*
+
+**Marginal structural model (MSM)**
+:   A model for the mean potential outcome as a function of treatment history, estimated in a population reweighted to remove measured confounding. *(Module 13)*
+
+**Markov chain Monte Carlo (MCMC)**
+:   A simulation method that draws samples from a posterior distribution; results depend on the chains having converged. *(Module 13)*
+
+**Mauchly's test**
+:   A test of sphericity; it has low power in small samples and rejects trivially in large ones. *(Module 3)*
+
+**Maximum likelihood (ML)**
+:   Estimation that maximises the full likelihood; variance components are biased downward in small samples; needed to compare models with different fixed effects. *(Module 4)*
+
+**Measurement occasion**
+:   The time at which a measurement was actually taken, $t_{ij}$. *(Module 1)*
+
+**Mediator**
+:   A variable on the causal pathway from treatment to outcome; adjusting for it removes the part of the treatment effect that acts through it. *(Module 9)*
+
+**Missing at random (MAR)**
+:   Given the observed data, the probability of missingness does not depend on the unobserved values. *(Module 10)*
+
+**Missing completely at random (MCAR)**
+:   The probability of missingness does not depend on any outcome values, observed or unobserved (it may depend on covariates in the model). *(Module 10)*
+
+**Missing not at random (MNAR)**
+:   The probability of missingness depends on unobserved values even after conditioning on the observed data. *(Module 10)*
+
+**Missingness map**
+:   A tile plot of participants (rows) by scheduled visits (columns) showing which measurements are observed. *(Module 2)*
+
+**Missingness pattern**
+:   The set of observed and missing occasions for a participant, for example `OOO...` for dropout after the third visit. *(Module 10)*
+
+**Mixed model for repeated measures (MMRM)**
+:   A model with a saturated visit-by-group mean and an unstructured residual covariance, common in clinical trials with a fixed visit schedule. *(Module 5)*
+
+**Mixture chi-square distribution**
+:   The null distribution of a likelihood-ratio statistic for a boundary hypothesis, for example $\tfrac12\chi^2_0 + \tfrac12\chi^2_1$ for a single variance. *(Module 5)*
+
+**Model-based (naive) standard error**
+:   A standard error that assumes the working covariance is correct; in geepack stored in `fit$geese$vbeta.naiv`. *(Module 7)*
+
+**Monte Carlo standard error (MCSE)**
+:   The standard error of a quantity estimated by simulation that is due to the finite number of simulated datasets; for a power estimate p from n_sims trials it is sqrt(p(1 - p) / n_sims). *(Modules 1, 12)*
+
+**Multilevel (two-level) imputation**
+:   Imputation of long-format data with a mixed model that represents the clustering of occasions within participants, for example `2l.norm` in `mice`. *(Module 10)*
+
+**Multiple imputation (MI)**
+:   Replacing each missing value with several draws from its predictive distribution, analysing each completed data set and combining the results with Rubin's rules. *(Module 10)*
+
+**Multiplicity**
+:   The increase in the chance of at least one false-positive result when many tests are performed. *(Module 3)*
+
+## N {.unnumbered}
+
+**Natural cubic spline**
+:   A smooth curve made of cubic pieces joined at knots and constrained to be linear beyond the outer knots; `splines::ns()` in R. *(Module 9)*
+
+**Negative binomial (nbinom2)**
+:   A count distribution with variance mu + mu^2/theta, where theta is the size (dispersion) parameter; reduces to Poisson as theta grows. *(Module 8)*
+
+**Nominal effect (partial proportional odds)**
+:   A covariate allowed to have a different coefficient at each cut-point; used to relax or test the proportional odds assumption. *(Module 13)*
+
+**Nominal (multinomial) outcome**
+:   A categorical outcome whose categories have no natural order. *(Module 13)*
+
+**Nonlinear mixed-effects model**
+:   A mixed model in which the mean function is nonlinear in at least one parameter (for example a time constant inside an exponential), so it cannot be written as $X\boldsymbol\beta + Z\mathbf{b}$; fitted in R with `nlme::nlme()`. *(Module 13)*
+
+**Normal Q–Q plot**
+:   A plot of ordered standardised residuals against normal quantiles used to check normality of the residuals. *(Module 0)*
+
+**Normalized residuals**
+:   Residuals transformed by the inverse of the estimated covariance, which should be independent with unit variance if the covariance model is correct. *(Module 5)*
+
+**Nugget**
+:   The proportion of the residual variance that is uncorrelated, usually interpreted as measurement error. *(Module 5)*
+
+## O {.unnumbered}
+
+**Observation**
+:   One measurement of the outcome; one row of a long-format dataset, written $y_{ij}$. *(Module 1)*
+
+**Observed mean**
+:   The mean outcome at a visit among participants measured at that visit; it estimates E(Y | observed), which differs from the mean of all randomised participants when missingness depends on the outcome history. *(Module 2)*
+
+**Odds / odds ratio**
+:   Odds are $p/(1-p)$; an odds ratio is the ratio of the odds in two groups, the exponentiated logistic coefficient. *(Module 0)*
+
+**Offset**
+:   A term in the linear predictor with coefficient fixed at 1, such as log(exposure), so that the model describes a rate. *(Module 8)*
+
+**Ordinal outcome**
+:   A categorical outcome whose categories have a natural order (for example none, mild, moderate, severe) but whose spacing is not defined. *(Module 13)*
+
+**Overdispersion**
+:   More variation in a count or binomial outcome than the assumed distribution allows; it makes model-based standard errors too small. *(Modules 8, 11)*
+
+## P {.unnumbered}
+
+**Paired t-test**
+:   A test of whether the mean within-person difference between two occasions is zero; it answers a within-group question. *(Module 3)*
+
+**Parametric bootstrap**
+:   Simulating new datasets from a fitted model, refitting, and using the distribution of the recomputed quantity to form intervals (`lme4::bootMer`). *(Module 8)*
+
+**Parsimony**
+:   Preferring the simplest model that describes the data adequately for the question at hand. *(Module 5)*
+
+**Participant-flow table**
+:   A table of the number (and percentage of those randomised) of participants seen at each scheduled visit, by group. *(Module 2)*
+
+**Pattern plot (dropout-pattern plot)**
+:   Mean outcome profiles plotted separately for groups of participants defined by the time of their last attended visit. *(Module 2)*
+
+**Pattern-mixture model**
+:   A model that specifies the outcome distribution separately for each missingness pattern; delta adjustment is a simple example. *(Module 10)*
+
+**Person mean**
+:   The mean of a time-varying covariate over a participant's observed occasions; it varies only between participants. *(Module 9)*
+
+**Person-mean centring**
+:   Subtracting each participant's person mean from their values of a time-varying covariate, so that the deviation varies only within participants. *(Module 9)*
+
+**Piecewise linear model (linear spline)**
+:   A trajectory made of straight-line segments joined at knots, for example $t$ and $(t - 3)_+$. *(Module 9)*
+
+**Pipe (`|>`)**
+:   Passes the result on its left as the first argument of the function on its right. *(Module 0)*
+
+**Planning values**
+:   The assumed effect size and variance parameters used in a sample-size or power calculation. *(Module 12)*
+
+**Plausibility (range) check**
+:   A check that values lie within limits fixed in advance; values outside are treated as errors and queried. *(Module 2)*
+
+**Population-average (marginal) effect**
+:   An effect that compares mean outcomes (proportions, mean counts) between populations defined by covariate values. *(Modules 1, 7)*
+
+**Population-average (marginal) interpretation**
+:   The meaning of the model averaged over subjects; coincides with the subject-specific one for the fixed effects of a linear mixed model. *(Module 4)*
+
+**Population-average (marginal) prediction**
+:   A prediction with the random effects set to zero, $\mathbf{x}^\top\hat{\boldsymbol\beta}$; the expected outcome for the population with given covariates. *(Modules 6, 8)*
+
+**Positivity**
+:   The requirement that every participant has a non-zero probability of each relevant event (being observed, for weighted GEE; receiving each treatment level given their history, for marginal structural models), so that inverse probability weights stay bounded. *(Modules 7, 13)*
+
+**Potential outcome**
+:   The outcome a participant would have had under a specified treatment or treatment history, whether or not that treatment was received. *(Module 13)*
+
+**Power**
+:   The probability that the planned analysis rejects the null hypothesis when a specified alternative is true. *(Module 12)*
+
+**Predicted probability**
+:   The probability of the outcome implied by a logistic model for a given covariate profile, obtained with the inverse logit. *(Module 0)*
+
+**Prediction interval**
+:   An interval expected to contain a single new observation with stated probability; it includes between-participant and residual variation as well as uncertainty about the mean. *(Modules 0, 6)*
+
+**Proportional odds assumption**
+:   The assumption that each covariate has the same odds ratio at every cut-point, so one coefficient describes "higher versus lower" categories whatever the cut-off. *(Module 13)*
+
+**p-value**
+:   The probability of an estimate at least as extreme as the one observed if the true parameter were zero (or another null value). *(Module 0)*
+
+## Q {.unnumbered}
+
+**QIC / CIC**
+:   Quasi-likelihood information criterion for GEE and its penalty term; QIC is a weak guide for choosing the working correlation. *(Module 7)*
+
+## R {.unnumbered}
+
+**R² (coefficient of determination)**
+:   The proportion of the outcome's variance explained by the model. *(Module 0)*
+
+**R project**
+:   A folder with an `.Rproj` file; opening it sets the working directory to the project root so that relative paths work. *(Modules 0, 12)*
+
+**Random effects**
+:   Subject-specific deviations from the mean trajectory (for example $b_{0i}$, $b_{1i}$), treated as draws from a distribution whose variance is estimated. *(Module 4)*
+
+**Random intercept**
+:   A subject-specific deviation $b_{0i}$ of the subject's level from the mean, shared by all of that subject's observations. *(Modules 1, 4)*
+
+**Random slope**
+:   A random effect that lets a subject's rate of change over time differ from the mean rate of change. *(Module 4)*
+
+**Range ($\phi$)**
+:   The time scale of an exponential correlation; the correlated part falls by a factor $e$ over one range. *(Module 5)*
+
+**Rate ratio**
+:   The ratio of event rates between two conditions; for a log link with a random intercept it is the same for individuals and for the population. *(Module 8)*
+
+**Reference grid**
+:   The set of covariate combinations (for example every arm at every visit) at which `emmeans` computes model predictions. *(Module 6)*
+
+**Regression coefficient**
+:   The difference in the mean outcome for a one-unit difference in a predictor, holding the other predictors fixed. *(Module 0)*
+
+**Regression dilution**
+:   Attenuation of an estimated association towards zero because the covariate is measured with error or is out of date. *(Module 13)*
+
+**Regression to the mean**
+:   The tendency of subjects selected for extreme values to have values nearer the mean when measured again, because part of the extreme value was chance. *(Module 3)*
+
+**Relative path (`here()`)**
+:   A file path built from the project root, so that code runs unchanged on any computer. *(Module 0)*
+
+**renv**
+:   An R package that gives a project its own package library and records package versions in a lockfile (`renv.lock`); `renv::init()`, `renv::snapshot()` and `renv::restore()` start, update and recreate the environment. *(Module 12)*
+
+**Repeated measures**
+:   More than one measurement of the outcome on the same unit, whether or not time order is of interest. *(Module 1)*
+
+**Repeated-measures ANOVA (RM-ANOVA)**
+:   Analysis of variance for outcomes measured at the same fixed occasions on every subject, with between-subject and within-subject error strata; it requires complete data. *(Module 3)*
+
+**Reporting checklist**
+:   A list of items (design, estimand, model, assumptions, missing data, results, reproducibility) that a complete report of a longitudinal analysis should contain. *(Module 12)*
+
+**Reproducibility**
+:   The property that another analyst, given the data and code, obtains the same results. *(Module 12)*
+
+**Reshaping (pivoting)**
+:   Converting between long and wide formats, in R with `tidyr::pivot_longer()` and `tidyr::pivot_wider()`. *(Module 2)*
+
+**Residual**
+:   The difference between an observed outcome and its fitted value; its standard deviation is the residual standard error. *(Module 0)*
+
+**Residual correlation structure**
+:   A rule that specifies the correlation between the residual errors of a participant's measurements, such as compound symmetry, AR(1), exponential or unstructured. *(Module 5)*
+
+**Residual error**
+:   The deviation of a single measurement from the subject's own trajectory; its variance is $\sigma^2$. *(Module 4)*
+
+**Residual-versus-fitted plot**
+:   A plot of residuals against fitted values used to check the mean structure and constant variance. *(Module 0)*
+
+**Restricted maximum likelihood (REML)**
+:   Estimation of variance components from the likelihood of residual contrasts, which accounts for the degrees of freedom used by the fixed effects; the default for reporting. *(Module 4)*
+
+**Reverse causation**
+:   An association that arises because the outcome influences the covariate rather than the other way round. *(Module 9)*
+
+**Rhat (Gelman-Rubin statistic)**
+:   A convergence diagnostic that compares variation within and between MCMC chains; values close to 1 (below about 1.05) indicate agreement. *(Module 13)*
+
+**Robust (sandwich) standard error**
+:   A standard error from B^-1 M B^-1, where the "meat" M uses the empirical outer products of cluster residuals; valid whatever the true correlation when there are many clusters. *(Module 7)*
+
+**Rubin's rules**
+:   The formulas that combine multiple-imputation results: the average estimate, and a total variance equal to the within-imputation variance plus (1 + 1/m) times the between-imputation variance. *(Module 10)*
+
+## S {.unnumbered}
+
+**Satterthwaite approximation**
+:   A method for approximate degrees of freedom of t- and F-tests in mixed models, used by `lmerTest`. *(Module 4)*
+
+**Saturated mean model**
+:   A mean model with one parameter per group and visit, able to reproduce any pattern of means. *(Module 4)*
+
+**Scale (dispersion) parameter in GEE**
+:   The multiplier phi of the variance function; for a Poisson GEE a value above 1 indicates overdispersion. *(Module 7)*
+
+**Scaled (quantile) residuals (DHARMa)**
+:   The position of each observed value within the distribution of values simulated from the fitted model; uniform on (0, 1) if the model is correct, for any outcome type. *(Modules 8, 11)*
+
+**Scale-location plot**
+:   A plot of the square root of the absolute standardised residuals against fitted values, used to check whether the residual variance changes with the level of the outcome. *(Module 11)*
+
+**Scheduled time**
+:   The time at which a visit was planned by the protocol (`month_sched` in WALK). *(Modules 1, 2)*
+
+**Semivariogram**
+:   A plot of half the mean squared difference between pairs of residuals from the same participant against their time separation; flat at 1 for normalized residuals when no correlation remains. *(Module 5)*
+
+**Sensitivity analysis**
+:   An analysis that relaxes a specific assumption of the primary analysis to show how much the conclusion depends on it. *(Module 12)*
+
+**Separability (distinctness) of parameters**
+:   The parameters of the outcome model and of the missingness model have no common elements or joint constraints. *(Module 10)*
+
+**Separation**
+:   A pattern in binary data in which a predictor or combination of predictors perfectly predicts the outcome, so the maximum-likelihood estimate is infinite. *(Module 11)*
+
+**Sequential exchangeability**
+:   The assumption that, at each time, treatment is independent of the potential outcomes given the measured past (no unmeasured confounding of treatment decisions). *(Module 13)*
+
+**Serial correlation**
+:   Correlation between measurements on the same participant that decreases as the time between them increases. *(Module 5)*
+
+**sessionInfo()**
+:   An R function that reports the R version, platform and attached package versions. *(Module 12)*
+
+**Shrinkage factor**
+:   The weight lambda_i given to a participant's own data in their BLUP; it lies between 0 and 1. *(Module 11)*
+
+**Shrinkage (partial pooling)**
+:   The pulling of subject-specific predictions toward the mean, stronger when a subject has few or noisy observations. *(Modules 4, 11)*
+
+**Simple effect**
+:   The effect of one variable at a specific value of another variable with which it interacts; in an interaction model, each "main effect" is a simple effect at the reference value of the other variable. *(Module 6)*
+
+**Simulation-based power**
+:   Power estimated as the proportion of simulated trials, generated from a planning model and analysed with the planned method, in which the null hypothesis is rejected. *(Module 12)*
+
+**Singular fit**
+:   A mixed-model fit in which the estimated random-effects covariance matrix is not of full rank, for example a variance of zero or a correlation of ±1. *(Modules 4, 5, 11)*
+
+**Spaghetti plot**
+:   A plot with one line per participant showing the outcome over time. *(Module 2)*
+
+**Sphericity**
+:   The condition that the variance of the difference between any two occasions is the same for all pairs; required for the within-subject F-tests of RM-ANOVA. *(Module 3)*
+
+**Stabilised weight**
+:   An inverse probability weight whose numerator is the probability of the received treatment given treatment history only; it keeps weights near 1 and reduces their variability. *(Module 13)*
+
+**Standardised conditional residual**
+:   A conditional residual divided by the estimated residual SD. *(Module 11)*
+
+**Starting values**
+:   Initial guesses for the parameters of an iterative fitting algorithm; nonlinear models need them and may converge to different solutions from poor starts. *(Module 13)*
+
+**Statistical analysis plan (SAP)**
+:   A dated, detailed description of the planned analyses, finalised before the data that bear on the main comparison are seen. *(Module 12)*
+
+**S_tt (spread of measurement times)**
+:   The sum of squared deviations of the measurement times from their mean; the larger it is, the more precisely an individual slope is estimated. *(Module 12)*
+
+**Subject (participant)**
+:   The unit measured repeatedly and assumed independent of other subjects, indexed $i$. *(Module 1)*
+
+**Subject-specific (conditional) effect**
+:   An effect that compares expected outcomes for the same participant (same random effects) under different covariate values. *(Module 8)*
+
+**Subject-specific (conditional) interpretation**
+:   The meaning of the model for a subject with given random effects. *(Module 4)*
+
+**Subject-specific (conditional) prediction**
+:   A prediction that adds a participant's predicted random effects, $\mathbf{x}^\top\hat{\boldsymbol\beta} + \mathbf{z}^\top\hat{\mathbf{b}}_i$. *(Module 6)*
+
+## T {.unnumbered}
+
+**Three-level model**
+:   A mixed model with random effects at three nested levels, for example visits within participants within clinics. *(Module 13)*
+
+**Time constant**
+:   In an exponential approach to a plateau, the time by which about 63% of the eventual change has occurred; about 95% has occurred by three time constants. *(Module 13)*
+
+**Time-dependent Cox model**
+:   A proportional hazards model whose covariates change over follow-up; with a biomarker measured at visits it usually carries the last observed value forward. *(Module 13)*
+
+**Time-invariant covariate**
+:   A covariate that takes one value per participant for the whole study, such as arm, sex or baseline age. *(Module 9)*
+
+**Time-varying confounding**
+:   Confounding by a variable that changes over time, influences later treatment and the outcome, and may itself be affected by earlier treatment. *(Modules 9, 13)*
+
+**Time-varying covariate**
+:   A covariate that can take a different value at each measurement occasion, such as daily steps or time itself. *(Module 9)*
+
+**Tipping point**
+:   The smallest departure from MAR (value of δ) at which the study conclusion changes. *(Module 10)*
+
+**Total effect**
+:   The effect of treatment on the outcome through all pathways; in a randomised trial, the effect of randomisation to an arm. *(Module 9)*
+
+**Trace plot**
+:   A plot of sampled parameter values against iteration for each MCMC chain, used to check mixing and convergence. *(Module 13)*
+
+**Treatment-policy strategy**
+:   Handling an intercurrent event by using the outcome whether or not the event occurred. *(Module 12)*
+
+**Type I error**
+:   Rejecting a true null hypothesis; its rate should equal the nominal significance level. *(Module 12)*
+
+## U {.unnumbered}
+
+**Unbalanced design**
+:   Subjects have different numbers or timings of measurements, through design, missed visits or dropout. *(Module 1)*
+
+**Unequal follow-up**
+:   Subjects are observed over different lengths of time. *(Module 1)*
+
+**Unequal measurement intervals**
+:   Gaps between measurement occasions that differ in length, by design (months 0, 1, 3, 6, ...) or because actual visit times vary. *(Module 9)*
+
+**Unstructured covariance**
+:   A covariance with a separate variance for each occasion and a separate covariance for each pair; $n(n+1)/2$ parameters for $n$ occasions. *(Module 5)*
+
+## V {.unnumbered}
+
+**Variance components**
+:   The variances and covariances of the random effects ($\tau_0^2$, $\tau_1^2$, $\tau_{01}$) and the residual variance $\sigma^2$. *(Modules 1, 4)*
+
+**Variance partition**
+:   The division of the total outcome variance into the shares attributable to each level of a multilevel model. *(Module 13)*
+
+**Version control (Git)**
+:   A system that records every change to files with a message, so that any earlier state can be recovered and the version that produced a result can be identified. *(Module 12)*
+
+**Visit**
+:   A scheduled contact defined by the study protocol (for example month 6). *(Module 1)*
+
+**Visit window**
+:   The protocol's permitted range around a scheduled visit date. Visits outside it are out-of-window visits. *(Modules 2, 12)*
+
+## W {.unnumbered}
+
+**Weighted GEE**
+:   GEE with inverse-probability weights, normally with an independence working correlation; valid under MAR if the dropout model is correct. *(Module 7)*
+
+**Wide format**
+:   A data layout with one row per participant and one column per scheduled visit for each repeated variable. It can hold only the scheduled time, not each participant's actual time. *(Module 2)*
+
+**Within-group change**
+:   The mean change over time in one group; it mixes any treatment effect with regression to the mean and other time effects. *(Module 3)*
+
+**Within-person (within-subject) effect**
+:   The expected change in a participant's outcome when their covariate is one unit above their own average. *(Module 9)*
+
+**Within-subject (within-person) variation**
+:   Variation of a subject's measurements around their own level, estimated by the residual variance $\sigma^2$. *(Module 1)*
+
+**Working correlation**
+:   The analyst's assumed correlation matrix for observations within a cluster in GEE (independence, exchangeable, AR(1), unstructured); it affects efficiency but not the consistency of the estimates. *(Module 7)*
+
+## Z {.unnumbered}
+
+**Zero inflation**
+:   More zero counts than the count model predicts. It can be modelled as a separate process producing structural zeros (`ziformula` in glmmTMB), but it is often a symptom of overdispersion, so compare with a negative binomial model first. *(Modules 8, 11)*

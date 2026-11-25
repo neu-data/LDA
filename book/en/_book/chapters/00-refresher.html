@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-GB" xml:lang="en-GB"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Foundations refresher: R and regression – Longitudinal Data Analysis in R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/01-foundations.html" rel="next">
+<link href="../index.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-174fd6913be23cc9900c0b0ca550f0a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../book.css">
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/00-refresher.html">Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/00-refresher.html">Foundations refresher: R and regression</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">Longitudinal Data Analysis in R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/neu-data/LDA/tree/main/book/en/" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+    <a href="../Longitudinal-Data-Analysis-in-R.pdf" title="Download PDF" class="quarto-navigation-tool px-1" aria-label="Download PDF"><i class="bi bi-file-pdf"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/00-refresher.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Foundations refresher: R and regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Foundations of longitudinal data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-data-preparation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Preparing and exploring longitudinal data in R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-traditional-methods.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Linear mixed models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-linear-mixed-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Linear mixed-effects models</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-covariance-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Modelling covariance and choosing a model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-interpretation-prediction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Interpretation, contrasts and prediction</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Non-normal outcomes</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-gee.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Generalized estimating equations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-glmm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Generalized linear mixed models</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Extensions, missing data and practice</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-time-varying-nonlinear.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Time-varying predictors and nonlinear change</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Missing data and dropout</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-diagnostics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Diagnostics and troubleshooting</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-planning-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Advanced extensions</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-advanced.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Advanced extensions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/a-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">The course datasets</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/b-choosing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Choosing a method</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/c-glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-outcomes" id="toc-learning-outcomes" class="nav-link active" data-scroll-target="#learning-outcomes">Learning outcomes</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#working-in-r-for-this-course" id="toc-working-in-r-for-this-course" class="nav-link" data-scroll-target="#working-in-r-for-this-course">Working in R for this course</a>
+  <ul class="collapse">
+  <li><a href="#the-course-r-project-and-relative-paths" id="toc-the-course-r-project-and-relative-paths" class="nav-link" data-scroll-target="#the-course-r-project-and-relative-paths">The course R project and relative paths</a></li>
+  <li><a href="#reading-data" id="toc-reading-data" class="nav-link" data-scroll-target="#reading-data">Reading data</a></li>
+  <li><a href="#inspecting-and-transforming-data-with-dplyr" id="toc-inspecting-and-transforming-data-with-dplyr" class="nav-link" data-scroll-target="#inspecting-and-transforming-data-with-dplyr">Inspecting and transforming data with <code>dplyr</code></a></li>
+  <li><a href="#plotting-with-ggplot2" id="toc-plotting-with-ggplot2" class="nav-link" data-scroll-target="#plotting-with-ggplot2">Plotting with <code>ggplot2</code></a></li>
+  </ul></li>
+  <li><a href="#linear-regression" id="toc-linear-regression" class="nav-link" data-scroll-target="#linear-regression">Linear regression</a>
+  <ul class="collapse">
+  <li><a href="#the-research-question-and-estimand" id="toc-the-research-question-and-estimand" class="nav-link" data-scroll-target="#the-research-question-and-estimand">The research question and estimand</a></li>
+  <li><a href="#data-structure-and-outcome-types" id="toc-data-structure-and-outcome-types" class="nav-link" data-scroll-target="#data-structure-and-outcome-types">Data structure and outcome types</a></li>
+  <li><a href="#intuition" id="toc-intuition" class="nav-link" data-scroll-target="#intuition">Intuition</a></li>
+  <li><a href="#the-model" id="toc-the-model" class="nav-link" data-scroll-target="#the-model">The model</a></li>
+  <li><a href="#assumptions-and-limitations" id="toc-assumptions-and-limitations" class="nav-link" data-scroll-target="#assumptions-and-limitations">Assumptions and limitations</a></li>
+  <li><a href="#fitting-the-model-in-r" id="toc-fitting-the-model-in-r" class="nav-link" data-scroll-target="#fitting-the-model-in-r">Fitting the model in R</a></li>
+  <li><a href="#interpreting-the-output" id="toc-interpreting-the-output" class="nav-link" data-scroll-target="#interpreting-the-output">Interpreting the output</a></li>
+  <li><a href="#checking-the-model" id="toc-checking-the-model" class="nav-link" data-scroll-target="#checking-the-model">Checking the model</a></li>
+  <li><a href="#reporting" id="toc-reporting" class="nav-link" data-scroll-target="#reporting">Reporting</a></li>
+  <li><a href="#common-mistakes" id="toc-common-mistakes" class="nav-link" data-scroll-target="#common-mistakes">Common mistakes</a></li>
+  </ul></li>
+  <li><a href="#interactions-between-a-continuous-and-a-categorical-predictor" id="toc-interactions-between-a-continuous-and-a-categorical-predictor" class="nav-link" data-scroll-target="#interactions-between-a-continuous-and-a-categorical-predictor">Interactions between a continuous and a categorical predictor</a>
+  <ul class="collapse">
+  <li><a href="#the-research-question-and-estimand-1" id="toc-the-research-question-and-estimand-1" class="nav-link" data-scroll-target="#the-research-question-and-estimand-1">The research question and estimand</a></li>
+  <li><a href="#data-structure-and-outcome-types-1" id="toc-data-structure-and-outcome-types-1" class="nav-link" data-scroll-target="#data-structure-and-outcome-types-1">Data structure and outcome types</a></li>
+  <li><a href="#intuition-1" id="toc-intuition-1" class="nav-link" data-scroll-target="#intuition-1">Intuition</a></li>
+  <li><a href="#the-model-1" id="toc-the-model-1" class="nav-link" data-scroll-target="#the-model-1">The model</a></li>
+  <li><a href="#assumptions-and-limitations-1" id="toc-assumptions-and-limitations-1" class="nav-link" data-scroll-target="#assumptions-and-limitations-1">Assumptions and limitations</a></li>
+  <li><a href="#fitting-the-model-in-r-1" id="toc-fitting-the-model-in-r-1" class="nav-link" data-scroll-target="#fitting-the-model-in-r-1">Fitting the model in R</a></li>
+  <li><a href="#interpreting-the-output-1" id="toc-interpreting-the-output-1" class="nav-link" data-scroll-target="#interpreting-the-output-1">Interpreting the output</a></li>
+  <li><a href="#checking-the-model-1" id="toc-checking-the-model-1" class="nav-link" data-scroll-target="#checking-the-model-1">Checking the model</a></li>
+  <li><a href="#reporting-1" id="toc-reporting-1" class="nav-link" data-scroll-target="#reporting-1">Reporting</a></li>
+  <li><a href="#common-mistakes-1" id="toc-common-mistakes-1" class="nav-link" data-scroll-target="#common-mistakes-1">Common mistakes</a></li>
+  </ul></li>
+  <li><a href="#logistic-regression" id="toc-logistic-regression" class="nav-link" data-scroll-target="#logistic-regression">Logistic regression</a>
+  <ul class="collapse">
+  <li><a href="#the-research-question-and-estimand-2" id="toc-the-research-question-and-estimand-2" class="nav-link" data-scroll-target="#the-research-question-and-estimand-2">The research question and estimand</a></li>
+  <li><a href="#data-structure-and-outcome-types-2" id="toc-data-structure-and-outcome-types-2" class="nav-link" data-scroll-target="#data-structure-and-outcome-types-2">Data structure and outcome types</a></li>
+  <li><a href="#intuition-2" id="toc-intuition-2" class="nav-link" data-scroll-target="#intuition-2">Intuition</a></li>
+  <li><a href="#the-model-2" id="toc-the-model-2" class="nav-link" data-scroll-target="#the-model-2">The model</a></li>
+  <li><a href="#assumptions-and-limitations-2" id="toc-assumptions-and-limitations-2" class="nav-link" data-scroll-target="#assumptions-and-limitations-2">Assumptions and limitations</a></li>
+  <li><a href="#fitting-the-model-in-r-2" id="toc-fitting-the-model-in-r-2" class="nav-link" data-scroll-target="#fitting-the-model-in-r-2">Fitting the model in R</a></li>
+  <li><a href="#interpreting-the-output-2" id="toc-interpreting-the-output-2" class="nav-link" data-scroll-target="#interpreting-the-output-2">Interpreting the output</a></li>
+  <li><a href="#checking-the-model-2" id="toc-checking-the-model-2" class="nav-link" data-scroll-target="#checking-the-model-2">Checking the model</a></li>
+  <li><a href="#reporting-2" id="toc-reporting-2" class="nav-link" data-scroll-target="#reporting-2">Reporting</a></li>
+  <li><a href="#common-mistakes-2" id="toc-common-mistakes-2" class="nav-link" data-scroll-target="#common-mistakes-2">Common mistakes</a></li>
+  </ul></li>
+  <li><a href="#confidence-intervals-and-prediction-intervals" id="toc-confidence-intervals-and-prediction-intervals" class="nav-link" data-scroll-target="#confidence-intervals-and-prediction-intervals">Confidence intervals and prediction intervals</a></li>
+  <li><a href="#why-repeated-measurements-break-the-independence-assumption" id="toc-why-repeated-measurements-break-the-independence-assumption" class="nav-link" data-scroll-target="#why-repeated-measurements-break-the-independence-assumption">Why repeated measurements break the independence assumption</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#further-reading" id="toc-further-reading" class="nav-link" data-scroll-target="#further-reading">Further reading</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises">Exercises</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/00-refresher.html">Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/00-refresher.html">Foundations refresher: R and regression</a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-m00" class="quarto-section-identifier">Foundations refresher: R and regression</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"R"</span>, <span class="st">"setup.R"</span>))</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>walk_base <span class="ot">&lt;-</span> <span class="fu">load_walk</span>(<span class="st">"baseline"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Every method in this course is a regression model with something added to cope with repeated measurements. A linear mixed model is a linear regression with extra terms for people; a generalized estimating equation is a logistic or Poisson regression with corrected standard errors. If the ordinary versions are secure, the longitudinal versions are much easier to learn. This module refreshes the R workflow and the regression ideas that the rest of the course takes for granted: reading data with relative paths, summarising and plotting with <code>dplyr</code> and <code>ggplot2</code>, fitting and interpreting linear and logistic regression, interactions and centring, residual checks, and the difference between a confidence interval and a prediction interval. All the analyses here use one row per participant, so they are cross-sectional by design. The module ends by showing why that one-row-per-person assumption breaks down as soon as the same people are measured more than once.</p>
+<section id="learning-outcomes" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="learning-outcomes">Learning outcomes</h2>
+<p>By the end of this module you will be able to:</p>
+<ol type="1">
+<li><strong>0.1</strong> Open the course R project, load data with relative paths and inspect data frames with <code>dplyr</code>.</li>
+<li><strong>0.2</strong> Fit linear and logistic regression models in R and interpret each coefficient, its confidence interval and its p-value in the units of the outcome.</li>
+<li><strong>0.3</strong> Specify and interpret an interaction between a categorical and a continuous predictor.</li>
+<li><strong>0.4</strong> Produce and interpret residual-versus-fitted and normal Q–Q plots, and name the assumption each one checks.</li>
+<li><strong>0.5</strong> Explain the difference between a confidence interval for a mean and a prediction interval for a new observation.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>None. This is the entry module. It assumes you have met descriptive statistics, confidence intervals, hypothesis tests and simple linear regression at some point, even if not recently. Participants who are confident with all five outcomes above can take the Module 0 knowledge check and go straight to Module 1.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="Simulated data">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Simulated data
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.</p>
+</div>
+</div>
+</section>
+<section id="working-in-r-for-this-course" class="level2">
+<h2 class="anchored" data-anchor-id="working-in-r-for-this-course">Working in R for this course</h2>
+<section id="the-course-r-project-and-relative-paths" class="level3">
+<h3 class="anchored" data-anchor-id="the-course-r-project-and-relative-paths">The course R project and relative paths</h3>
+<p>The course materials live in one folder that contains an RStudio project file, <code>LDA_course.Rproj</code>. Opening that file (double-click it, or use <em>File &gt; Open Project</em> in RStudio) starts R with the working directory set to the project root. Everything in the course then refers to files by their position inside the project, never by a path that only exists on one computer.</p>
+<p>The <code>here</code> package does this reliably. <code>here::here("data", "walk_baseline.csv")</code> builds the full path to <code>data/walk_baseline.csv</code> starting from the project root, wherever the project happens to sit on your disk and whichever subfolder the current script or Quarto document is in. That is why every script and document in the course begins with the same line:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"R"</span>, <span class="st">"setup.R"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>setup.R</code> loads the course packages, sets the plotting theme and defines a small set of helper functions, such as <code>load_walk()</code>. You should never need <code>setwd()</code>. A script that calls <code>setwd("C:/Users/me/Desktop/course")</code> will fail on every other computer, including yours after you move the folder.</p>
+</section>
+<section id="reading-data" class="level3">
+<h3 class="anchored" data-anchor-id="reading-data">Reading data</h3>
+<p>The WALK study is the course’s core dataset: a fictional three-arm randomised trial of a community walking programme for adults with raised blood pressure, with 360 participants at 8 clinics. The file <code>walk_baseline.csv</code> has one row per participant. You can read it directly with <code>readr</code>:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>walk_raw <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"data"</span>, <span class="st">"walk_baseline.csv"</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>walk_raw</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 360 × 11
+#&gt;    id    clinic arm     age sex      bmi rand_date   sbp0 steps0 dropout
+#&gt;    &lt;chr&gt;  &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt; &lt;chr&gt;  &lt;dbl&gt; &lt;date&gt;     &lt;dbl&gt;  &lt;dbl&gt; &lt;lgl&gt;  
+#&gt;  1 W001       8 EP       69 Male    32.8 2024-07-29   150    4.5 FALSE  
+#&gt;  2 W002       5 SP       64 Male    37.9 2024-10-28   176    7.5 TRUE   
+#&gt;  3 W003       4 UC       52 Female  26.3 2024-10-31   125   11.2 FALSE  
+#&gt;  4 W004       5 EP       69 Female  28.8 2024-03-06   145    7.2 FALSE  
+#&gt;  5 W005       5 UC       53 Male    31.2 2024-04-03   140    7   FALSE  
+#&gt;  6 W006       1 SP       74 Female  24.6 2024-02-05   118    9.5 FALSE  
+#&gt;  7 W007       8 SP       41 Male    29.9 2024-02-01   141    4.5 FALSE  
+#&gt;  8 W008       2 EP       66 Female  24.3 2024-10-30   157    4.9 FALSE  
+#&gt;  9 W009       4 SP       49 Female  27.8 2024-11-15   136    5.1 FALSE  
+#&gt; 10 W010       8 SP       74 Female  30.4 2024-03-13   165    3.9 FALSE  
+#&gt; # ℹ 350 more rows
+#&gt; # ℹ 1 more variable: last_month_sched &lt;dbl&gt;</code></pre>
+</div>
+</div>
+<p>The printout tells you the dimensions (360 rows, 11 columns) and the type of each column. Notice that <code>arm</code> and <code>sex</code> are read as character strings. For modelling we want them as factors with a deliberate reference level: usual care (UC) first for arm, and male first for sex. The course loader does this for you, and it is what we use from now on:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>walk_base <span class="ot">&lt;-</span> <span class="fu">load_walk</span>(<span class="st">"baseline"</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(walk_base[, <span class="fu">c</span>(<span class="st">"id"</span>, <span class="st">"arm"</span>, <span class="st">"sex"</span>, <span class="st">"age"</span>, <span class="st">"bmi"</span>, <span class="st">"sbp0"</span>, <span class="st">"dropout"</span>)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; tibble [360 × 7] (S3: tbl_df/tbl/data.frame)
+#&gt;  $ id     : chr [1:360] "W001" "W002" "W003" "W004" ...
+#&gt;  $ arm    : Factor w/ 3 levels "UC","SP","EP": 3 2 1 3 1 2 2 3 2 2 ...
+#&gt;  $ sex    : Factor w/ 2 levels "Male","Female": 1 1 2 2 1 2 1 2 2 2 ...
+#&gt;  $ age    : num [1:360] 69 64 52 69 53 74 41 66 49 74 ...
+#&gt;  $ bmi    : num [1:360] 32.8 37.9 26.3 28.8 31.2 24.6 29.9 24.3 27.8 30.4 ...
+#&gt;  $ sbp0   : num [1:360] 150 176 125 145 140 118 141 157 136 165 ...
+#&gt;  $ dropout: logi [1:360] FALSE TRUE FALSE FALSE FALSE FALSE ...</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(walk_base<span class="sc">$</span>arm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] "UC" "SP" "EP"</code></pre>
+</div>
+</div>
+<p><code>load_walk("baseline")</code> returns the same rows with <code>arm</code>, <code>sex</code> and <code>clinic</code> stored as factors. The first level of a factor is the reference category in a regression, which is why the order of <code>levels()</code> matters.</p>
+</section>
+<section id="inspecting-and-transforming-data-with-dplyr" class="level3">
+<h3 class="anchored" data-anchor-id="inspecting-and-transforming-data-with-dplyr">Inspecting and transforming data with <code>dplyr</code></h3>
+<p>Five <code>dplyr</code> verbs cover most data handling in this course. Each takes a data frame and returns a data frame, so they can be chained with the native pipe <code>|&gt;</code>, which passes the result on the left as the first argument of the function on the right.</p>
+<ul>
+<li><code>filter()</code> keeps rows that meet a condition.</li>
+<li><code>select()</code> keeps or drops columns.</li>
+<li><code>mutate()</code> creates or changes columns.</li>
+<li><code>group_by()</code> with <code>summarise()</code> computes summaries within groups.</li>
+<li><code>arrange()</code> sorts rows; <code>count()</code> tabulates.</li>
+</ul>
+<p>Here they are in use. First we create the derived variables that the course uses throughout. Age is centred at 60 years and expressed per 10 years (<code>age10</code>), BMI is centred at 29 kg/m² (<code>bmi_c</code>), and <code>hyp150</code> flags a baseline systolic blood pressure (SBP) of at least 150 mmHg.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>walk_base <span class="ot">&lt;-</span> walk_base <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">age10  =</span> (age <span class="sc">-</span> <span class="dv">60</span>) <span class="sc">/</span> <span class="dv">10</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">bmi_c  =</span> bmi <span class="sc">-</span> <span class="dv">29</span>,</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyp150 =</span> <span class="fu">as.integer</span>(sbp0 <span class="sc">&gt;=</span> <span class="dv">150</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>walk_base <span class="sc">|&gt;</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(arm) <span class="sc">|&gt;</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">n         =</span> <span class="fu">n</span>(),</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_age  =</span> <span class="fu">mean</span>(age),</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">pct_women =</span> <span class="dv">100</span> <span class="sc">*</span> <span class="fu">mean</span>(sex <span class="sc">==</span> <span class="st">"Female"</span>),</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_sbp0 =</span> <span class="fu">mean</span>(sbp0),</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_sbp0   =</span> <span class="fu">sd</span>(sbp0),</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">pct_150   =</span> <span class="dv">100</span> <span class="sc">*</span> <span class="fu">mean</span>(hyp150)</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 3 × 7
+#&gt;   arm       n mean_age pct_women mean_sbp0 sd_sbp0 pct_150
+#&gt;   &lt;fct&gt; &lt;int&gt;    &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt; 1 UC      120    59.62     54.17     146.2   12.56   40.83
+#&gt; 2 SP      120    60.11     56.67     147.2   14.10   45   
+#&gt; 3 EP      120    60.52     47.5      147.5   13.18   48.33</code></pre>
+</div>
+</div>
+<p>Because WALK is randomised, the three arms should look similar at baseline, and they do: mean baseline SBP differs by less than 2 mmHg between arms. A few more examples show the other verbs:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Women over 70 with the highest baseline SBP</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>walk_base <span class="sc">|&gt;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sex <span class="sc">==</span> <span class="st">"Female"</span>, age <span class="sc">&gt;</span> <span class="dv">70</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, arm, age, bmi, sbp0) <span class="sc">|&gt;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(sbp0)) <span class="sc">|&gt;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 5 × 5
+#&gt;   id    arm     age   bmi  sbp0
+#&gt;   &lt;chr&gt; &lt;fct&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt; 1 W082  UC       75  32.5   183
+#&gt; 2 W189  EP       80  33.4   173
+#&gt; 3 W010  SP       74  30.4   165
+#&gt; 4 W132  SP       72  28     161
+#&gt; 5 W213  EP       80  30.4   159</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># How many participants dropped out, by arm</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>walk_base <span class="sc">|&gt;</span> <span class="fu">count</span>(arm, dropout)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 6 × 3
+#&gt;   arm   dropout     n
+#&gt;   &lt;fct&gt; &lt;lgl&gt;   &lt;int&gt;
+#&gt; 1 UC    FALSE      95
+#&gt; 2 UC    TRUE       25
+#&gt; 3 SP    FALSE     100
+#&gt; 4 SP    TRUE       20
+#&gt; 5 EP    FALSE      93
+#&gt; 6 EP    TRUE       27</code></pre>
+</div>
+</div>
+</section>
+<section id="plotting-with-ggplot2" class="level3">
+<h3 class="anchored" data-anchor-id="plotting-with-ggplot2">Plotting with <code>ggplot2</code></h3>
+<p>A <code>ggplot2</code> figure is built in layers. <code>ggplot(data, aes(...))</code> names the data and maps variables to aesthetics (x position, y position, colour). Geometric layers such as <code>geom_point()</code>, <code>geom_histogram()</code> or <code>geom_smooth()</code> then draw the data, and <code>labs()</code> sets the axis labels. Always put units in axis labels.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(walk_base, <span class="fu">aes</span>(sbp0)) <span class="sc">+</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">binwidth =</span> <span class="dv">4</span>, <span class="at">fill =</span> <span class="st">"#9A9A9A"</span>, <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">150</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Baseline systolic blood pressure (mmHg)"</span>, <span class="at">y =</span> <span class="st">"Participants"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-hist" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-hist-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-hist-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-hist-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: Distribution of baseline systolic blood pressure in WALK (n = 360). The dashed line marks 150 mmHg.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(walk_base, <span class="fu">aes</span>(bmi, sbp0, <span class="at">colour =</span> sex)) <span class="sc">+</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>, <span class="at">formula =</span> y <span class="sc">~</span> x) <span class="sc">+</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">Male =</span> <span class="st">"#0072B2"</span>, <span class="at">Female =</span> <span class="st">"#D55E00"</span>),</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>                      <span class="at">name =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Body mass index (kg/m²)"</span>, <span class="at">y =</span> <span class="st">"Baseline SBP (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-scatter" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-scatter-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-scatter-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-scatter-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: Baseline SBP against BMI, by sex, with a least-squares line for each sex.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><a href="#fig-m00-scatter" class="quarto-xref">Figure&nbsp;<span>2</span></a> already suggests the regression story to come. SBP rises with BMI, women sit a few mmHg below men at the same BMI, and there is a great deal of scatter around both lines.</p>
+</section>
+</section>
+<section id="linear-regression" class="level2">
+<h2 class="anchored" data-anchor-id="linear-regression">Linear regression</h2>
+<section id="the-research-question-and-estimand" class="level3">
+<h3 class="anchored" data-anchor-id="the-research-question-and-estimand">The research question and estimand</h3>
+<p>How is baseline SBP associated with age, sex and BMI among WALK participants? The estimands are adjusted differences in mean SBP: the difference in mean SBP between two groups of people who differ by one unit of a predictor and are alike in the other predictors. For BMI, for example, the estimand is the difference in mean SBP between people whose BMI differs by 1 kg/m² but who have the same age and sex.</p>
+<p>This is a question about association. Baseline age, sex and BMI were not assigned, so the coefficients describe how mean SBP differs across people, not what would happen to one person’s SBP if their BMI changed.</p>
+</section>
+<section id="data-structure-and-outcome-types" class="level3">
+<h3 class="anchored" data-anchor-id="data-structure-and-outcome-types">Data structure and outcome types</h3>
+<p>The data have one row per participant (360 rows). The outcome <code>sbp0</code> is continuous and measured in mmHg. The predictors are age (continuous, years), sex (binary factor) and BMI (continuous, kg/m²). Each participant contributes exactly one outcome value, which is what makes ordinary regression appropriate here.</p>
+</section>
+<section id="intuition" class="level3">
+<h3 class="anchored" data-anchor-id="intuition">Intuition</h3>
+<p>Linear regression finds the plane (with one predictor, the line) that passes as close as possible to the observed outcomes, in the sense of the smallest sum of squared vertical distances. Each slope tells you how far the plane rises when you move one unit along one predictor while holding the others fixed. The scatter of points around the plane is the residual variation: everything about SBP that age, sex and BMI do not explain.</p>
+</section>
+<section id="the-model" class="level3">
+<h3 class="anchored" data-anchor-id="the-model">The model</h3>
+<p><span class="math display">\[
+y_i = \beta_0 + \beta_1\,\text{age10}_i + \beta_2\,\text{Female}_i + \beta_3\,\text{bmi\_c}_i + \varepsilon_i,
+\qquad \varepsilon_i \sim N(0, \sigma^2) \text{ independently.}
+\]</span></p>
+<ul>
+<li><span class="math inline">\(y_i\)</span> is the baseline SBP of participant <span class="math inline">\(i\)</span>, <span class="math inline">\(i = 1, \dots, N\)</span>, with <span class="math inline">\(N = 360\)</span>. (In later modules <span class="math inline">\(y_{ij}\)</span> carries a second subscript for the measurement occasion. Here there is only one occasion.)</li>
+<li><span class="math inline">\(\text{age10}_i = (\text{age}_i - 60)/10\)</span>, so a one-unit change is 10 years and zero means age 60.</li>
+<li><span class="math inline">\(\text{Female}_i\)</span> is 1 for women and 0 for men (the reference level).</li>
+<li><span class="math inline">\(\text{bmi\_c}_i = \text{BMI}_i - 29\)</span>, so zero means a BMI of 29 kg/m².</li>
+<li><span class="math inline">\(\beta_0\)</span> is the mean SBP for a 60-year-old man with BMI 29, the person for whom all predictors are zero.</li>
+<li><span class="math inline">\(\beta_1\)</span>, <span class="math inline">\(\beta_2\)</span>, <span class="math inline">\(\beta_3\)</span> are the adjusted differences in mean SBP per 10 years of age, for women versus men, and per 1 kg/m² of BMI.</li>
+<li><span class="math inline">\(\varepsilon_i\)</span> is the residual error: the gap between participant <span class="math inline">\(i\)</span>’s SBP and the mean for people with the same covariates. Its variance <span class="math inline">\(\sigma^2\)</span> is assumed constant.</li>
+</ul>
+</section>
+<section id="assumptions-and-limitations" class="level3">
+<h3 class="anchored" data-anchor-id="assumptions-and-limitations">Assumptions and limitations</h3>
+<p>The model assumes, in decreasing order of importance:</p>
+<ol type="1">
+<li><strong>Correct mean structure (linearity).</strong> The mean of <span class="math inline">\(y\)</span> really is a linear function of the predictors as written. If SBP rises with BMI in a curve, a straight line misdescribes it.</li>
+<li><strong>Independence.</strong> The residuals of different participants are unrelated. With one row per person in a randomised trial this is reasonable. It is the assumption that fails for longitudinal data, as the end of this module shows.</li>
+<li><strong>Constant variance (homoscedasticity).</strong> The spread of the residuals is the same at every fitted value.</li>
+<li><strong>Normality of the residuals.</strong> This matters mainly for small samples and for prediction intervals. With 360 participants the coefficient estimates are approximately normal whatever the residual distribution, by the central limit theorem.</li>
+</ol>
+<p>Regression describes associations. It cannot by itself separate the effect of BMI from the effects of things correlated with BMI that are not in the model.</p>
+</section>
+<section id="fitting-the-model-in-r" class="level3">
+<h3 class="anchored" data-anchor-id="fitting-the-model-in-r">Fitting the model in R</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>m_lin <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> age10 <span class="sc">+</span> sex <span class="sc">+</span> bmi_c, <span class="at">data =</span> walk_base)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(m_lin)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; Call:
+#&gt; lm(formula = sbp0 ~ age10 + sex + bmi_c, data = walk_base)
+#&gt; 
+#&gt; Residuals:
+#&gt;    Min     1Q Median     3Q    Max 
+#&gt; -30.77 -10.05   0.51   8.94  37.83 
+#&gt; 
+#&gt; Coefficients:
+#&gt;             Estimate Std. Error t value Pr(&gt;|t|)    
+#&gt; (Intercept)  149.322      0.984  151.71  &lt; 2e-16 ***
+#&gt; age10          1.372      0.757    1.81  0.07069 .  
+#&gt; sexFemale     -4.809      1.353   -3.55  0.00043 ***
+#&gt; bmi_c          0.625      0.160    3.90  0.00012 ***
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#&gt; 
+#&gt; Residual standard error: 12.8 on 356 degrees of freedom
+#&gt; Multiple R-squared:  0.0816, Adjusted R-squared:  0.0738 
+#&gt; F-statistic: 10.5 on 3 and 356 DF,  p-value: 1.18e-06</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">confint</span>(m_lin)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                2.5 %   97.5 %
+#&gt; (Intercept) 147.3860 151.2574
+#&gt; age10        -0.1164   2.8607
+#&gt; sexFemale    -7.4703  -2.1476
+#&gt; bmi_c         0.3093   0.9397</code></pre>
+</div>
+</div>
+<p><code>lm()</code> takes a formula (outcome on the left, predictors on the right) and a data frame. <code>summary()</code> gives the coefficient table and fit statistics. <code>confint()</code> gives 95% confidence intervals. A factor such as <code>sex</code> is turned into an indicator automatically; its row is labelled <code>sexFemale</code> because the coefficient compares women with the reference level, men.</p>
+</section>
+<section id="interpreting-the-output" class="level3">
+<h3 class="anchored" data-anchor-id="interpreting-the-output">Interpreting the output</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output line</th>
+<th>What it means</th>
+<th>Value here</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>(Intercept)</code></td>
+<td>Mean SBP when all predictors are zero: a 60-year-old man with BMI 29</td>
+<td>149.3 mmHg</td>
+</tr>
+<tr class="even">
+<td><code>age10</code></td>
+<td>Difference in mean SBP per 10 years of age, same sex and BMI</td>
+<td>1.4 (-0.1 to 2.9) mmHg</td>
+</tr>
+<tr class="odd">
+<td><code>sexFemale</code></td>
+<td>Women minus men, same age and BMI</td>
+<td>-4.8 (-7.5 to -2.1) mmHg</td>
+</tr>
+<tr class="even">
+<td><code>bmi_c</code></td>
+<td>Difference per 1 kg/m² of BMI, same age and sex</td>
+<td>0.62 (0.31 to 0.94) mmHg</td>
+</tr>
+<tr class="odd">
+<td><code>Residual standard error</code></td>
+<td>Estimate of <span class="math inline">\(\sigma\)</span>, the typical distance of a participant from the mean for their covariates</td>
+<td>12.8 mmHg</td>
+</tr>
+<tr class="even">
+<td><code>Multiple R-squared</code></td>
+<td>Share of the variance in SBP explained by the predictors</td>
+<td>0.082</td>
+</tr>
+</tbody>
+</table>
+<p>Take the coefficients one at a time. Among participants of the same sex and BMI, those who are 10 years older have mean SBP 1.4 mmHg higher. The 95% confidence interval runs from -0.1 to 2.9 mmHg, so the data are compatible with essentially no age association as well as with one of almost 3 mmHg per decade; the p-value of 0.071 says the same thing in a different language. Women have mean SBP 4.8 mmHg lower than men of the same age and BMI (95% CI -7.5 to -2.1, p &lt; 0.001). Each additional 1 kg/m² of BMI goes with 0.62 mmHg higher mean SBP (0.62 (0.31 to 0.94), p &lt; 0.001), so two people who differ by 5 kg/m² differ on average by about 3.1 mmHg.</p>
+<p>A <strong>confidence interval</strong> is a range of values for the true coefficient that are compatible with the data, given the model. If the study were repeated many times, 95% of intervals constructed this way would contain the true value. A <strong>p-value</strong> is the probability of an estimate at least as far from zero as the one observed if the true coefficient were zero. It measures incompatibility with “no association”, not the size or importance of an association. Report the estimate and its interval first and the p-value second.</p>
+<p>The <span class="math inline">\(R^2\)</span> of 0.082 means that age, sex and BMI together explain only about 8% of the variation in baseline SBP between people. That is typical for blood pressure, and it does not make the coefficients wrong. A model can estimate an association precisely while explaining little of the outcome’s variance. The residual standard error of 12.8 mmHg is a better reminder of how much individuals scatter around their predicted mean.</p>
+<p>Because the data are simulated, we can compare these estimates with the values used to generate them, which is never possible with real data. The generating model used 3.0 mmHg per 10 years of age, −4.0 mmHg for women and 0.6 mmHg per kg/m² of BMI. The true sex and BMI values lie comfortably inside their 95% confidence intervals. The true age value lies just above the upper limit of its interval (2.86). That is not a mistake in the analysis: a 95% interval is expected to miss the true value in about 1 study in 20, and here this sample happens to contain an unusually weak age gradient. It is a useful reminder that a single study gives one draw from the sampling distribution.</p>
+<section id="why-centring-makes-the-intercept-meaningful" class="level4">
+<h4 class="anchored" data-anchor-id="why-centring-makes-the-intercept-meaningful">Why centring makes the intercept meaningful</h4>
+<p>The same model can be fitted with raw age and BMI:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>m_raw <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> bmi, <span class="at">data =</span> walk_base)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">coef</span>(m_raw), <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; (Intercept)         age   sexFemale         bmi 
+#&gt;     122.978       0.137      -4.809       0.625</code></pre>
+</div>
+</div>
+<p>The slopes are identical (age is now per year, so 0.1372 is one tenth of 1.372), but the intercept is now 123 mmHg. That is the predicted mean SBP for a man aged 0 with a BMI of 0, a person who cannot exist. <strong>Centring</strong> (subtracting a meaningful reference value from a predictor) changes only what the intercept refers to. It does not change the slopes, the fitted values or the residuals. Centring becomes essential once a model contains interactions, as the next section shows, and in longitudinal models where the intercept is the mean outcome at the start of follow-up.</p>
+</section>
+<section id="categorical-predictors-and-reference-levels" class="level4">
+<h4 class="anchored" data-anchor-id="categorical-predictors-and-reference-levels">Categorical predictors and reference levels</h4>
+<p>A categorical predictor with <span class="math inline">\(K\)</span> levels enters the model as <span class="math inline">\(K-1\)</span> indicator variables, one for each level except the reference. Each coefficient is the difference between that level and the reference. Arm has three levels:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>m_arm <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> arm, <span class="at">data =</span> walk_base)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(<span class="fu">summary</span>(m_arm))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;             Estimate Std. Error  t value   Pr(&gt;|t|)
+#&gt; (Intercept)  146.183      1.214 120.4430 3.615e-291
+#&gt; armSP          1.025      1.716   0.5972  5.508e-01
+#&gt; armEP          1.350      1.716   0.7865  4.321e-01</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(m_arm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; Analysis of Variance Table
+#&gt; 
+#&gt; Response: sbp0
+#&gt;            Df Sum Sq Mean Sq F value Pr(&gt;F)
+#&gt; arm         2    119    59.6    0.34   0.71
+#&gt; Residuals 357  63108   176.8</code></pre>
+</div>
+</div>
+<p>The intercept, 146.2 mmHg, is the mean baseline SBP in usual care. <code>armSP</code> (1.03) and <code>armEP</code> (1.35) are the differences between each programme and usual care. The overall F-test in <code>anova()</code> asks whether any of the three means differ (F = 0.34, p = 0.714). Since arm was randomised, these baseline differences can only be chance, and they are small.</p>
+<p>To compare against a different group, change the reference level with <code>relevel()</code>. The model is the same; only the parameterisation changes.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>m_arm_ep <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> <span class="fu">relevel</span>(arm, <span class="at">ref =</span> <span class="st">"EP"</span>), <span class="at">data =</span> walk_base)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">coef</span>(m_arm_ep), <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                (Intercept) relevel(arm, ref = "EP")UC 
+#&gt;                     147.53                      -1.35 
+#&gt; relevel(arm, ref = "EP")SP 
+#&gt;                      -0.33</code></pre>
+</div>
+</div>
+<p>Now the intercept is the EP mean and the other coefficients compare UC and SP with EP. The fitted group means are unchanged. The same principle applies throughout the course: the WALK factors are set up so that usual care, the natural comparator, is the reference.</p>
+</section>
+</section>
+<section id="checking-the-model" class="level3">
+<h3 class="anchored" data-anchor-id="checking-the-model">Checking the model</h3>
+<p>The two standard residual plots each check one assumption. We draw them with <code>ggplot2</code> from the fitted values and residuals of <code>m_lin</code>. (Base R’s <code>plot(m_lin, which = 1:2)</code> produces the same two plots.)</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>diag_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">fitted =</span> <span class="fu">fitted</span>(m_lin), <span class="at">resid =</span> <span class="fu">resid</span>(m_lin),</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>                      <span class="at">std_resid =</span> <span class="fu">rstandard</span>(m_lin))</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>p_rvf <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(diag_df, <span class="fu">aes</span>(fitted, resid)) <span class="sc">+</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"loess"</span>, <span class="at">formula =</span> y <span class="sc">~</span> x, <span class="at">se =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>              <span class="at">colour =</span> <span class="st">"#0072B2"</span>) <span class="sc">+</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Fitted SBP (mmHg)"</span>, <span class="at">y =</span> <span class="st">"Residual (mmHg)"</span>)</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>p_qq <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(diag_df, <span class="fu">aes</span>(<span class="at">sample =</span> std_resid)) <span class="sc">+</span></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>(<span class="at">colour =</span> <span class="st">"#0072B2"</span>) <span class="sc">+</span></span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Theoretical normal quantile"</span>, <span class="at">y =</span> <span class="st">"Standardised residual"</span>)</span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>p_rvf <span class="sc">+</span> p_qq</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-resid" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-resid-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-resid-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-resid-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3: Residual checks for the baseline SBP model. Left: residuals against fitted values, with a smooth curve. Right: normal Q–Q plot of standardised residuals.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The <strong>residual-versus-fitted plot</strong> checks the mean structure and constant variance. If the model’s mean is right, the residuals scatter evenly around zero at every fitted value, and the smooth curve stays close to the horizontal line. A curve (for example, residuals positive at both ends and negative in the middle) suggests a missing nonlinearity or interaction. A funnel shape (spread growing with the fitted value) suggests non-constant variance. Here the cloud is a horizontal band with no clear funnel. The smooth curve stays close to zero over most of the range; it turns up at the far left, but that part rests on only a handful of participants with the lowest fitted values, which is too little to suggest a real curve.</p>
+<p>The <strong>normal Q–Q plot</strong> checks the normality of the residuals. It plots the ordered standardised residuals against the values expected from a normal distribution. Normal residuals fall close to the straight line; heavy tails bend away at both ends, and skewness gives a curve. Here the points follow the line closely through the middle. At the left end they sit above the line, meaning the most negative residuals are a little less extreme than a normal distribution would produce (a mild right skew). With 360 participants, mild departures of this size would not threaten the confidence intervals for the coefficients.</p>
+<p>Neither plot checks independence. Independence is a property of how the data were collected, and you judge it from the design. That is the assumption Module 1 is about.</p>
+</section>
+<section id="reporting" class="level3">
+<h3 class="anchored" data-anchor-id="reporting">Reporting</h3>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>We used linear regression to examine the association of baseline systolic blood pressure with age, sex and body mass index in the 360 WALK participants. Age was centred at 60 years and expressed per 10 years; BMI was centred at 29 kg/m². Mean SBP was 0.62 (0.31 to 0.94) mmHg higher per 1 kg/m² of BMI (p &lt; 0.001) and -4.8 (-7.5 to -2.1) mmHg different in women compared with men (p &lt; 0.001), each adjusted for the other predictors. The association with age was 1.4 (-0.1 to 2.9) mmHg per 10 years (p = 0.071). The model explained 8.2% of the variance in baseline SBP (residual SD 12.8 mmHg). Residual plots showed no important departures from linearity, constant variance or normality.</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes" class="level3">
+<h3 class="anchored" data-anchor-id="common-mistakes">Common mistakes</h3>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Interpreting an uncentred intercept.</strong> The intercept of <code>sbp0 ~ age + sex + bmi</code> refers to age 0 and BMI 0. Centre continuous predictors at a sensible value, or do not interpret the intercept.</li>
+<li><strong>Forgetting “holding the others fixed”.</strong> Each coefficient in a multiple regression is an adjusted difference. Say what it is adjusted for.</li>
+<li><strong>Treating a non-significant p-value as evidence of no effect.</strong> The age interval includes values close to 3 mmHg per decade. Absence of evidence is not evidence of absence; report the interval.</li>
+<li><strong>Equating a low <span class="math inline">\(R^2\)</span> with a useless model.</strong> <span class="math inline">\(R^2\)</span> measures explained variance, not whether the coefficients are estimated well.</li>
+<li><strong>Reading causal effects from observational associations.</strong> BMI was not assigned. The coefficient describes how mean SBP differs between people with different BMIs.</li>
+<li><strong>Using a character variable without checking the reference level.</strong> R uses alphabetical order unless you set the levels. Check <code>levels()</code> before interpreting.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+<section id="interactions-between-a-continuous-and-a-categorical-predictor" class="level2">
+<h2 class="anchored" data-anchor-id="interactions-between-a-continuous-and-a-categorical-predictor">Interactions between a continuous and a categorical predictor</h2>
+<section id="the-research-question-and-estimand-1" class="level3">
+<h3 class="anchored" data-anchor-id="the-research-question-and-estimand-1">The research question and estimand</h3>
+<p>Does the association between age and SBP differ between men and women? The estimand is the <strong>difference in slopes</strong>: the age slope among women minus the age slope among men, each adjusted for BMI. A secondary set of estimands are the two sex-specific slopes themselves and the sex difference at a stated age.</p>
+<p>This is the same shape of question that dominates the rest of the course. In a trial, “does the change in SBP over time differ between arms?” is an interaction between a continuous predictor (time) and a categorical one (arm). Getting comfortable with the cross-sectional version now pays off from Module 3 onwards.</p>
+</section>
+<section id="data-structure-and-outcome-types-1" class="level3">
+<h3 class="anchored" data-anchor-id="data-structure-and-outcome-types-1">Data structure and outcome types</h3>
+<p>The same one-row-per-participant data, with continuous SBP as the outcome. The interaction involves the continuous predictor <code>age10</code> and the binary factor <code>sex</code>.</p>
+</section>
+<section id="intuition-1" class="level3">
+<h3 class="anchored" data-anchor-id="intuition-1">Intuition</h3>
+<p>Without an interaction the model draws two parallel lines for SBP against age, one for men and one for women, separated by a constant gap. An interaction lets the two lines have different slopes, so the gap between men and women depends on age. Once the lines are allowed to diverge, there is no longer a single “sex difference”: there is a different one at every age. That is why centring matters: the “main effect” of sex in an interaction model is the sex difference at the age where the continuous predictor equals zero.</p>
+</section>
+<section id="the-model-1" class="level3">
+<h3 class="anchored" data-anchor-id="the-model-1">The model</h3>
+<p><span class="math display">\[
+y_i = \beta_0 + \beta_1\,\text{age10}_i + \beta_2\,\text{Female}_i + \beta_3\,\text{bmi\_c}_i + \beta_4\,(\text{age10}_i \times \text{Female}_i) + \varepsilon_i,
+\qquad \varepsilon_i \sim N(0, \sigma^2).
+\]</span></p>
+<p>Writing out the mean for each sex shows what each coefficient means:</p>
+<ul>
+<li>Men (<span class="math inline">\(\text{Female}_i = 0\)</span>): mean <span class="math inline">\(= \beta_0 + \beta_1\,\text{age10}_i + \beta_3\,\text{bmi\_c}_i\)</span>.</li>
+<li>Women (<span class="math inline">\(\text{Female}_i = 1\)</span>): mean <span class="math inline">\(= (\beta_0 + \beta_2) + (\beta_1 + \beta_4)\,\text{age10}_i + \beta_3\,\text{bmi\_c}_i\)</span>.</li>
+</ul>
+<p>So <span class="math inline">\(\beta_1\)</span> is the age slope (per 10 years) <strong>in men</strong>, <span class="math inline">\(\beta_1 + \beta_4\)</span> is the age slope in women, <span class="math inline">\(\beta_4\)</span> is the difference in slopes, <span class="math inline">\(\beta_2\)</span> is the female-minus-male difference <strong>at age 60</strong> (where <span class="math inline">\(\text{age10} = 0\)</span>), and <span class="math inline">\(\beta_0\)</span> is the mean for a 60-year-old man with BMI 29. The BMI coefficient <span class="math inline">\(\beta_3\)</span> is assumed to be the same in both sexes. The other symbols are as in the previous model.</p>
+</section>
+<section id="assumptions-and-limitations-1" class="level3">
+<h3 class="anchored" data-anchor-id="assumptions-and-limitations-1">Assumptions and limitations</h3>
+<p>The assumptions are those of linear regression, with the additional assumption that the age association within each sex is linear. A study powered to detect a main effect usually has much less power for an interaction of similar size, so a non-significant interaction is weak evidence that the slopes are equal. Interactions should be prespecified where possible; searching through many possible interactions produces false positives.</p>
+</section>
+<section id="fitting-the-model-in-r-1" class="level3">
+<h3 class="anchored" data-anchor-id="fitting-the-model-in-r-1">Fitting the model in R</h3>
+<p>The formula <code>age10 * sex</code> expands to <code>age10 + sex + age10:sex</code>, the two main effects and their product.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>m_int <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> age10 <span class="sc">*</span> sex <span class="sc">+</span> bmi_c, <span class="at">data =</span> walk_base)</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(m_int)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; Call:
+#&gt; lm(formula = sbp0 ~ age10 * sex + bmi_c, data = walk_base)
+#&gt; 
+#&gt; Residuals:
+#&gt;    Min     1Q Median     3Q    Max 
+#&gt; -32.16  -9.71   0.62   9.38  39.38 
+#&gt; 
+#&gt; Coefficients:
+#&gt;                 Estimate Std. Error t value Pr(&gt;|t|)    
+#&gt; (Intercept)      149.284      0.983  151.89  &lt; 2e-16 ***
+#&gt; age10              0.170      1.102    0.15  0.87727    
+#&gt; sexFemale         -4.835      1.351   -3.58  0.00039 ***
+#&gt; bmi_c              0.587      0.162    3.63  0.00033 ***
+#&gt; age10:sexFemale    2.292      1.529    1.50  0.13494    
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#&gt; 
+#&gt; Residual standard error: 12.7 on 355 degrees of freedom
+#&gt; Multiple R-squared:  0.0873, Adjusted R-squared:  0.077 
+#&gt; F-statistic: 8.49 on 4 and 355 DF,  p-value: 1.49e-06</code></pre>
+</div>
+</div>
+</section>
+<section id="interpreting-the-output-1" class="level3">
+<h3 class="anchored" data-anchor-id="interpreting-the-output-1">Interpreting the output</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Term</th>
+<th>Meaning in this model</th>
+<th>Estimate (95% CI)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>(Intercept)</code></td>
+<td>Mean SBP, man aged 60, BMI 29</td>
+<td>149.3 (147.4 to 151.2)</td>
+</tr>
+<tr class="even">
+<td><code>age10</code></td>
+<td>Age slope per 10 years <strong>in men</strong></td>
+<td>0.2 (-2.0 to 2.3)</td>
+</tr>
+<tr class="odd">
+<td><code>sexFemale</code></td>
+<td>Women minus men <strong>at age 60</strong></td>
+<td>-4.8 (-7.5 to -2.2)</td>
+</tr>
+<tr class="even">
+<td><code>bmi_c</code></td>
+<td>Per 1 kg/m², same in both sexes</td>
+<td>0.59 (0.27 to 0.91)</td>
+</tr>
+<tr class="odd">
+<td><code>age10:sexFemale</code></td>
+<td>Women’s age slope minus men’s</td>
+<td>2.3 (-0.7 to 5.3)</td>
+</tr>
+</tbody>
+</table>
+<p>In men, mean SBP rises by only 0.17 mmHg per 10 years. In women the slope is 0.17 + 2.29 = 2.46 mmHg per 10 years. The estimated difference in slopes is 2.29 mmHg per 10 years, but its 95% confidence interval (2.29 (-0.72 to 5.30)) includes zero and p = 0.135. The data are compatible with equal slopes. The F-test comparing the models with and without the interaction gives the same p-value (p = 0.135), because the two models differ by one parameter.</p>
+<p>The <code>sexFemale</code> coefficient, -4.83 mmHg, is now the sex difference at age 60 specifically. In this model the sex difference changes with age: at age 50 it is <span class="math inline">\(\beta_2 - \beta_4\)</span> and at age 70 it is <span class="math inline">\(\beta_2 + \beta_4\)</span>. Because the generating model used for these simulated data had no age-by-sex interaction, we know that the apparent difference in slopes here is chance, which is a useful reminder not to read too much into an imprecise interaction.</p>
+<p>The easiest way to get the sex-specific slopes with their own confidence intervals is <code>emmeans::emtrends()</code>, which the course uses heavily from Module 6 onwards:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">emtrends</span>(m_int, <span class="sc">~</span> sex, <span class="at">var =</span> <span class="st">"age10"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;  sex    age10.trend   SE  df lower.CL upper.CL
+#&gt;  Male          0.17 1.10 355   -1.997     2.34
+#&gt;  Female        2.46 1.05 355    0.399     4.52
+#&gt; 
+#&gt; Confidence level used: 0.95</code></pre>
+</div>
+</div>
+<section id="what-the-main-effects-mean-under-an-interaction-and-why-centring-matters" class="level4">
+<h4 class="anchored" data-anchor-id="what-the-main-effects-mean-under-an-interaction-and-why-centring-matters">What the main effects mean under an interaction, and why centring matters</h4>
+<p>Fit the same interaction with uncentred age:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>m_int_raw <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> age <span class="sc">*</span> sex <span class="sc">+</span> bmi_c, <span class="at">data =</span> walk_base)</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">coef</span>(<span class="fu">summary</span>(m_int_raw))[<span class="st">"sexFemale"</span>, ], <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;   Estimate Std. Error    t value   Pr(&gt;|t|) 
+#&gt;    -18.584      9.292     -2.000      0.046</code></pre>
+</div>
+</div>
+<p>The <code>sexFemale</code> coefficient is now -18.6 mmHg with a huge standard error. This is not a different finding. It is the sex difference at age 0, an extrapolation 40 years below the youngest participant. The model, the fitted values and the interaction coefficient are exactly the same as before (per year rather than per decade). Only the meaning of the “main effect” of sex has moved. Whenever a model contains an interaction, each main effect is a conditional effect: the effect of that predictor when the other predictor in the interaction is zero. Centre the continuous predictor so that zero is a value you care about.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>nd <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">age =</span> <span class="dv">40</span><span class="sc">:</span><span class="dv">80</span>, <span class="at">sex =</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="st">"Male"</span>, <span class="st">"Female"</span>),</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>                                             <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Male"</span>, <span class="st">"Female"</span>)),</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>                  <span class="at">bmi_c =</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age10 =</span> (age <span class="sc">-</span> <span class="dv">60</span>) <span class="sc">/</span> <span class="dv">10</span>)</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>pr <span class="ot">&lt;-</span> <span class="fu">predict</span>(m_int, <span class="at">newdata =</span> nd, <span class="at">interval =</span> <span class="st">"confidence"</span>)</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>nd <span class="ot">&lt;-</span> <span class="fu">cbind</span>(nd, pr)</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(nd, <span class="fu">aes</span>(age, fit, <span class="at">colour =</span> sex, <span class="at">fill =</span> sex)) <span class="sc">+</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> lwr, <span class="at">ymax =</span> upr), <span class="at">alpha =</span> <span class="fl">0.15</span>, <span class="at">colour =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="fl">0.9</span>) <span class="sc">+</span></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">Male =</span> <span class="st">"#0072B2"</span>, <span class="at">Female =</span> <span class="st">"#D55E00"</span>),</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>                      <span class="at">name =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">Male =</span> <span class="st">"#0072B2"</span>, <span class="at">Female =</span> <span class="st">"#D55E00"</span>),</span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>                    <span class="at">name =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Fitted mean SBP (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-int" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-int-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-int-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-int-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4: Fitted mean baseline SBP by age and sex from the interaction model, for BMI 29 kg/m². Shaded bands are 95% confidence intervals for the mean.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="checking-the-model-1" class="level3">
+<h3 class="anchored" data-anchor-id="checking-the-model-1">Checking the model</h3>
+<p>Check the interaction model with the same residual plots as before. In addition, plot the residuals against age separately for each sex: if the age association were curved in one sex, the residuals would show a pattern there.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>walk_base <span class="sc">|&gt;</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">resid =</span> <span class="fu">resid</span>(m_int)) <span class="sc">|&gt;</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(age, resid)) <span class="sc">+</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"loess"</span>, <span class="at">formula =</span> y <span class="sc">~</span> x, <span class="at">se =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>              <span class="at">colour =</span> <span class="st">"#0072B2"</span>) <span class="sc">+</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> sex) <span class="sc">+</span></span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Residual (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-int-check" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-int-check-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-int-check-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-int-check-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;5: Residuals from the interaction model against age, by sex.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The smooth curves stay close to zero across the age range in both sexes, so a linear age term within each sex is adequate.</p>
+</section>
+<section id="reporting-1" class="level3">
+<h3 class="anchored" data-anchor-id="reporting-1">Reporting</h3>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>To examine whether the association of age with baseline SBP differed by sex, we added an age-by-sex interaction to a linear regression adjusted for BMI (age centred at 60 years, per 10 years). The age slope was 0.2 mmHg per 10 years in men and 2.5 mmHg per 10 years in women; the difference in slopes was 2.3 (-0.7 to 5.3) mmHg per 10 years (p = 0.135). At age 60, mean SBP in women was -4.8 (-7.5 to -2.2) mmHg different from men. The data do not provide clear evidence that the age association differs between men and women.</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-1" class="level3">
+<h3 class="anchored" data-anchor-id="common-mistakes-1">Common mistakes</h3>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Calling a main effect “the effect of sex” in an interaction model.</strong> It is the sex difference where the other predictor is zero. Say “at age 60”.</li>
+<li><strong>Not centring the continuous predictor.</strong> An uncentred main effect refers to age 0 and can look absurd or wildly imprecise.</li>
+<li><strong>Reading the interaction coefficient as the slope in women.</strong> It is the <em>difference</em> between the women’s and men’s slopes. The slope in women is <span class="math inline">\(\beta_1 + \beta_4\)</span>.</li>
+<li><strong>Dropping a main effect but keeping the interaction.</strong> Always keep both main effects when the interaction is in the model; <code>*</code> does this for you.</li>
+<li><strong>Testing many interactions and reporting the one with p &lt; 0.05.</strong> Prespecify the interactions that answer your question.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+<section id="logistic-regression" class="level2">
+<h2 class="anchored" data-anchor-id="logistic-regression">Logistic regression</h2>
+<section id="the-research-question-and-estimand-2" class="level3">
+<h3 class="anchored" data-anchor-id="the-research-question-and-estimand-2">The research question and estimand</h3>
+<p>Which baseline characteristics are associated with the odds of having baseline SBP of at least 150 mmHg? The estimands are adjusted <strong>odds ratios</strong>: how many times higher the odds of SBP ≥ 150 are for a one-unit difference in a predictor, holding the others fixed. Because odds ratios are hard to communicate, we also estimate <strong>predicted probabilities</strong> for specific covariate profiles.</p>
+</section>
+<section id="data-structure-and-outcome-types-2" class="level3">
+<h3 class="anchored" data-anchor-id="data-structure-and-outcome-types-2">Data structure and outcome types</h3>
+<p>One row per participant. The outcome <code>hyp150</code> is binary (1 if <code>sbp0</code> ≥ 150, otherwise 0); 161 of 360 participants (45%) have the outcome. Dichotomising a continuous outcome throws away information, and in a real analysis of blood pressure you would usually prefer the linear model. We use it here because a clinical threshold is a familiar example, and because the same tools later apply to outcomes that really are binary, such as dropout or the itch outcome in CLEAR (Modules 7 and 8).</p>
+</section>
+<section id="intuition-2" class="level3">
+<h3 class="anchored" data-anchor-id="intuition-2">Intuition</h3>
+<p>A probability is trapped between 0 and 1, so a straight line in the predictors would eventually predict impossible values. Logistic regression instead models the <strong>log-odds</strong>, <span class="math inline">\(\log\{p/(1-p)\}\)</span>, which can take any value, as a linear function of the predictors. The S-shaped logistic curve then maps the log-odds back to a probability. On the log-odds scale everything works like linear regression: coefficients add up. Exponentiating a coefficient turns a difference in log-odds into a ratio of odds.</p>
+</section>
+<section id="the-model-2" class="level3">
+<h3 class="anchored" data-anchor-id="the-model-2">The model</h3>
+<p><span class="math display">\[
+\log\left(\frac{p_i}{1 - p_i}\right) = \beta_0 + \beta_1\,\text{age10}_i + \beta_2\,\text{Female}_i + \beta_3\,\text{bmi\_c}_i,
+\qquad Y_i \sim \text{Bernoulli}(p_i) \text{ independently.}
+\]</span></p>
+<ul>
+<li><span class="math inline">\(Y_i\)</span> is 1 if participant <span class="math inline">\(i\)</span> has baseline SBP ≥ 150 mmHg, otherwise 0, and <span class="math inline">\(p_i = P(Y_i = 1)\)</span>.</li>
+<li><span class="math inline">\(\log\{p_i/(1-p_i)\}\)</span> is the logit link <span class="math inline">\(g(p_i)\)</span>, the natural log of the odds.</li>
+<li><span class="math inline">\(\beta_0\)</span> is the log-odds for a 60-year-old man with BMI 29; <span class="math inline">\(e^{\beta_0}\)</span> is the corresponding odds.</li>
+<li><span class="math inline">\(\beta_1, \beta_2, \beta_3\)</span> are differences in log-odds; <span class="math inline">\(e^{\beta_k}\)</span> are the odds ratios per 10 years of age, for women versus men, and per 1 kg/m² of BMI.</li>
+<li>There is no separate residual term: the randomness comes from the Bernoulli distribution, whose variance <span class="math inline">\(p_i(1 - p_i)\)</span> is fixed by the mean.</li>
+</ul>
+</section>
+<section id="assumptions-and-limitations-2" class="level3">
+<h3 class="anchored" data-anchor-id="assumptions-and-limitations-2">Assumptions and limitations</h3>
+<p>The log-odds are assumed to be linear in each continuous predictor, the observations to be independent, and the model to include the relevant predictors. There is no normality or constant-variance assumption. Odds ratios are not risk ratios: when the outcome is common (here about 45%), an odds ratio is noticeably further from 1 than the corresponding ratio of probabilities. Logistic regression needs enough events per parameter; with very few events, or a predictor that perfectly separates the outcomes, estimates become unstable (Module 11 returns to this).</p>
+</section>
+<section id="fitting-the-model-in-r-2" class="level3">
+<h3 class="anchored" data-anchor-id="fitting-the-model-in-r-2">Fitting the model in R</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>m_log <span class="ot">&lt;-</span> <span class="fu">glm</span>(hyp150 <span class="sc">~</span> age10 <span class="sc">+</span> sex <span class="sc">+</span> bmi_c, <span class="at">family =</span> binomial, <span class="at">data =</span> walk_base)</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(m_log)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; Call:
+#&gt; glm(formula = hyp150 ~ age10 + sex + bmi_c, family = binomial, 
+#&gt;     data = walk_base)
+#&gt; 
+#&gt; Coefficients:
+#&gt;             Estimate Std. Error z value Pr(&gt;|z|)  
+#&gt; (Intercept)  -0.0280     0.1557   -0.18    0.857  
+#&gt; age10         0.1889     0.1214    1.56    0.120  
+#&gt; sexFemale    -0.4027     0.2165   -1.86    0.063 .
+#&gt; bmi_c         0.0666     0.0261    2.55    0.011 *
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#&gt; 
+#&gt; (Dispersion parameter for binomial family taken to be 1)
+#&gt; 
+#&gt;     Null deviance: 495.05  on 359  degrees of freedom
+#&gt; Residual deviance: 482.64  on 356  degrees of freedom
+#&gt; AIC: 490.6
+#&gt; 
+#&gt; Number of Fisher Scoring iterations: 4</code></pre>
+</div>
+</div>
+<p><code>glm()</code> with <code>family = binomial</code> fits a logistic regression. The coefficients are on the log-odds scale. To report odds ratios, exponentiate the estimates and the confidence limits:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>or_tab <span class="ot">&lt;-</span> <span class="fu">exp</span>(<span class="fu">cbind</span>(<span class="at">OR =</span> <span class="fu">coef</span>(m_log), <span class="fu">confint</span>(m_log)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>#&gt; Waiting for profiling to be done...</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(or_tab, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                OR 2.5 % 97.5 %
+#&gt; (Intercept) 0.972 0.716  1.320
+#&gt; age10       1.208 0.953  1.536
+#&gt; sexFemale   0.669 0.437  1.021
+#&gt; bmi_c       1.069 1.016  1.126</code></pre>
+</div>
+</div>
+<p><code>confint()</code> on a <code>glm</code> gives profile-likelihood intervals, which behave better than estimate ± 1.96 SE when the sample is small. Here the two are almost identical.</p>
+</section>
+<section id="interpreting-the-output-2" class="level3">
+<h3 class="anchored" data-anchor-id="interpreting-the-output-2">Interpreting the output</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Term</th>
+<th>Log-odds coefficient</th>
+<th>Odds ratio (95% CI)</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>(Intercept)</code></td>
+<td>-0.028</td>
+<td>odds 0.97</td>
+<td>Odds of SBP ≥ 150 for a man aged 60 with BMI 29</td>
+</tr>
+<tr class="even">
+<td><code>age10</code></td>
+<td>0.189</td>
+<td>1.21 (0.95 to 1.54)</td>
+<td>Per 10 years of age</td>
+</tr>
+<tr class="odd">
+<td><code>sexFemale</code></td>
+<td>-0.403</td>
+<td>0.67 (0.44 to 1.02)</td>
+<td>Women vs men</td>
+</tr>
+<tr class="even">
+<td><code>bmi_c</code></td>
+<td>0.067</td>
+<td>1.069 (1.016 to 1.126)</td>
+<td>Per 1 kg/m² of BMI</td>
+</tr>
+</tbody>
+</table>
+<p>The odds of baseline SBP ≥ 150 are multiplied by 1.069 for each extra 1 kg/m² of BMI, holding age and sex fixed: about 7% higher odds per unit (95% CI 1.016 to 1.126, p = 0.011). Over 5 kg/m² the odds ratio is <span class="math inline">\(e^{5\beta_3}\)</span> = 1.39. Women have 0.67 times the odds of men, about 33% lower; the interval (0.44 to 1.02) just includes 1 and p = 0.063. The age odds ratio is 1.21 per 10 years, again with an interval that includes 1.</p>
+<p>The direction of each association agrees with the linear model of SBP itself, as it should, but the evidence is weaker. Dichotomising at 150 mmHg discards the information about how far above or below the threshold each person is.</p>
+<section id="predicted-probabilities" class="level4">
+<h4 class="anchored" data-anchor-id="predicted-probabilities">Predicted probabilities</h4>
+<p>Odds ratios describe relative differences. To say how likely the outcome actually is, compute predicted probabilities for covariate profiles. Calculate them on the log-odds scale with their standard errors, form the confidence interval there, and then transform the limits with the inverse logit (<code>plogis()</code>). This keeps the interval inside 0 to 1.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>profiles <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">label =</span> <span class="fu">c</span>(<span class="st">"Man, 60, BMI 29"</span>, <span class="st">"Woman, 60, BMI 29"</span>, <span class="st">"Woman, 70, BMI 35"</span>),</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">age10 =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">1</span>),</span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">sex   =</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="st">"Male"</span>, <span class="st">"Female"</span>, <span class="st">"Female"</span>), <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Male"</span>, <span class="st">"Female"</span>)),</span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">bmi_c =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">6</span>)</span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>lp <span class="ot">&lt;-</span> <span class="fu">predict</span>(m_log, <span class="at">newdata =</span> profiles, <span class="at">type =</span> <span class="st">"link"</span>, <span class="at">se.fit =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>profiles <span class="ot">&lt;-</span> profiles <span class="sc">|&gt;</span></span>
+<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prob  =</span> <span class="fu">plogis</span>(lp<span class="sc">$</span>fit),</span>
+<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">lower =</span> <span class="fu">plogis</span>(lp<span class="sc">$</span>fit <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> lp<span class="sc">$</span>se.fit),</span>
+<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">upper =</span> <span class="fu">plogis</span>(lp<span class="sc">$</span>fit <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> lp<span class="sc">$</span>se.fit))</span>
+<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a>profiles <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="fu">across</span>(prob<span class="sc">:</span>upper, \(x) <span class="fu">round</span>(x, <span class="dv">3</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;               label age10    sex bmi_c  prob lower upper
+#&gt; 1   Man, 60, BMI 29     0   Male     0 0.493 0.417 0.569
+#&gt; 2 Woman, 60, BMI 29     0 Female     0 0.394 0.326 0.466
+#&gt; 3 Woman, 70, BMI 35     1 Female     6 0.539 0.421 0.653</code></pre>
+</div>
+</div>
+<p>A 60-year-old man with a BMI of 29 has an estimated probability of 0.49 of baseline SBP ≥ 150 (95% CI 0.42 to 0.57). For a woman of the same age and BMI it is 0.39, and for a 70-year-old woman with a BMI of 35 it is 0.54. Notice that the odds ratio for sex is a constant 0.67, but the difference in probabilities depends on where you start. That is a general feature of nonlinear models, and it is why later modules report effects on the probability scale as well as odds ratios.</p>
+</section>
+</section>
+<section id="checking-the-model-2" class="level3">
+<h3 class="anchored" data-anchor-id="checking-the-model-2">Checking the model</h3>
+<p>Residual-versus-fitted and Q–Q plots are not informative for a binary outcome, because each residual can take only two values at a given fitted probability. A useful check is <strong>calibration</strong>: group participants by their predicted probability and compare the mean predicted probability with the observed proportion in each group. A well-specified model gives points close to the diagonal.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>calib <span class="ot">&lt;-</span> walk_base <span class="sc">|&gt;</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">p_hat =</span> <span class="fu">fitted</span>(m_log),</span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">group =</span> <span class="fu">ntile</span>(p_hat, <span class="dv">5</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(group) <span class="sc">|&gt;</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">pred =</span> <span class="fu">mean</span>(p_hat), <span class="at">obs =</span> <span class="fu">mean</span>(hyp150), <span class="at">n =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">se =</span> <span class="fu">sqrt</span>(obs <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> obs) <span class="sc">/</span> n))</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(calib, <span class="fu">aes</span>(pred, obs)) <span class="sc">+</span></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> obs <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> se, <span class="at">ymax =</span> obs <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> se),</span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>                <span class="at">width =</span> <span class="fl">0.01</span>) <span class="sc">+</span></span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_equal</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.8</span>), <span class="at">ylim =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.8</span>)) <span class="sc">+</span></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Mean predicted probability"</span>, <span class="at">y =</span> <span class="st">"Observed proportion"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-calib" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-calib-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-calib-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-calib-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6: Calibration of the logistic model: observed proportion with SBP ≥ 150 against mean predicted probability, in fifths of the predicted probability. Vertical bars are 95% confidence intervals for the observed proportions.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The observed proportions scatter around the diagonal and every interval crosses it, so there is no sign of systematic miscalibration. The predicted probabilities span only a modest range (0.22 to 0.66), which reflects the weak associations. Module 11 introduces simulation-based residuals (<code>DHARMa</code>) that extend this kind of check to binary outcomes in mixed models.</p>
+</section>
+<section id="reporting-2" class="level3">
+<h3 class="anchored" data-anchor-id="reporting-2">Reporting</h3>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>We used logistic regression to examine the association of age, sex and BMI with baseline SBP of at least 150 mmHg, which was present in 161 of 360 participants (44.7%). Each 1 kg/m² higher BMI was associated with 6.9% higher odds (OR 1.069 (1.016 to 1.126), p = 0.011), adjusted for age and sex. The odds ratio for women compared with men was 0.67 (0.44 to 1.02) and for 10 years of age 1.21 (0.95 to 1.54). The estimated probability of SBP ≥ 150 was 0.49 (95% CI 0.42 to 0.57) for a 60-year-old man with BMI 29 kg/m² and 0.54 (0.42 to 0.65) for a 70-year-old woman with BMI 35 kg/m².</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-2" class="level3">
+<h3 class="anchored" data-anchor-id="common-mistakes-2">Common mistakes</h3>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Reporting log-odds coefficients as if they were odds ratios.</strong> Exponentiate the estimate and both confidence limits.</li>
+<li><strong>Calling an odds ratio a risk ratio.</strong> With a common outcome, an odds ratio of 0.67 does not mean the probability is 33% lower.</li>
+<li><strong>Building a probability interval as estimate ± 1.96 SE on the probability scale.</strong> Compute the interval on the log-odds scale and transform it.</li>
+<li><strong>Dichotomising a continuous outcome without a good reason.</strong> It loses power, as the weaker evidence here shows.</li>
+<li><strong>Using residual-versus-fitted or Q–Q plots for a binary outcome.</strong> Use calibration or simulation-based residuals instead.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+<section id="confidence-intervals-and-prediction-intervals" class="level2">
+<h2 class="anchored" data-anchor-id="confidence-intervals-and-prediction-intervals">Confidence intervals and prediction intervals</h2>
+<p>A fitted regression model can answer two different questions about people with given covariates, and they need two different intervals.</p>
+<ol type="1">
+<li><em>What is the mean SBP of all 60-year-old men with a BMI of 35?</em> The answer is a point on the regression plane. Its uncertainty comes only from not knowing the coefficients exactly, and it shrinks as the sample grows. The interval is a <strong>confidence interval for the mean</strong>.</li>
+<li><em>What SBP will the next 60-year-old man with a BMI of 35 have?</em> Even if we knew the coefficients perfectly, an individual would scatter around the mean with SD <span class="math inline">\(\sigma\)</span>. The interval must include that scatter. It is a <strong>prediction interval for a new observation</strong>, and it does not shrink to zero however large the sample.</li>
+</ol>
+<p>For a new covariate vector <span class="math inline">\(\mathbf{x}_0\)</span>, the estimated mean is <span class="math inline">\(\hat\mu_0 = \mathbf{x}_0^\top \hat{\boldsymbol\beta}\)</span> and the two intervals are</p>
+<p><span class="math display">\[
+\hat\mu_0 \pm t_{0.975,\,N-p}\;\text{SE}(\hat\mu_0)
+\qquad\text{and}\qquad
+\hat\mu_0 \pm t_{0.975,\,N-p}\;\sqrt{\text{SE}(\hat\mu_0)^2 + \hat\sigma^2},
+\]</span></p>
+<p>where <span class="math inline">\(p\)</span> is the number of coefficients and <span class="math inline">\(\hat\sigma\)</span> is the residual standard error. The prediction interval relies on the normality of the residuals, because it describes individuals rather than an average. In R, <code>predict()</code> with <code>interval = "confidence"</code> or <code>interval = "prediction"</code> gives each.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>new_men <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">age10 =</span> <span class="dv">0</span>, <span class="at">sex =</span> <span class="fu">factor</span>(<span class="st">"Male"</span>, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Male"</span>, <span class="st">"Female"</span>)),</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>                      <span class="at">bmi_c =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">6</span>))</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>ci_mean <span class="ot">&lt;-</span> <span class="fu">predict</span>(m_lin, <span class="at">newdata =</span> new_men, <span class="at">interval =</span> <span class="st">"confidence"</span>)</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>pi_new  <span class="ot">&lt;-</span> <span class="fu">predict</span>(m_lin, <span class="at">newdata =</span> new_men, <span class="at">interval =</span> <span class="st">"prediction"</span>)</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">bmi =</span> <span class="fu">c</span>(<span class="dv">29</span>, <span class="dv">35</span>), <span class="fu">round</span>(ci_mean, <span class="dv">1</span>), <span class="fu">round</span>(pi_new[, <span class="sc">-</span><span class="dv">1</span>], <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;   bmi   fit   lwr   upr   lwr   upr
+#&gt; 1  29 149.3 147.4 151.3 124.1 174.5
+#&gt; 2  35 153.1 150.5 155.7 127.8 178.3</code></pre>
+</div>
+</div>
+<p>For 60-year-old men with BMI 35, the estimated mean SBP is 153.1 mmHg with a 95% confidence interval of 150.5 to 155.7 mmHg: a width of about 5.2 mmHg. The 95% prediction interval for one new such man runs from 127.8 to 178.3 mmHg, about 50 mmHg wide. The prediction interval is dominated by the residual SD of 12.8 mmHg. The confidence interval is a little wider at BMI 35 than at BMI 29 (3.9 mmHg), because BMI 35 is further from the centre of the data.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">age10 =</span> <span class="dv">0</span>, <span class="at">sex =</span> <span class="fu">factor</span>(<span class="st">"Male"</span>, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Male"</span>, <span class="st">"Female"</span>)),</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">bmi_c =</span> <span class="fu">seq</span>(<span class="dv">19</span>, <span class="dv">40</span>, <span class="at">by =</span> <span class="fl">0.5</span>) <span class="sc">-</span> <span class="dv">29</span>)</span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>band <span class="ot">&lt;-</span> <span class="fu">cbind</span>(grid,</span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>              <span class="fu">as.data.frame</span>(<span class="fu">predict</span>(m_lin, grid, <span class="at">interval =</span> <span class="st">"confidence"</span>)),</span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>              <span class="fu">setNames</span>(<span class="fu">as.data.frame</span>(<span class="fu">predict</span>(m_lin, grid, <span class="at">interval =</span> <span class="st">"prediction"</span>))[, <span class="dv">2</span><span class="sc">:</span><span class="dv">3</span>],</span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>                       <span class="fu">c</span>(<span class="st">"plo"</span>, <span class="st">"phi"</span>))) <span class="sc">|&gt;</span></span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">bmi =</span> bmi_c <span class="sc">+</span> <span class="dv">29</span>)</span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(band, <span class="fu">aes</span>(bmi)) <span class="sc">+</span></span>
+<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> plo, <span class="at">ymax =</span> phi), <span class="at">fill =</span> <span class="st">"#0072B2"</span>, <span class="at">alpha =</span> <span class="fl">0.12</span>) <span class="sc">+</span></span>
+<span id="cb49-11"><a href="#cb49-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> lwr, <span class="at">ymax =</span> upr), <span class="at">fill =</span> <span class="st">"#0072B2"</span>, <span class="at">alpha =</span> <span class="fl">0.35</span>) <span class="sc">+</span></span>
+<span id="cb49-12"><a href="#cb49-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">y =</span> fit), <span class="at">colour =</span> <span class="st">"#0072B2"</span>, <span class="at">linewidth =</span> <span class="fl">0.9</span>) <span class="sc">+</span></span>
+<span id="cb49-13"><a href="#cb49-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">data =</span> <span class="fu">filter</span>(walk_base, sex <span class="sc">==</span> <span class="st">"Male"</span>, <span class="fu">between</span>(age, <span class="dv">55</span>, <span class="dv">65</span>)),</span>
+<span id="cb49-14"><a href="#cb49-14" aria-hidden="true" tabindex="-1"></a>             <span class="fu">aes</span>(bmi, sbp0), <span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb49-15"><a href="#cb49-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Body mass index (kg/m²)"</span>, <span class="at">y =</span> <span class="st">"SBP (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m00-cipi" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m00-cipi-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="00-refresher_files/figure-html/fig-m00-cipi-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m00-cipi-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;7: Fitted mean SBP against BMI for 60-year-old men, with the 95% confidence interval for the mean (dark band) and the 95% prediction interval for a new man (light band). Points are the observed men aged 55 to 65.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><a href="#fig-m00-cipi" class="quarto-xref">Figure&nbsp;<span>7</span></a> makes the distinction visible. The narrow dark band is where the mean line plausibly lies. The wide light band is where an individual’s SBP plausibly lies, and most of the observed men fall inside it. The same distinction reappears in Module 6, where we separate confidence intervals for mean trajectories from prediction intervals for individual participants.</p>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Using a confidence interval to describe where individuals lie.</strong> It describes the mean only. For “what range should a new patient expect?”, use a prediction interval.</li>
+<li><strong>Expecting a prediction interval to shrink with more data.</strong> It approaches <span class="math inline">\(\pm 1.96\sigma\)</span>, not zero.</li>
+<li><strong>Forgetting that prediction intervals depend on normality.</strong> Check the Q–Q plot before relying on one.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="why-repeated-measurements-break-the-independence-assumption" class="level2">
+<h2 class="anchored" data-anchor-id="why-repeated-measurements-break-the-independence-assumption">Why repeated measurements break the independence assumption</h2>
+<p>Everything in this module has assumed one outcome per participant. WALK did not stop at baseline: participants were measured again at months 1, 3, 6, 9 and 12. The long-format file has one row per attended visit.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>walk <span class="ot">&lt;-</span> <span class="fu">load_walk</span>()</span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">rows =</span> <span class="fu">nrow</span>(walk), <span class="at">participants =</span> <span class="fu">n_distinct</span>(walk<span class="sc">$</span>id))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;         rows participants 
+#&gt;         1897          360</code></pre>
+</div>
+</div>
+<p>There are 1897 SBP measurements from 360 people. It is tempting to fit the same regression to all of them, as if there were 1897 independent observations:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>m_once <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp0 <span class="sc">~</span> bmi, <span class="at">data =</span> walk_base)    <span class="co"># one row per person</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>m_all  <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp <span class="sc">~</span> bmi, <span class="at">data =</span> walk)          <span class="co"># every visit, treated as independent</span></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(<span class="at">baseline_only =</span> <span class="fu">coef</span>(<span class="fu">summary</span>(m_once))[<span class="st">"bmi"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>],</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>      <span class="at">all_visits    =</span> <span class="fu">coef</span>(<span class="fu">summary</span>(m_all))[<span class="st">"bmi"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;               Estimate Std. Error
+#&gt; baseline_only   0.6473    0.16277
+#&gt; all_visits      0.5236    0.07368</code></pre>
+</div>
+</div>
+<p>The slope estimates are similar, but the standard error from the all-visits model is less than half as large. That apparent gain in precision is an illusion. BMI was measured once per person, so the information about the BMI association comes from comparing 360 people, not 1897 independent measurements. A person with high SBP at baseline tends to have high SBP at every visit:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a>m1_sbp <span class="ot">&lt;-</span> walk <span class="sc">|&gt;</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(month_sched <span class="sc">==</span> <span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, <span class="at">sbp_m1 =</span> sbp)</span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>pairs01 <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(walk_base, m1_sbp, <span class="at">by =</span> <span class="st">"id"</span>)</span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a>r01 <span class="ot">&lt;-</span> <span class="fu">cor</span>(pairs01<span class="sc">$</span>sbp0, pairs01<span class="sc">$</span>sbp_m1)</span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(r01, <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] 0.87</code></pre>
+</div>
+</div>
+<p>The correlation between a participant’s SBP at baseline and at month 1 is 0.87. Repeated measurements on the same person are <strong>not independent</strong>: they share everything that makes that person’s blood pressure high or low. Treating them as independent pretends that the second, third and sixth measurements on a person bring as much new information as measurements on new people. For comparisons between people, such as BMI, sex or randomised arm, this makes standard errors too small, confidence intervals too narrow and p-values too small. For comparisons within people, such as change over time, the error can go the other way.</p>
+<p>None of the residual plots from earlier in this module would reveal the problem, because independence is a property of the design, not of the residual distribution. Module 1 looks at this dependence directly, measures how much of the variation in SBP lies between people and how much within them, and uses a simulation to show the size and direction of the errors that come from ignoring it. The rest of the course is about models that respect it.</p>
+</section>
+<section id="summary" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="summary">Summary</h2>
+<p>Regression models the mean of an outcome as a function of predictors. In linear regression each coefficient is an adjusted difference in the outcome’s mean, measured in the outcome’s units; in logistic regression each exponentiated coefficient is an adjusted odds ratio, and predicted probabilities translate the model back into absolute terms. Centring a continuous predictor changes only what the intercept, or a main effect in an interaction model, refers to. Under an interaction, a main effect is the effect of one predictor where the other is zero. Residual-versus-fitted plots check the mean structure and constant variance, normal Q–Q plots check normality, and neither checks independence. A confidence interval describes uncertainty about a mean; a prediction interval adds the scatter of individuals. Repeated measurements on the same person violate the independence assumption, which is the starting point for Module 1.</p>
+</section>
+<section id="further-reading" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="further-reading">Further reading</h2>
+<ul>
+<li><span class="citation" data-cites="gelman2007">Gelman and Hill (<a href="../references.html#ref-gelman2007" role="doc-biblioref">2007</a>)</span> (chapters 3–5) give a clear applied treatment of linear and logistic regression, interactions and centring, written with the later move to multilevel models in mind.</li>
+<li><span class="citation" data-cites="fitzmaurice2011">Fitzmaurice et al. (<a href="../references.html#ref-fitzmaurice2011" role="doc-biblioref">2011</a>)</span> (chapter 1) introduces the longitudinal setting and the regression background it assumes.</li>
+<li><span class="citation" data-cites="wickham2014">Wickham (<a href="../references.html#ref-wickham2014" role="doc-biblioref">2014</a>)</span> explains the principles of tidy data that underlie the <code>dplyr</code> and <code>ggplot2</code> workflow.</li>
+<li><span class="citation" data-cites="diggle2002">Diggle et al. (<a href="../references.html#ref-diggle2002" role="doc-biblioref">2002</a>)</span> (chapter 1) show why repeated observations on the same subject call for different methods.</li>
+</ul>
+</section>
+<section id="exercises" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="exercises">Exercises</h2>
+<p>The workbook <code>workbook/wb00-refresher.qmd</code> contains guided and independent exercises on these topics, and the answer key <code>answer-key/ak00-refresher.qmd</code> has worked solutions. Take the knowledge check <code>assessments/kc00-refresher.qmd</code> to decide whether you are ready for Module 1.</p>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-diggle2002" class="csl-entry" role="listitem">
+Diggle, Peter J., Patrick J. Heagerty, Kung-Yee Liang, and Scott L. Zeger. 2002. <em>Analysis of Longitudinal Data</em>. 2nd edn. Vol. 25. Oxford Statistical Science Series. Oxford University Press. <a href="https://doi.org/10.1093/oso/9780198524847.001.0001">https://doi.org/10.1093/oso/9780198524847.001.0001</a>.
+</div>
+<div id="ref-fitzmaurice2011" class="csl-entry" role="listitem">
+Fitzmaurice, Garrett M., Nan M. Laird, and James H. Ware. 2011. <em>Applied Longitudinal Analysis</em>. 2nd edn. Wiley Series in Probability and Statistics. John Wiley &amp; Sons. <a href="https://doi.org/10.1002/9781119513469">https://doi.org/10.1002/9781119513469</a>.
+</div>
+<div id="ref-gelman2007" class="csl-entry" role="listitem">
+Gelman, Andrew, and Jennifer Hill. 2007. <em>Data Analysis Using Regression and Multilevel/Hierarchical Models</em>. Analytical Methods for Social Research. Cambridge University Press. <a href="https://doi.org/10.1017/CBO9780511790942">https://doi.org/10.1017/CBO9780511790942</a>.
+</div>
+<div id="ref-wickham2014" class="csl-entry" role="listitem">
+Wickham, Hadley. 2014. <span>‘Tidy Data’</span>. <em>Journal of Statistical Software</em> 59 (10). <a href="https://doi.org/10.18637/jss.v059.i10">https://doi.org/10.18637/jss.v059.i10</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/neu-data\.github\.io\/LDA\/book\/en\/_book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../index.html" class="pagination-link" aria-label="Preface">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Preface</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../chapters/01-foundations.html" class="pagination-link" aria-label="Foundations of longitudinal data">
+        <span class="nav-page-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Foundations of longitudinal data</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

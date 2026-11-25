@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-GB" xml:lang="en-GB"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>3&nbsp; Statistical foundations and traditional approaches – Longitudinal Data Analysis in R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/04-linear-mixed-models.html" rel="next">
+<link href="../chapters/02-data-preparation.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-174fd6913be23cc9900c0b0ca550f0a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../book.css">
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/00-refresher.html">Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/03-traditional-methods.html"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">Longitudinal Data Analysis in R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/neu-data/LDA/tree/main/book/en/" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+    <a href="../Longitudinal-Data-Analysis-in-R.pdf" title="Download PDF" class="quarto-navigation-tool px-1" aria-label="Download PDF"><i class="bi bi-file-pdf"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/00-refresher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Foundations refresher: R and regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Foundations of longitudinal data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-data-preparation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Preparing and exploring longitudinal data in R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-traditional-methods.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Linear mixed models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-linear-mixed-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Linear mixed-effects models</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-covariance-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Modelling covariance and choosing a model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-interpretation-prediction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Interpretation, contrasts and prediction</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Non-normal outcomes</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-gee.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Generalized estimating equations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-glmm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Generalized linear mixed models</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Extensions, missing data and practice</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-time-varying-nonlinear.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Time-varying predictors and nonlinear change</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Missing data and dropout</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-diagnostics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Diagnostics and troubleshooting</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-planning-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Advanced extensions</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-advanced.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Advanced extensions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/a-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">The course datasets</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/b-choosing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Choosing a method</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/c-glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-outcomes" id="toc-learning-outcomes" class="nav-link active" data-scroll-target="#learning-outcomes">Learning outcomes</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#the-walk-data-used-in-this-module" id="toc-the-walk-data-used-in-this-module" class="nav-link" data-scroll-target="#the-walk-data-used-in-this-module">The WALK data used in this module</a></li>
+  <li><a href="#part-1.-regression-foundations-in-a-longitudinal-context" id="toc-part-1.-regression-foundations-in-a-longitudinal-context" class="nav-link" data-scroll-target="#part-1.-regression-foundations-in-a-longitudinal-context"><span class="header-section-number">3.1</span> Part 1. Regression foundations in a longitudinal context</a>
+  <ul class="collapse">
+  <li><a href="#regression-with-time-and-an-arm-by-time-interaction" id="toc-regression-with-time-and-an-arm-by-time-interaction" class="nav-link" data-scroll-target="#regression-with-time-and-an-arm-by-time-interaction"><span class="header-section-number">3.1.1</span> Regression with time and an arm-by-time interaction</a></li>
+  </ul></li>
+  <li><a href="#part-2.-comparing-two-occasions" id="toc-part-2.-comparing-two-occasions" class="nav-link" data-scroll-target="#part-2.-comparing-two-occasions"><span class="header-section-number">3.2</span> Part 2. Comparing two occasions</a>
+  <ul class="collapse">
+  <li><a href="#the-paired-t-test-baseline-versus-month-12-within-an-arm" id="toc-the-paired-t-test-baseline-versus-month-12-within-an-arm" class="nav-link" data-scroll-target="#the-paired-t-test-baseline-versus-month-12-within-an-arm"><span class="header-section-number">3.2.1</span> The paired t-test: baseline versus month 12 within an arm</a></li>
+  </ul></li>
+  <li><a href="#part-3.-repeated-measures-anova" id="toc-part-3.-repeated-measures-anova" class="nav-link" data-scroll-target="#part-3.-repeated-measures-anova"><span class="header-section-number">3.3</span> Part 3. Repeated-measures ANOVA</a>
+  <ul class="collapse">
+  <li><a href="#repeated-measures-anova-on-completers" id="toc-repeated-measures-anova-on-completers" class="nav-link" data-scroll-target="#repeated-measures-anova-on-completers"><span class="header-section-number">3.3.1</span> Repeated-measures ANOVA on completers</a></li>
+  <li><a href="#multivariate-tests-as-an-alternative-to-sphericity-advanced" id="toc-multivariate-tests-as-an-alternative-to-sphericity-advanced" class="nav-link" data-scroll-target="#multivariate-tests-as-an-alternative-to-sphericity-advanced"><span class="header-section-number">3.3.2</span> Multivariate tests as an alternative to sphericity <span class="advanced-tag">Advanced</span></a></li>
+  </ul></li>
+  <li><a href="#part-4.-baseline-and-one-follow-up-three-analyses" id="toc-part-4.-baseline-and-one-follow-up-three-analyses" class="nav-link" data-scroll-target="#part-4.-baseline-and-one-follow-up-three-analyses"><span class="header-section-number">3.4</span> Part 4. Baseline and one follow-up: three analyses</a>
+  <ul class="collapse">
+  <li><a href="#follow-up-only-change-score-and-ancova-at-month-12" id="toc-follow-up-only-change-score-and-ancova-at-month-12" class="nav-link" data-scroll-target="#follow-up-only-change-score-and-ancova-at-month-12"><span class="header-section-number">3.4.1</span> Follow-up only, change score and ANCOVA at month 12</a></li>
+  </ul></li>
+  <li><a href="#part-5.-separate-tests-at-each-visit" id="toc-part-5.-separate-tests-at-each-visit" class="nav-link" data-scroll-target="#part-5.-separate-tests-at-each-visit"><span class="header-section-number">3.5</span> Part 5. Separate tests at each visit</a>
+  <ul class="collapse">
+  <li><a href="#why-separate-tests-at-each-visit-are-inadequate" id="toc-why-separate-tests-at-each-visit-are-inadequate" class="nav-link" data-scroll-target="#why-separate-tests-at-each-visit-are-inadequate"><span class="header-section-number">3.5.1</span> Why separate tests at each visit are inadequate</a></li>
+  </ul></li>
+  <li><a href="#part-6.-putting-it-together" id="toc-part-6.-putting-it-together" class="nav-link" data-scroll-target="#part-6.-putting-it-together"><span class="header-section-number">3.6</span> Part 6. Putting it together</a>
+  <ul class="collapse">
+  <li><a href="#how-the-traditional-methods-compare" id="toc-how-the-traditional-methods-compare" class="nav-link" data-scroll-target="#how-the-traditional-methods-compare"><span class="header-section-number">3.6.1</span> How the traditional methods compare</a></li>
+  </ul></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#further-reading" id="toc-further-reading" class="nav-link" data-scroll-target="#further-reading">Further reading</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises">Exercises</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/00-refresher.html">Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/03-traditional-methods.html"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-m03" class="quarto-section-identifier"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"R"</span>, <span class="st">"setup.R"</span>))</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>walk <span class="ot">&lt;-</span> <span class="fu">load_walk</span>()</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>wide <span class="ot">&lt;-</span> <span class="fu">load_walk</span>(<span class="st">"wide"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Before mixed models existed in standard software, analysts of repeated measurements had a toolbox of simpler methods: a regression that treats every observation as independent, a paired t-test of baseline against follow-up, a repeated-measures analysis of variance, an analysis of the last visit adjusted for baseline, or a separate test at every visit. These methods are still everywhere in published papers, in reviewers’ requests and in statistical analysis plans. Some of them remain the best tool for a narrow question. Others give answers that look plausible but rest on assumptions that longitudinal data rarely meet. This module reviews the regression ideas the rest of the course builds on, works through each traditional method with the WALK trial, and shows exactly where each one stops being adequate. By the end you should be able to read an analysis that uses these methods, judge whether it answers the stated question, and explain why the course moves on to linear mixed-effects models in Module 4.</p>
+<section id="learning-outcomes" class="level3 unnumbered">
+<h3 class="unnumbered anchored" data-anchor-id="learning-outcomes">Learning outcomes</h3>
+<p>By the end of this module participants will be able to:</p>
+<ol type="1">
+<li><strong>3.1</strong> Interpret regression coefficients, interaction terms, confidence intervals and residuals in models that include time.</li>
+<li><strong>3.2</strong> Carry out and interpret a paired comparison and a repeated-measures ANOVA, and state their assumptions.</li>
+<li><strong>3.3</strong> Explain sphericity, apply the Greenhouse–Geisser and Huynh–Feldt corrections, and list the limitations of repeated-measures ANOVA (complete cases, fixed occasions, no time-varying covariates).</li>
+<li><strong>3.4</strong> Compare follow-up-only analysis, change-score analysis and baseline-adjusted ANCOVA, and choose between them according to the research question and design.</li>
+<li><strong>3.5</strong> Explain why separate tests at each visit are inefficient and inflate the number of comparisons.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level3 unnumbered">
+<h3 class="unnumbered anchored" data-anchor-id="prerequisites">Prerequisites</h3>
+<p>Module 0 (regression and R refresher) or equivalent knowledge of linear regression, Module 1 (foundations of longitudinal data: within- and between-subject variation, estimands) and Module 2 (long and wide formats, exploring WALK).</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="Simulated data">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Simulated data
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.</p>
+</div>
+</div>
+</section>
+<section id="the-walk-data-used-in-this-module" class="level3 unnumbered">
+<h3 class="unnumbered anchored" data-anchor-id="the-walk-data-used-in-this-module">The WALK data used in this module</h3>
+<p>WALK is a fictional three-arm randomised trial of a community walking programme in 360 adults with raised blood pressure: usual care (UC), a standard programme (SP) and an enhanced programme (EP), 120 participants per arm. Systolic blood pressure (SBP, mmHg) is measured at scheduled visits at months 0, 1, 3, 6, 9 and 12, but the actual visit times (<code>month</code>) scatter around the schedule (<code>month_sched</code>). The long file has 1897 observations because some visits were missed and some participants dropped out. Dropout depends on the last observed SBP and on arm, so the data are missing at random (MAR) given the observed history.</p>
+<p>The traditional methods in this module mostly work with the <strong>wide format</strong> (one row per participant, one column per scheduled visit), because that is how they were designed. The long format (one row per observation) is used for the regression review.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_observed_means</span>(walk, month_sched, sbp, arm) <span class="sc">+</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Scheduled month"</span>, <span class="at">y =</span> <span class="st">"Mean SBP (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-walk-means" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-walk-means-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-walk-means-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-walk-means-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.1: Observed mean SBP (95% CI) by arm and scheduled visit, using all available observations. The arms start together, which randomisation leads us to expect, and separate over the first six months.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>n_complete <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="fu">complete.cases</span>(wide[, yv]))</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>n_m12 <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(wide<span class="sc">$</span>sbp_m12))</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">participants =</span> <span class="fu">nrow</span>(wide), <span class="at">complete_all_six =</span> n_complete, <span class="at">seen_at_m12 =</span> n_m12)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;     participants complete_all_six      seen_at_m12 
+#&gt;              360              238              288</code></pre>
+</div>
+</div>
+<p>Only 238 of the 360 participants (66%) have all six visits, and 288 have a month-12 measurement. Keep these numbers in mind: several of the methods below can use only some of the participants.</p>
+</section>
+<section id="part-1.-regression-foundations-in-a-longitudinal-context" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="part-1.-regression-foundations-in-a-longitudinal-context"><span class="header-section-number">3.1</span> Part 1. Regression foundations in a longitudinal context</h2>
+<section id="regression-with-time-and-an-arm-by-time-interaction" class="level3" data-number="3.1.1">
+<h3 data-number="3.1.1" class="anchored" data-anchor-id="regression-with-time-and-an-arm-by-time-interaction"><span class="header-section-number">3.1.1</span> Regression with time and an arm-by-time interaction</h3>
+<p>This section revisits ordinary linear regression with the WALK data. The model is not a good final analysis, because it treats every observation as independent, but every later model in the course shares its mean structure and the way its coefficients are read. Getting the interpretation right here pays off in every later module.</p>
+<section id="the-research-question-and-estimand" class="level4">
+<h4 class="anchored" data-anchor-id="the-research-question-and-estimand">The research question and estimand</h4>
+<p>“Does the rate of change in SBP over the first year differ between each walking programme and usual care?” If we assume that mean SBP changes linearly with time in each arm, the estimand is the <strong>difference in mean slope</strong> (mmHg per month) between SP and UC, and between EP and UC. Multiplying by 12 gives the implied difference in mean change over a year.</p>
+</section>
+<section id="data-structure-and-outcome-types" class="level4">
+<h4 class="anchored" data-anchor-id="data-structure-and-outcome-types">Data structure and outcome types</h4>
+<p>The outcome SBP is continuous. The data are in long format with one row per observation; each participant contributes between one and six rows. Time is the actual visit time <code>month</code>, a continuous variable. Arm is a three-level factor with UC as the reference level.</p>
+</section>
+<section id="intuition" class="level4">
+<h4 class="anchored" data-anchor-id="intuition">Intuition</h4>
+<p>Fit a straight line through the SBP measurements of each arm. The intercept of each line is the mean SBP at month 0 and the slope is the mean change per month. An <strong>interaction</strong> between arm and month lets the slopes differ between arms; without it the lines would be forced to be parallel, and the model could only say that one arm is higher than another by the same amount at every time. In a randomised trial the question is precisely whether the lines diverge, so the interaction terms carry the treatment effect.</p>
+</section>
+<section id="the-model" class="level4">
+<h4 class="anchored" data-anchor-id="the-model">The model</h4>
+<p><span class="math display">\[
+y_{ij} = \beta_0 + \beta_1 t_{ij} + \beta_2 \text{SP}_i + \beta_3 \text{EP}_i + \beta_4\, t_{ij}\text{SP}_i + \beta_5\, t_{ij}\text{EP}_i + \varepsilon_{ij},
+\qquad \varepsilon_{ij} \sim N(0, \sigma^2) \text{ independent}.
+\]</span></p>
+<p>Here <span class="math inline">\(y_{ij}\)</span> is the SBP of participant <span class="math inline">\(i\)</span> at occasion <span class="math inline">\(j\)</span> and <span class="math inline">\(t_{ij}\)</span> is the actual time of that occasion in months. <span class="math inline">\(\text{SP}_i\)</span> and <span class="math inline">\(\text{EP}_i\)</span> are indicators (1 if participant <span class="math inline">\(i\)</span> is in that arm, 0 otherwise), so UC is the reference. <span class="math inline">\(\beta_0\)</span> is the mean SBP in UC at month 0; <span class="math inline">\(\beta_1\)</span> is the mean change per month in UC; <span class="math inline">\(\beta_2\)</span> and <span class="math inline">\(\beta_3\)</span> are the differences in mean SBP from UC at month 0; <span class="math inline">\(\beta_4\)</span> and <span class="math inline">\(\beta_5\)</span> are the differences in slope from UC, so the SP slope is <span class="math inline">\(\beta_1 + \beta_4\)</span> and the EP slope is <span class="math inline">\(\beta_1 + \beta_5\)</span>. The residual error <span class="math inline">\(\varepsilon_{ij}\)</span> has variance <span class="math inline">\(\sigma^2\)</span>, and ordinary least squares assumes that residuals are independent of one another, including those from the same participant.</p>
+</section>
+<section id="assumptions-and-limitations" class="level4">
+<h4 class="anchored" data-anchor-id="assumptions-and-limitations">Assumptions and limitations</h4>
+<p>The assumptions are linearity of the mean in time within each arm, constant residual variance, approximately normal residuals (important for small samples) and, crucially, <strong>independence</strong> of the residuals. The last assumption is false for repeated measurements. Participants who start high tend to stay high, so two residuals from the same participant are positively correlated. Module 1 showed by simulation what this does: the standard error of a between-subject comparison (such as the arm difference at month 0) is too small, and the standard error of a within-subject comparison (such as a slope) is usually too large, because the model does not know that each participant acts as their own control. A linear mean is also only an approximation for WALK, where most of the fall in SBP occurs in the first six months.</p>
+</section>
+<section id="fitting-the-model-in-r" class="level4">
+<h4 class="anchored" data-anchor-id="fitting-the-model-in-r">Fitting the model in R</h4>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>m_ols <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp <span class="sc">~</span> month <span class="sc">*</span> arm, <span class="at">data =</span> walk)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(m_ols)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; Call:
+#&gt; lm(formula = sbp ~ month * arm, data = walk)
+#&gt; 
+#&gt; Residuals:
+#&gt;    Min     1Q Median     3Q    Max 
+#&gt; -39.59  -9.40   0.70   9.14  45.71 
+#&gt; 
+#&gt; Coefficients:
+#&gt;             Estimate Std. Error t value Pr(&gt;|t|)    
+#&gt; (Intercept) 144.3304     0.8028  179.79   &lt;2e-16 ***
+#&gt; month        -0.0828     0.1237   -0.67   0.5032    
+#&gt; armSP         0.6448     1.1329    0.57   0.5694    
+#&gt; armEP        -0.3659     1.1331   -0.32   0.7468    
+#&gt; month:armSP  -0.5114     0.1739   -2.94   0.0033 ** 
+#&gt; month:armEP  -0.7217     0.1752   -4.12    4e-05 ***
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#&gt; 
+#&gt; Residual standard error: 13.3 on 1891 degrees of freedom
+#&gt; Multiple R-squared:  0.0465, Adjusted R-squared:  0.044 
+#&gt; F-statistic: 18.5 on 5 and 1891 DF,  p-value: &lt;2e-16</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ols_tab <span class="ot">&lt;-</span> <span class="fu">fixef_table</span>(m_ols)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>ols_tab</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;          term  estimate     se    lower    upper         p
+#&gt; 1 (Intercept) 144.33038 0.8028 142.7569 145.9038 0.000e+00
+#&gt; 2       month  -0.08284 0.1237  -0.3253   0.1596 5.032e-01
+#&gt; 3       armSP   0.64476 1.1329  -1.5757   2.8653 5.694e-01
+#&gt; 4       armEP  -0.36587 1.1331  -2.5867   1.8550 7.468e-01
+#&gt; 5 month:armSP  -0.51145 0.1739  -0.8524  -0.1705 3.317e-03
+#&gt; 6 month:armEP  -0.72174 0.1752  -1.0652  -0.3783 3.976e-05</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>b <span class="ot">&lt;-</span> <span class="fu">coef</span>(m_ols)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="interpreting-the-output" class="level4">
+<h4 class="anchored" data-anchor-id="interpreting-the-output">Interpreting the output</h4>
+<p>The formula <code>month * arm</code> expands to the main effects of <code>month</code> and <code>arm</code> plus their interaction <code>month:arm</code>. The table below reads the key lines.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output line</th>
+<th>What it means</th>
+<th>Value here</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>(Intercept)</code></td>
+<td>Mean SBP in UC at month 0</td>
+<td>144.3 mmHg</td>
+</tr>
+<tr class="even">
+<td><code>month</code></td>
+<td>Mean change per month in UC</td>
+<td>-0.08 mmHg/month</td>
+</tr>
+<tr class="odd">
+<td><code>armSP</code>, <code>armEP</code></td>
+<td>Difference from UC at month 0</td>
+<td>0.64, -0.37 mmHg</td>
+</tr>
+<tr class="even">
+<td><code>month:armSP</code></td>
+<td>Extra change per month in SP compared with UC</td>
+<td>-0.51 mmHg/month</td>
+</tr>
+<tr class="odd">
+<td><code>month:armEP</code></td>
+<td>Extra change per month in EP compared with UC</td>
+<td>-0.72 mmHg/month</td>
+</tr>
+<tr class="even">
+<td>Residual standard error</td>
+<td>Estimate of <span class="math inline">\(\sigma\)</span></td>
+<td>13.3 mmHg</td>
+</tr>
+</tbody>
+</table>
+<p>The main effect of arm is the arm difference <strong>at month 0 only</strong>, because that is where the interaction terms are zero. It is close to zero, as randomisation should make it. A common error is to call <code>armEP</code> “the effect of the enhanced programme”. The programme effect is in the interaction: SBP in the EP arm falls by an extra 0.72 mmHg per month compared with UC (95% confidence interval -1.07 to -0.38). Over 12 months that is an extra fall of 8.7 mmHg. The slope in UC itself is -0.08 mmHg per month, close to zero. The 95% confidence interval is the range of slope differences compatible with the data under the model: if we repeated the trial many times, intervals built in this way would contain the true value 95% of the time, <em>provided the model’s assumptions hold</em>. That proviso is the problem here, as the next subsection shows.</p>
+<p>Predictions follow from the coefficients. For an EP participant at month 12 the model predicts <span class="math inline">\(\hat\beta_0 + 12\hat\beta_1 + \hat\beta_3 + 12\hat\beta_5\)</span> = 134.3 mmHg; for UC it predicts 143.3 mmHg. The <code>predict()</code> function does the same arithmetic with standard errors.</p>
+</section>
+<section id="checking-the-model" class="level4">
+<h4 class="anchored" data-anchor-id="checking-the-model">Checking the model</h4>
+<p>The usual residual-versus-fitted plot (<a href="#fig-m03-ols-res" class="quarto-xref">Figure&nbsp;<span>3.2</span></a>) looks unremarkable: no curvature, no funnel. It cannot reveal the main problem, because that problem is about pairs of residuals from the same person. To see it, reshape the residuals to wide format and correlate them across scheduled visits.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>walk<span class="sc">$</span>res_ols <span class="ot">&lt;-</span> <span class="fu">resid</span>(m_ols)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(walk, <span class="fu">aes</span>(<span class="fu">fitted</span>(m_ols), res_ols)) <span class="sc">+</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.25</span>, <span class="at">size =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">colour =</span> <span class="st">"#888888"</span>) <span class="sc">+</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Fitted SBP (mmHg)"</span>, <span class="at">y =</span> <span class="st">"Residual (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-ols-res" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-ols-res-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-ols-res-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-ols-res-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.2: Residuals against fitted values from the ordinary least squares model. The plot shows no obvious curvature or change in spread, but it cannot show correlation between residuals of the same participant.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>res_cor <span class="ot">&lt;-</span> <span class="fu">visit_correlation</span>(walk, id, month_sched, res_ols)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(res_cor, <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;       0    1    3    6    9   12
+#&gt; 0  1.00 0.87 0.79 0.73 0.75 0.72
+#&gt; 1  0.87 1.00 0.83 0.79 0.76 0.74
+#&gt; 3  0.79 0.83 1.00 0.78 0.75 0.74
+#&gt; 6  0.73 0.79 0.78 1.00 0.78 0.75
+#&gt; 9  0.75 0.76 0.75 0.78 1.00 0.83
+#&gt; 12 0.72 0.74 0.74 0.75 0.83 1.00</code></pre>
+</div>
+</div>
+<p>The correlations between residuals of the same participant at different visits range from 0.72 to 0.87. Independence would require them to be near zero. This single table is the reason ordinary regression is not an acceptable final analysis of longitudinal data: its standard errors, confidence intervals and p-values are based on a variance formula that does not apply. Notice also that the correlation is highest between neighbouring visits (0.87 between months 0 and 1) and lower for visits further apart (0.72 between months 0 and 12). We will meet this pattern again when we discuss sphericity.</p>
+</section>
+<section id="reporting" class="level4">
+<h4 class="anchored" data-anchor-id="reporting">Reporting</h4>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>We would not report this model as a primary analysis. If it were shown for illustration, an honest description would be: “An ordinary least squares regression of SBP on month, arm and their interaction, ignoring within-participant correlation, gave a difference in slope between the enhanced programme and usual care of -0.72 mmHg per month (95% CI -1.07 to -0.38). Residuals from the same participant were strongly correlated (0.72 to 0.87), so these intervals are not valid; the primary analysis uses a linear mixed model.”</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes" class="level4">
+<h4 class="anchored" data-anchor-id="common-mistakes">Common mistakes</h4>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Reading the arm main effect as the treatment effect.</strong> With an interaction in the model, <code>armEP</code> is the arm difference at month 0. The treatment effect on change is in <code>month:armEP</code>.</li>
+<li><strong>Dropping the interaction to “simplify” the model.</strong> Without it the arm lines are parallel and the model cannot detect a treatment effect on change.</li>
+<li><strong>Trusting <code>lm()</code> standard errors for repeated measurements.</strong> They assume independent observations. Check the within-participant residual correlation; it is almost never zero.</li>
+<li><strong>Using scheduled time when actual time is available.</strong> The regression above uses <code>month</code>; using <code>month_sched</code> would ignore the real timing of visits.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+</section>
+<section id="part-2.-comparing-two-occasions" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="part-2.-comparing-two-occasions"><span class="header-section-number">3.2</span> Part 2. Comparing two occasions</h2>
+<section id="the-paired-t-test-baseline-versus-month-12-within-an-arm" class="level3" data-number="3.2.1">
+<h3 data-number="3.2.1" class="anchored" data-anchor-id="the-paired-t-test-baseline-versus-month-12-within-an-arm"><span class="header-section-number">3.2.1</span> The paired t-test: baseline versus month 12 within an arm</h3>
+<section id="the-research-question-and-estimand-1" class="level4">
+<h4 class="anchored" data-anchor-id="the-research-question-and-estimand-1">The research question and estimand</h4>
+<p>“By how much does mean SBP change from baseline to month 12 among participants in the enhanced programme?” The estimand is the <strong>mean within-person change</strong> <span class="math inline">\(\mu_d = E(Y_{i,12} - Y_{i,0})\)</span> in one arm. This is a <strong>within-group</strong> question. It says nothing about whether the programme caused the change, because the change in a single arm mixes the programme effect with everything else that happens over a year: regression to the mean (participants were recruited because their blood pressure was raised), seasonal effects, the attention of being in a trial, and changes in medication.</p>
+</section>
+<section id="data-structure-and-outcome-types-1" class="level4">
+<h4 class="anchored" data-anchor-id="data-structure-and-outcome-types-1">Data structure and outcome types</h4>
+<p>A continuous outcome measured on the same participants at two occasions. Each participant contributes a pair <span class="math inline">\((y_{i,0}, y_{i,12})\)</span>; only participants with both values can be used. In WALK the pairs come from the wide file.</p>
+</section>
+<section id="intuition-1" class="level4">
+<h4 class="anchored" data-anchor-id="intuition-1">Intuition</h4>
+<p>Measuring the same person twice removes the large differences between people from the comparison. Instead of comparing two groups of measurements, we compute each person’s difference <span class="math inline">\(d_i = y_{i,12} - y_{i,0}\)</span> and ask whether the mean difference is zero. Because baseline and month-12 SBP are strongly positively correlated, the differences vary much less than the raw values, and the comparison is precise.</p>
+</section>
+<section id="the-model-1" class="level4">
+<h4 class="anchored" data-anchor-id="the-model-1">The model</h4>
+<p><span class="math display">\[
+d_i = y_{i,12} - y_{i,0}, \qquad d_i \sim N(\mu_d, \sigma_d^2) \text{ independently}, \qquad
+t = \frac{\bar d}{s_d / \sqrt{n}} \sim t_{n-1} \text{ under } H_0: \mu_d = 0 .
+\]</span></p>
+<p><span class="math inline">\(\bar d\)</span> is the mean of the <span class="math inline">\(n\)</span> differences and <span class="math inline">\(s_d\)</span> their standard deviation. The variance of a difference is <span class="math inline">\(\sigma_d^2 = \sigma_0^2 + \sigma_{12}^2 - 2\rho\,\sigma_0\sigma_{12}\)</span>, where <span class="math inline">\(\rho\)</span> is the correlation between baseline and month-12 SBP. The larger <span class="math inline">\(\rho\)</span> is, the smaller <span class="math inline">\(\sigma_d^2\)</span>, which is why pairing helps.</p>
+</section>
+<section id="assumptions-and-limitations-1" class="level4">
+<h4 class="anchored" data-anchor-id="assumptions-and-limitations-1">Assumptions and limitations</h4>
+<p>The differences must be independent across participants and approximately normal (or <span class="math inline">\(n\)</span> large enough for the central limit theorem, which with about 90 pairs it comfortably is). Only complete pairs are used, which is a complete-case analysis: if dropout before month 12 depends on SBP, as it does in WALK, the participants who remain are not a random sample of those randomised. The test uses only two of the six visits. Most importantly, it answers a within-group question; a between-arm comparison of change needs a two-sample analysis (Part 4).</p>
+</section>
+<section id="fitting-the-model-in-r-1" class="level4">
+<h4 class="anchored" data-anchor-id="fitting-the-model-in-r-1">Fitting the model in R</h4>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>ep <span class="ot">&lt;-</span> wide <span class="sc">|&gt;</span> <span class="fu">filter</span>(arm <span class="sc">==</span> <span class="st">"EP"</span>, <span class="sc">!</span><span class="fu">is.na</span>(sbp_m0), <span class="sc">!</span><span class="fu">is.na</span>(sbp_m12))</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>tt_ep <span class="ot">&lt;-</span> <span class="fu">t.test</span>(ep<span class="sc">$</span>sbp_m12, ep<span class="sc">$</span>sbp_m0, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>tt_ep</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt;  Paired t-test
+#&gt; 
+#&gt; data:  ep$sbp_m12 and ep$sbp_m0
+#&gt; t = -11, df = 92, p-value &lt;2e-16
+#&gt; alternative hypothesis: true mean difference is not equal to 0
+#&gt; 95 percent confidence interval:
+#&gt;  -12.089  -8.298
+#&gt; sample estimates:
+#&gt; mean difference 
+#&gt;          -10.19</code></pre>
+</div>
+</div>
+</section>
+<section id="interpreting-the-output-1" class="level4">
+<h4 class="anchored" data-anchor-id="interpreting-the-output-1">Interpreting the output</h4>
+<p>Among the 93 EP participants with both measurements, SBP fell by a mean of 10.2 mmHg (95% CI for the mean change -12.1 to -8.3; t = -10.7 on 92 degrees of freedom, p &lt; 0.001). The sign convention matters: the first argument minus the second, so a negative difference is a fall.</p>
+<p>It is tempting to stop here and declare the programme effective. Run the same test in usual care:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>uc <span class="ot">&lt;-</span> wide <span class="sc">|&gt;</span> <span class="fu">filter</span>(arm <span class="sc">==</span> <span class="st">"UC"</span>, <span class="sc">!</span><span class="fu">is.na</span>(sbp_m0), <span class="sc">!</span><span class="fu">is.na</span>(sbp_m12))</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>tt_uc <span class="ot">&lt;-</span> <span class="fu">t.test</span>(uc<span class="sc">$</span>sbp_m12, uc<span class="sc">$</span>sbp_m0, <span class="at">paired =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">mean_change =</span> <span class="fu">unname</span>(tt_uc<span class="sc">$</span>estimate), <span class="at">lower =</span> tt_uc<span class="sc">$</span>conf.int[<span class="dv">1</span>],</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">upper =</span> tt_uc<span class="sc">$</span>conf.int[<span class="dv">2</span>], <span class="at">p =</span> tt_uc<span class="sc">$</span>p.value)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; mean_change       lower       upper           p 
+#&gt;     -1.0105     -3.1455      1.1245      0.3497</code></pre>
+</div>
+</div>
+<p>In UC the mean change is -1.0 mmHg (95% CI -3.1 to 1.1). The programme effect is the <em>difference</em> between these changes, and a pair of within-group tests does not estimate it or test it. A significant change in one arm and a non-significant change in another does not show that the arms differ; the difference between “significant” and “not significant” is not itself statistically significant <span class="citation" data-cites="vickers2001">(<a href="../references.html#ref-vickers2001" role="doc-biblioref">Vickers and Altman 2001</a>)</span>. Part 4 estimates the between-arm difference directly.</p>
+<p>Because the data are simulated we can compare with the truth, which is possible only for simulated data: the true mean change to month 12 is -10.2 mmHg in EP and -2.1 mmHg in UC.</p>
+</section>
+<section id="checking-the-model-1" class="level4">
+<h4 class="anchored" data-anchor-id="checking-the-model-1">Checking the model</h4>
+<p>Check the distribution of the differences, not of the raw values.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ep, <span class="fu">aes</span>(sbp_m12 <span class="sc">-</span> sbp_m0)) <span class="sc">+</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">fill =</span> <span class="st">"#D55E00"</span>, <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Change in SBP, month 12 minus baseline (mmHg)"</span>, <span class="at">y =</span> <span class="st">"Participants"</span>)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(ep, <span class="fu">aes</span>(<span class="at">sample =</span> sbp_m12 <span class="sc">-</span> sbp_m0)) <span class="sc">+</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq</span>(<span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span> <span class="fu">stat_qq_line</span>(<span class="at">colour =</span> <span class="st">"#888888"</span>) <span class="sc">+</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Normal quantiles"</span>, <span class="at">y =</span> <span class="st">"Observed change (mmHg)"</span>)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>p1 <span class="sc">+</span> p2</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-paired-diff" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-paired-diff-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-paired-diff-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-paired-diff-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.3: Distribution of within-person change from baseline to month 12 in the enhanced programme (left) and a normal Q-Q plot of the same differences (right).
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The differences are roughly symmetric with no extreme values, so the normality assumption is reasonable. Independence between participants follows from the design. The assumption that cannot be checked from these data alone is that the 93 completers represent all 120 EP participants.</p>
+</section>
+<section id="reporting-1" class="level4">
+<h4 class="anchored" data-anchor-id="reporting-1">Reporting</h4>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>“Among participants in the enhanced programme with SBP recorded at baseline and month 12 (n = 93), mean SBP fell by 10.2 mmHg (95% CI 8.3 to 12.1) between baseline and month 12. This within-arm change does not estimate the effect of the programme, which is reported as the difference in mean change against usual care.”</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-1" class="level4">
+<h4 class="anchored" data-anchor-id="common-mistakes-1">Common mistakes</h4>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Using a within-arm paired test to claim a treatment effect.</strong> It measures change, not the effect of the intervention. Compare arms.</li>
+<li><strong>Comparing p-values between arms</strong> (“significant in EP, not in UC”) instead of estimating the difference between arms.</li>
+<li><strong>Running an unpaired two-sample t-test on paired data.</strong> It ignores the correlation and is far less precise.</li>
+<li><strong>Forgetting which way the difference is taken.</strong> State “month 12 minus baseline” explicitly.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+</section>
+<section id="part-3.-repeated-measures-anova" class="level2" data-number="3.3">
+<h2 data-number="3.3" class="anchored" data-anchor-id="part-3.-repeated-measures-anova"><span class="header-section-number">3.3</span> Part 3. Repeated-measures ANOVA</h2>
+<section id="repeated-measures-anova-on-completers" class="level3" data-number="3.3.1">
+<h3 data-number="3.3.1" class="anchored" data-anchor-id="repeated-measures-anova-on-completers"><span class="header-section-number">3.3.1</span> Repeated-measures ANOVA on completers</h3>
+<section id="the-research-question-and-estimand-2" class="level4">
+<h4 class="anchored" data-anchor-id="the-research-question-and-estimand-2">The research question and estimand</h4>
+<p>Repeated-measures analysis of variance (RM-ANOVA) answers three omnibus questions about mean SBP at the six scheduled visits: does the mean differ between arms when averaged over visits (the <strong>between-subject</strong> effect of arm), does the mean change across visits when averaged over arms (the <strong>within-subject</strong> effect of visit), and does the pattern of change differ between arms (the <strong>arm-by-visit interaction</strong>)? In a randomised trial the interaction is the question of interest. Note that these are F-tests of “no difference anywhere”, not estimates of a clinically interpretable quantity with a confidence interval. RM-ANOVA does not directly deliver the difference in mean change at month 12; that has to come from follow-up contrasts.</p>
+</section>
+<section id="data-structure-and-outcome-types-2" class="level4">
+<h4 class="anchored" data-anchor-id="data-structure-and-outcome-types-2">Data structure and outcome types</h4>
+<p>A continuous outcome measured at the same fixed set of occasions on every participant, with one or more between-subject factors (here arm). The method requires a <strong>balanced, complete</strong> design: every participant must have all six measurements. The univariate version uses long data; the multivariate version uses wide data with one column per visit.</p>
+</section>
+<section id="intuition-2" class="level4">
+<h4 class="anchored" data-anchor-id="intuition-2">Intuition</h4>
+<p>RM-ANOVA splits the total variation in SBP into a between-participant part and a within-participant part. The between-participant part tests arm, using the variation between participant averages as its error term. The within-participant part tests visit and arm-by-visit, using the variation of each participant’s measurements around their own average as its error term. Taking out each participant’s average removes the large stable differences between people, so the within-participant tests are sensitive. The price is an assumption about how the within-participant errors are correlated, called <strong>sphericity</strong>.</p>
+</section>
+<section id="the-model-2" class="level4">
+<h4 class="anchored" data-anchor-id="the-model-2">The model</h4>
+<p>For participant <span class="math inline">\(i\)</span> in arm <span class="math inline">\(g\)</span> at scheduled visit <span class="math inline">\(j\)</span> (<span class="math inline">\(j = 1, \dots, 6\)</span>):</p>
+<p><span class="math display">\[
+y_{ij} = \mu + \alpha_g + \gamma_j + (\alpha\gamma)_{gj} + b_{0i} + \varepsilon_{ij},
+\qquad b_{0i} \sim N(0, \tau_0^2), \quad \varepsilon_{ij} \sim N(0, \sigma^2),
+\]</span></p>
+<p>with <span class="math inline">\(b_{0i}\)</span> and <span class="math inline">\(\varepsilon_{ij}\)</span> independent. <span class="math inline">\(\mu\)</span> is the overall mean, <span class="math inline">\(\alpha_g\)</span> the effect of arm <span class="math inline">\(g\)</span>, <span class="math inline">\(\gamma_j\)</span> the effect of visit <span class="math inline">\(j\)</span> and <span class="math inline">\((\alpha\gamma)_{gj}\)</span> the interaction (each set constrained, for example to sum to zero). <span class="math inline">\(b_{0i}\)</span> is a participant effect that makes all of participant <span class="math inline">\(i\)</span>’s measurements share a common shift, and <span class="math inline">\(\varepsilon_{ij}\)</span> is the residual error. This is a random-intercept model, the simplest mixed model of Module 4, written with visit as a categorical factor. It implies <strong>compound symmetry</strong>: every measurement has variance <span class="math inline">\(\tau_0^2 + \sigma^2\)</span> and every pair of measurements from the same participant has covariance <span class="math inline">\(\tau_0^2\)</span>, whatever the gap between them. The F-tests remain valid under the slightly weaker condition of sphericity, discussed below.</p>
+</section>
+<section id="assumptions-and-limitations-2" class="level4">
+<h4 class="anchored" data-anchor-id="assumptions-and-limitations-2">Assumptions and limitations</h4>
+<p>RM-ANOVA assumes independent participants, normal errors, equal covariance matrices across arms and sphericity. Its limitations for longitudinal data are serious:</p>
+<ol type="1">
+<li><strong>Complete cases only.</strong> Any participant with a missed visit is deleted entirely (listwise deletion). In WALK this removes 122 of 360 participants (34%). When dropout depends on observed SBP (MAR), completers are a selected group and the estimates can be biased; Module 10 returns to this.</li>
+<li><strong>Fixed occasions.</strong> Visits are treated as identical categories for everyone. The actual visit times, which in WALK vary around the schedule, are discarded.</li>
+<li><strong>No time-varying covariates.</strong> Daily steps, measured at each visit, cannot enter the model.</li>
+<li><strong>No individual trajectories.</strong> There are no participant-specific slopes; the only participant effect is a shift in level. The heterogeneity in rates of change, which Module 4 models with random slopes, is pushed into the error.</li>
+<li><strong>Omnibus tests rather than estimates.</strong> The interaction F-test says that the arms differ somewhere, not by how much at month 12.</li>
+</ol>
+</section>
+<section id="fitting-the-model-in-r-2" class="level4">
+<h4 class="anchored" data-anchor-id="fitting-the-model-in-r-2">Fitting the model in R</h4>
+<p>First, build the complete-case data. The long version is needed for <code>aov()</code>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>cc <span class="ot">&lt;-</span> wide[<span class="fu">complete.cases</span>(wide[, yv]), ]</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(cc<span class="sc">$</span>arm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; UC SP EP 
+#&gt; 76 84 78</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>lc <span class="ot">&lt;-</span> cc <span class="sc">|&gt;</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, arm, <span class="fu">all_of</span>(yv)) <span class="sc">|&gt;</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">all_of</span>(yv), <span class="at">names_to =</span> <span class="st">"visit"</span>, <span class="at">values_to =</span> <span class="st">"sbp"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">visit =</span> <span class="fu">factor</span>(visit, <span class="at">levels =</span> yv), <span class="at">id =</span> <span class="fu">factor</span>(id))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The <strong>univariate approach</strong> uses <code>aov()</code> with an <code>Error()</code> term. <code>Error(id/visit)</code> tells R that participants are the experimental units for arm and that visit varies within participants, so two error strata are formed.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>rm_aov <span class="ot">&lt;-</span> <span class="fu">aov</span>(sbp <span class="sc">~</span> arm <span class="sc">*</span> visit <span class="sc">+</span> <span class="fu">Error</span>(id <span class="sc">/</span> visit), <span class="at">data =</span> lc)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(rm_aov)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; Error: id
+#&gt;            Df Sum Sq Mean Sq F value Pr(&gt;F)
+#&gt; arm         2   2792    1396     1.7   0.19
+#&gt; Residuals 235 193510     823               
+#&gt; 
+#&gt; Error: id:visit
+#&gt;             Df Sum Sq Mean Sq F value  Pr(&gt;F)    
+#&gt; visit        5   6876    1375   36.97 &lt; 2e-16 ***
+#&gt; arm:visit   10   2783     278    7.48 1.3e-11 ***
+#&gt; Residuals 1175  43711      37                    
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>s_aov <span class="ot">&lt;-</span> <span class="fu">summary</span>(rm_aov)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>btw <span class="ot">&lt;-</span> s_aov[[<span class="st">"Error: id"</span>]][[<span class="dv">1</span>]]</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>wth <span class="ot">&lt;-</span> s_aov[[<span class="st">"Error: id:visit"</span>]][[<span class="dv">1</span>]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The <strong>multivariate approach</strong> fits a multivariate linear model to the wide data: the response is a matrix of six columns, one per visit. <code>anova()</code> with <code>X = ~1</code> and <code>test = "Spherical"</code> then tests the within-subject effects using contrasts orthogonal to the constant, which is exactly the RM-ANOVA, and adds the Greenhouse–Geisser and Huynh–Feldt corrections. <code>mauchly.test()</code> tests sphericity.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(cc[, yv])</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>rm_mlm <span class="ot">&lt;-</span> <span class="fu">lm</span>(Y <span class="sc">~</span> arm, <span class="at">data =</span> cc)</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>idata <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">visit =</span> <span class="fu">factor</span>(yv, <span class="at">levels =</span> yv))</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>rm_sph <span class="ot">&lt;-</span> <span class="fu">anova</span>(rm_mlm, <span class="at">X =</span> <span class="sc">~</span><span class="dv">1</span>, <span class="at">idata =</span> idata, <span class="at">test =</span> <span class="st">"Spherical"</span>)</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>rm_sph</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; Analysis of Variance Table
+#&gt; 
+#&gt; 
+#&gt; Contrasts orthogonal to
+#&gt; ~1
+#&gt; 
+#&gt; Greenhouse-Geisser epsilon: 0.8490
+#&gt; Huynh-Feldt epsilon:        0.8665
+#&gt; 
+#&gt;              Df     F num Df den Df   Pr(&gt;F)   G-G Pr   H-F Pr
+#&gt; (Intercept)   1 36.97      5   1175 0.00e+00 0.00e+00 0.00e+00
+#&gt; arm           2  7.48     10   1175 1.29e-11 3.57e-10 2.42e-10
+#&gt; Residuals   235</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>mau <span class="ot">&lt;-</span> <span class="fu">mauchly.test</span>(rm_mlm, <span class="at">X =</span> <span class="sc">~</span><span class="dv">1</span>, <span class="at">idata =</span> idata)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>mau</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt;  Mauchly's test of sphericity
+#&gt;  Contrasts orthogonal to
+#&gt;  ~1
+#&gt; 
+#&gt; 
+#&gt; data:  SSD matrix from lm(formula = Y ~ arm, data = cc)
+#&gt; W = 0.65, p-value = 4e-15</code></pre>
+</div>
+</div>
+</section>
+<section id="interpreting-the-output-2" class="level4">
+<h4 class="anchored" data-anchor-id="interpreting-the-output-2">Interpreting the output</h4>
+<p>In the multivariate table, the row labelled <code>(Intercept)</code> tests the effect of <strong>visit</strong> (the within-subject contrasts averaged over arms) and the row labelled <code>arm</code> tests the <strong>arm-by-visit interaction</strong>. The labels look odd because the model is fitted to the visit contrasts: the intercept of the contrasts is the average pattern over visits, and the arm terms are differences in that pattern. The F statistics agree with <code>aov()</code>.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output line</th>
+<th>What it means</th>
+<th>Value here</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Error: id</code>, <code>arm</code></td>
+<td>Arms differ in SBP averaged over all six visits?</td>
+<td>F = 1.70 on 2 and 235 df, p = 0.186</td>
+</tr>
+<tr class="even">
+<td><code>Error: id:visit</code>, <code>visit</code></td>
+<td>Mean SBP changes across visits?</td>
+<td>F = 36.97 on 5 and 1175 df, p &lt; 0.001</td>
+</tr>
+<tr class="odd">
+<td><code>Error: id:visit</code>, <code>arm:visit</code></td>
+<td>Pattern over visits differs between arms?</td>
+<td>F = 7.48 on 10 and 1175 df, p &lt; 0.001</td>
+</tr>
+<tr class="even">
+<td>Greenhouse–Geisser epsilon</td>
+<td>Estimated departure from sphericity (1 = none)</td>
+<td>0.849</td>
+</tr>
+<tr class="odd">
+<td>Huynh–Feldt epsilon</td>
+<td>Less conservative estimate of the same</td>
+<td>0.867</td>
+</tr>
+<tr class="even">
+<td><code>G-G Pr</code>, <code>H-F Pr</code></td>
+<td>p-values with degrees of freedom multiplied by epsilon</td>
+<td>interaction: p &lt; 0.001 (GG)</td>
+</tr>
+<tr class="odd">
+<td>Mauchly’s W</td>
+<td>Test of sphericity</td>
+<td>W = 0.65, p &lt; 0.001</td>
+</tr>
+</tbody>
+</table>
+<p>The arm-by-visit interaction is strong: the arms follow different patterns over the year. The between-subject test of arm is not significant, which may seem surprising given <a href="#fig-m03-walk-means" class="quarto-xref">Figure&nbsp;<span>3.1</span></a>. It is not a contradiction. That test averages SBP over all six visits, including baseline and month 1 when the arms hardly differ, and its error term is the large between-participant variation. The arm main effect is therefore the wrong test for a treatment effect on change, exactly as the arm main effect in Part 1 was the wrong coefficient.</p>
+<p>Mauchly’s test rejects sphericity firmly, so the uncorrected p-values for the within-subject effects are too small. After correction the interaction remains highly significant. With 238 participants the conclusion here is not in doubt; with smaller samples the correction can change it.</p>
+</section>
+<section id="checking-the-model-2" class="level4">
+<h4 class="anchored" data-anchor-id="checking-the-model-2">Checking the model</h4>
+<p>The key check for RM-ANOVA is sphericity, followed by the usual checks of normality and of equal covariance matrices across arms.</p>
+<section id="sphericity-and-the-corrections" class="level5">
+<h5 class="anchored" data-anchor-id="sphericity-and-the-corrections">Sphericity and the corrections</h5>
+<p><strong>Sphericity</strong> is the condition that the variance of the difference between any two visits is the same for every pair of visits:</p>
+<p><span class="math display">\[
+\operatorname{Var}(y_{ij} - y_{ik}) = \text{constant for all } j \neq k .
+\]</span></p>
+<p>The within-subject F-tests compare variation in these differences, so they need the differences to be equally variable. Compound symmetry (equal variances, equal correlations) is sufficient for sphericity; sphericity is slightly more general but in practice rarely holds when compound symmetry fails. Longitudinal data typically violate it, because measurements close in time are more alike than measurements far apart.</p>
+<p>We can see this in the observed covariance matrix of the completers.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>S_cc <span class="ot">&lt;-</span> <span class="fu">cov</span>(Y)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(S_cc, <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;         sbp_m0 sbp_m1 sbp_m3 sbp_m6 sbp_m9 sbp_m12
+#&gt; sbp_m0   156.6  141.7  123.9  119.8  120.3   115.2
+#&gt; sbp_m1   141.7  168.3  136.8  134.8  126.5   126.6
+#&gt; sbp_m3   123.9  136.8  163.8  137.3  128.8   127.4
+#&gt; sbp_m6   119.8  134.8  137.3  183.5  143.7   143.0
+#&gt; sbp_m9   120.3  126.5  128.8  143.7  174.2   146.9
+#&gt; sbp_m12  115.2  126.6  127.4  143.0  146.9   178.0</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>cor_long <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">as.table</span>(<span class="fu">round</span>(<span class="fu">cov2cor</span>(S_cc), <span class="dv">2</span>)))</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(cor_long<span class="sc">$</span>Var1) <span class="ot">&lt;-</span> <span class="fu">levels</span>(cor_long<span class="sc">$</span>Var2) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>)</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(cor_long, <span class="fu">aes</span>(Var1, Var2, <span class="at">fill =</span> Freq)) <span class="sc">+</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tile</span>(<span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"%.2f"</span>, Freq)), <span class="at">size =</span> <span class="fl">3.2</span>) <span class="sc">+</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_gradient</span>(<span class="at">low =</span> <span class="st">"#F2F2F2"</span>, <span class="at">high =</span> <span class="st">"#0072B2"</span>, <span class="at">name =</span> <span class="st">"Correlation"</span>) <span class="sc">+</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Scheduled month"</span>, <span class="at">y =</span> <span class="st">"Scheduled month"</span>) <span class="sc">+</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">panel.grid =</span> <span class="fu">element_blank</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-rm-cor" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-rm-cor-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-rm-cor-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-rm-cor-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.4: Observed correlation of SBP between scheduled visits among the completers. Correlations are highest next to the diagonal and decline as visits get further apart, a pattern that compound symmetry does not allow.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The variances on the diagonal range from 156.6 to 183.5 mmHg<span class="math inline">\(^2\)</span>, and the correlations from 0.69 to 0.87. Sphericity is about the differences, so compute the variance of every pairwise difference, <span class="math inline">\(s_{jj} + s_{kk} - 2 s_{jk}\)</span>:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>pairs <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">combn</span>(<span class="dv">6</span>, <span class="dv">2</span>))</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>dv <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">pair =</span> <span class="fu">paste0</span>(<span class="st">"m"</span>, <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>)[pairs[, <span class="dv">1</span>]], <span class="st">" vs m"</span>,</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>                <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>)[pairs[, <span class="dv">2</span>]]),</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">var_diff =</span> S_cc[<span class="fu">cbind</span>(pairs[, <span class="dv">1</span>], pairs[, <span class="dv">1</span>])] <span class="sc">+</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    S_cc[<span class="fu">cbind</span>(pairs[, <span class="dv">2</span>], pairs[, <span class="dv">2</span>])] <span class="sc">-</span> <span class="dv">2</span> <span class="sc">*</span> S_cc[pairs])</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>dv<span class="sc">$</span>var_diff <span class="ot">&lt;-</span> <span class="fu">round</span>(dv<span class="sc">$</span>var_diff, <span class="dv">1</span>)</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>dv[<span class="fu">order</span>(dv<span class="sc">$</span>var_diff), ]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;         pair var_diff
+#&gt; 1   m0 vs m1     41.6
+#&gt; 6   m1 vs m3     58.5
+#&gt; 15 m9 vs m12     58.5
+#&gt; 13  m6 vs m9     70.4
+#&gt; 2   m0 vs m3     72.6
+#&gt; 10  m3 vs m6     72.7
+#&gt; 14 m6 vs m12     75.5
+#&gt; 11  m3 vs m9     80.5
+#&gt; 7   m1 vs m6     82.3
+#&gt; 12 m3 vs m12     87.0
+#&gt; 8   m1 vs m9     89.6
+#&gt; 4   m0 vs m9     90.2
+#&gt; 9  m1 vs m12     93.1
+#&gt; 3   m0 vs m6    100.4
+#&gt; 5  m0 vs m12    104.2</code></pre>
+</div>
+</div>
+<p>If sphericity held, these 15 variances would be roughly equal. They range from 41.6 (m0 vs m1) to 104.2 (m0 vs m12), a ratio of about 2.5. Differences between adjacent visits vary least; differences between distant visits vary most.</p>
+<p>When sphericity fails, the F statistic does not follow the F distribution with the nominal degrees of freedom, and the test rejects too often. <span class="citation" data-cites="greenhouse1959">Greenhouse and Geisser (<a href="../references.html#ref-greenhouse1959" role="doc-biblioref">1959</a>)</span> showed that a good approximation is obtained by multiplying both degrees of freedom by a factor <span class="math inline">\(\epsilon\)</span> between <span class="math inline">\(1/(k-1)\)</span> and 1, where <span class="math inline">\(k\)</span> is the number of occasions. Let <span class="math inline">\(C\)</span> be a <span class="math inline">\(k \times (k-1)\)</span> matrix of orthonormal contrasts (for example polynomial contrasts) and <span class="math inline">\(S\)</span> the pooled within-arm covariance matrix. With <span class="math inline">\(\lambda_1, \dots, \lambda_{k-1}\)</span> the eigenvalues of <span class="math inline">\(C^\top S C\)</span>,</p>
+<p><span class="math display">\[
+\hat\epsilon_{\text{GG}} = \frac{\left(\sum_r \lambda_r\right)^2}{(k-1)\sum_r \lambda_r^2} .
+\]</span></p>
+<p>If all eigenvalues are equal (perfect sphericity) <span class="math inline">\(\hat\epsilon_{\text{GG}} = 1\)</span>. We can reproduce the value R printed:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>S_pool <span class="ot">&lt;-</span> <span class="fu">estVar</span>(rm_mlm)          <span class="co"># pooled within-arm covariance matrix</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>C <span class="ot">&lt;-</span> <span class="fu">contr.poly</span>(<span class="dv">6</span>)                <span class="co"># orthonormal contrasts</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>lam <span class="ot">&lt;-</span> <span class="fu">eigen</span>(<span class="fu">t</span>(C) <span class="sc">%*%</span> S_pool <span class="sc">%*%</span> C)<span class="sc">$</span>values</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(lam)<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> (<span class="dv">5</span> <span class="sc">*</span> <span class="fu">sum</span>(lam<span class="sc">^</span><span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] 0.849</code></pre>
+</div>
+</div>
+<p><span class="math inline">\(\hat\epsilon_{\text{GG}}\)</span> is known to be conservative (biased downwards) when the true <span class="math inline">\(\epsilon\)</span> is near 1. <span class="citation" data-cites="huynh1976">Huynh and Feldt (<a href="../references.html#ref-huynh1976" role="doc-biblioref">1976</a>)</span> proposed a less conservative estimator, <span class="math inline">\(\hat\epsilon_{\text{HF}}\)</span>, which is never smaller than <span class="math inline">\(\hat\epsilon_{\text{GG}}\)</span> and is truncated at 1. Here <span class="math inline">\(\hat\epsilon_{\text{GG}}\)</span> = 0.849 and <span class="math inline">\(\hat\epsilon_{\text{HF}}\)</span> = 0.867, so the corrected interaction test uses about 8.5 and 998 degrees of freedom (Greenhouse–Geisser) instead of 10 and 1175. A common rule of thumb is to report Greenhouse–Geisser when <span class="math inline">\(\hat\epsilon\)</span> is below about 0.75 and Huynh–Feldt otherwise; many analysts simply report Greenhouse–Geisser always. Mauchly’s test is not a good guide on its own: it has low power in small samples and rejects trivially in large ones, so look at <span class="math inline">\(\hat\epsilon\)</span> instead.</p>
+<p>The corrections fix the p-values. They do not fix the other limitations, and they do not turn the omnibus tests into estimates of a treatment effect.</p>
+</section>
+<section id="normality-and-equal-covariance-matrices" class="level5">
+<h5 class="anchored" data-anchor-id="normality-and-equal-covariance-matrices">Normality and equal covariance matrices</h5>
+<p>Beyond sphericity, check normality of the within-participant residuals and the equality of covariance matrices across arms.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>r_long <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">res =</span> <span class="fu">as.vector</span>(<span class="fu">resid</span>(rm_mlm)))</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>q1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(r_long, <span class="fu">aes</span>(<span class="at">sample =</span> res)) <span class="sc">+</span> <span class="fu">stat_qq</span>(<span class="at">size =</span> <span class="fl">0.6</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_qq_line</span>(<span class="at">colour =</span> <span class="st">"#888888"</span>) <span class="sc">+</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Normal quantiles"</span>, <span class="at">y =</span> <span class="st">"Residual (mmHg)"</span>)</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>q2 <span class="ot">&lt;-</span> lc <span class="sc">|&gt;</span> <span class="fu">group_by</span>(arm, visit) <span class="sc">|&gt;</span> <span class="fu">summarise</span>(<span class="at">v =</span> <span class="fu">var</span>(sbp)) <span class="sc">|&gt;</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">month =</span> <span class="fu">as.numeric</span>(<span class="fu">sub</span>(<span class="st">"sbp_m"</span>, <span class="st">""</span>, visit))) <span class="sc">|&gt;</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(month, v, <span class="at">colour =</span> arm)) <span class="sc">+</span> <span class="fu">geom_line</span>() <span class="sc">+</span> <span class="fu">geom_point</span>() <span class="sc">+</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_arm</span>(<span class="at">name =</span> <span class="cn">NULL</span>, <span class="at">labels =</span> walk_arm_labels) <span class="sc">+</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Scheduled month"</span>, <span class="at">y =</span> <span class="st">"Variance of SBP (mmHg²)"</span>)</span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>q1 <span class="sc">+</span> q2</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-rm-check" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-rm-check-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-rm-check-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-rm-check-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.5: Normal Q-Q plot of residuals from the multivariate linear model (all six visits pooled, left) and the variance of SBP by visit and arm among completers (right).
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The residuals are close to normal. Variances are broadly similar across arms and tend to increase over time, consistent with participants changing at different rates, which is exactly what a random-slope model captures.</p>
+</section>
+</section>
+<section id="reporting-2" class="level4">
+<h4 class="anchored" data-anchor-id="reporting-2">Reporting</h4>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>“Among the 238 participants with SBP at all six scheduled visits (66% of those randomised), a repeated-measures ANOVA showed that the pattern of SBP over time differed between arms (arm-by-visit interaction F = 7.48, Greenhouse–Geisser <span class="math inline">\(\hat\epsilon\)</span> = 0.85, corrected p &lt; 0.001). Mauchly’s test indicated departure from sphericity (W = 0.65, p &lt; 0.001). Because this analysis excludes 122 participants with incomplete data and ignores actual visit times, it is presented for comparison only; the primary analysis is a linear mixed model using all available data.”</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-2" class="level4">
+<h4 class="anchored" data-anchor-id="common-mistakes-2">Common mistakes</h4>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Reporting uncorrected within-subject p-values</strong> when sphericity fails. Use the Greenhouse–Geisser or Huynh–Feldt p-values and report <span class="math inline">\(\hat\epsilon\)</span>.</li>
+<li><strong>Interpreting the between-subject arm test as the treatment effect.</strong> It averages over visits, including baseline. The interaction is the relevant test.</li>
+<li><strong>Not stating how many participants were excluded.</strong> Listwise deletion is easy to miss; report the number analysed and the number randomised.</li>
+<li><strong>Using RM-ANOVA when visit times vary or covariates change over time.</strong> Use a mixed model (Module 4).</li>
+<li><strong>Stopping at the omnibus F-test.</strong> Report an estimate with a confidence interval for the contrast that answers the question.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled" title="Why this matters">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Why this matters
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>RM-ANOVA is a special case of the linear mixed model with a random intercept, categorical time and complete data. Module 4 relaxes each restriction: it uses every available observation, uses actual times, allows random slopes so that variances and correlations can change over time, and delivers estimates of the difference in mean change with confidence intervals.</p>
+</div>
+</div>
+</section>
+</section>
+<section id="multivariate-tests-as-an-alternative-to-sphericity-advanced" class="level3" data-number="3.3.2">
+<h3 data-number="3.3.2" class="anchored" data-anchor-id="multivariate-tests-as-an-alternative-to-sphericity-advanced"><span class="header-section-number">3.3.2</span> Multivariate tests as an alternative to sphericity <span class="advanced-tag">Advanced</span></h3>
+<p>This extension is needed only if you must analyse complete balanced data without assuming sphericity at all and without a mixed model. The multivariate approach (profile analysis, MANOVA) treats the six visits as a vector with an unstructured covariance matrix, so sphericity is not required. The same <code>anova()</code> call gives it with a different <code>test</code>:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(rm_mlm, <span class="at">X =</span> <span class="sc">~</span><span class="dv">1</span>, <span class="at">idata =</span> idata, <span class="at">test =</span> <span class="st">"Pillai"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; Analysis of Variance Table
+#&gt; 
+#&gt; 
+#&gt; Contrasts orthogonal to
+#&gt; ~1
+#&gt; 
+#&gt;              Df Pillai approx F num Df den Df  Pr(&gt;F)    
+#&gt; (Intercept)   1  0.388    29.35      5    231 &lt; 2e-16 ***
+#&gt; arm           2  0.187     4.79     10    464 1.5e-06 ***
+#&gt; Residuals   235                                          
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+<p>The multivariate test spends degrees of freedom estimating every variance and covariance, so it loses power when the number of participants is not large relative to the number of occasions, and it still requires complete data. The unstructured covariance model of Module 5, fitted by REML to all available data, is the modern equivalent.</p>
+</section>
+</section>
+<section id="part-4.-baseline-and-one-follow-up-three-analyses" class="level2" data-number="3.4">
+<h2 data-number="3.4" class="anchored" data-anchor-id="part-4.-baseline-and-one-follow-up-three-analyses"><span class="header-section-number">3.4</span> Part 4. Baseline and one follow-up: three analyses</h2>
+<section id="follow-up-only-change-score-and-ancova-at-month-12" class="level3" data-number="3.4.1">
+<h3 data-number="3.4.1" class="anchored" data-anchor-id="follow-up-only-change-score-and-ancova-at-month-12"><span class="header-section-number">3.4.1</span> Follow-up only, change score and ANCOVA at month 12</h3>
+<p>Many trials name a single primary time point. For WALK suppose it is month 12. There are three common ways to compare arms using baseline and month-12 SBP, and they do not give the same answer.</p>
+<section id="the-research-question-and-estimand-3" class="level4">
+<h4 class="anchored" data-anchor-id="the-research-question-and-estimand-3">The research question and estimand</h4>
+<p>“What is the effect of each walking programme, compared with usual care, on SBP at month 12?” In a randomised trial this estimand can be written in two equivalent ways: the difference in mean SBP at month 12 between arms, or the difference in mean change from baseline to month 12. They are equal because randomisation makes the expected baseline means equal in all arms. The true values for WALK (known only because the data are simulated) are -4.6 mmHg for SP and -8.1 mmHg for EP. Because the estimand is the same, the choice between the three analyses is about precision and assumptions, not about the question <span class="citation" data-cites="senn2006 vickers2001">(<a href="../references.html#ref-senn2006" role="doc-biblioref">Senn 2006</a>; <a href="../references.html#ref-vickers2001" role="doc-biblioref">Vickers and Altman 2001</a>)</span>.</p>
+</section>
+<section id="data-structure-and-outcome-types-3" class="level4">
+<h4 class="anchored" data-anchor-id="data-structure-and-outcome-types-3">Data structure and outcome types</h4>
+<p>One row per participant with baseline SBP (<span class="math inline">\(y_{i0}\)</span>), month-12 SBP (<span class="math inline">\(y_{i,12}\)</span>) and arm. Only participants with a month-12 value can be used.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>d12 <span class="ot">&lt;-</span> wide <span class="sc">|&gt;</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(sbp_m0), <span class="sc">!</span><span class="fu">is.na</span>(sbp_m12)) <span class="sc">|&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">chg =</span> sbp_m12 <span class="sc">-</span> sbp_m0)</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(d12<span class="sc">$</span>arm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt;  UC  SP  EP 
+#&gt;  95 100  93</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>r0_12 <span class="ot">&lt;-</span> <span class="fu">cor</span>(d12<span class="sc">$</span>sbp_m0, d12<span class="sc">$</span>sbp_m12)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>288 participants have month-12 data. The correlation between baseline and month-12 SBP is 0.69.</p>
+</section>
+<section id="intuition-3" class="level4">
+<h4 class="anchored" data-anchor-id="intuition-3">Intuition</h4>
+<p>The follow-up-only analysis compares month-12 means and ignores baseline. The change-score analysis subtracts each participant’s baseline, which removes stable differences between people but also adds the baseline measurement error. ANCOVA (analysis of covariance) lets the data decide how much of the baseline to subtract: it regresses month-12 SBP on baseline and arm, and the coefficient of baseline is estimated, not fixed. Follow-up-only subtracts none of baseline, change subtracts all of it, and ANCOVA subtracts the optimal fraction.</p>
+</section>
+<section id="the-model-3" class="level4">
+<h4 class="anchored" data-anchor-id="the-model-3">The model</h4>
+<p>All three are linear regressions with one row per participant:</p>
+<p><span class="math display">\[
+\begin{aligned}
+\text{Follow-up only:}\quad &amp; y_{i,12} = \beta_0 + \beta_1 \text{SP}_i + \beta_2 \text{EP}_i + \varepsilon_i \\
+\text{Change score:}\quad &amp; y_{i,12} - y_{i0} = \beta_0 + \beta_1 \text{SP}_i + \beta_2 \text{EP}_i + \varepsilon_i \\
+\text{ANCOVA:}\quad &amp; y_{i,12} = \beta_0 + \beta_1 \text{SP}_i + \beta_2 \text{EP}_i + \gamma\, y_{i0} + \varepsilon_i
+\end{aligned}
+\]</span></p>
+<p>with <span class="math inline">\(\varepsilon_i \sim N(0, \sigma^2)\)</span> independent (a different <span class="math inline">\(\sigma^2\)</span> in each model). <span class="math inline">\(\beta_1\)</span> and <span class="math inline">\(\beta_2\)</span> are the treatment effects of SP and EP against UC, and <span class="math inline">\(\gamma\)</span> is the regression coefficient of month-12 on baseline SBP. Rearranging the ANCOVA model as <span class="math inline">\(y_{i,12} - \gamma y_{i0} = \dots\)</span> shows that follow-up-only is ANCOVA with <span class="math inline">\(\gamma = 0\)</span> and change is ANCOVA with <span class="math inline">\(\gamma = 1\)</span>.</p>
+<p>Suppose baseline and follow-up have the same variance <span class="math inline">\(\sigma_y^2\)</span> and correlation <span class="math inline">\(\rho\)</span>. Then, for a given sample size, the variance of the estimated treatment effect is proportional to</p>
+<p><span class="math display">\[
+\text{follow-up: } \sigma_y^2, \qquad \text{change: } 2\sigma_y^2(1-\rho), \qquad \text{ANCOVA: } \sigma_y^2(1-\rho^2).
+\]</span></p>
+<p>ANCOVA is never worse than either alternative (in large samples), because <span class="math inline">\(1 - \rho^2 \le 1\)</span> and <span class="math inline">\(1 - \rho^2 \le 2(1-\rho)\)</span> for every <span class="math inline">\(\rho\)</span>. The change score beats follow-up-only only when <span class="math inline">\(\rho &gt; 0.5\)</span>.</p>
+</section>
+<section id="assumptions-and-limitations-3" class="level4">
+<h4 class="anchored" data-anchor-id="assumptions-and-limitations-3">Assumptions and limitations</h4>
+<p>All three assume independent participants and approximately normal residuals with constant variance. ANCOVA also assumes a linear relationship between baseline and follow-up with the same slope in every arm (no baseline-by-arm interaction); a mild violation does not bias the treatment effect in a randomised trial. The unbiasedness of all three for the treatment effect rests on randomisation, which balances baseline in expectation. All three use only the participants seen at month 12 (288 of 360), so they are complete-case analyses with the same vulnerability to dropout that depends on SBP; they also discard the four intermediate visits that carry information about the participants who dropped out.</p>
+</section>
+<section id="fitting-the-model-in-r-3" class="level4">
+<h4 class="anchored" data-anchor-id="fitting-the-model-in-r-3">Fitting the model in R</h4>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>m_fu  <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp_m12 <span class="sc">~</span> arm, <span class="at">data =</span> d12)</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>m_chg <span class="ot">&lt;-</span> <span class="fu">lm</span>(chg <span class="sc">~</span> arm, <span class="at">data =</span> d12)</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>m_anc <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp_m12 <span class="sc">~</span> arm <span class="sc">+</span> sbp_m0, <span class="at">data =</span> d12)</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(m_anc)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 
+#&gt; Call:
+#&gt; lm(formula = sbp_m12 ~ arm + sbp_m0, data = d12)
+#&gt; 
+#&gt; Residuals:
+#&gt;     Min      1Q  Median      3Q     Max 
+#&gt; -24.340  -6.015   0.319   5.741  24.044 
+#&gt; 
+#&gt; Coefficients:
+#&gt;             Estimate Std. Error t value Pr(&gt;|t|)    
+#&gt; (Intercept)  36.8230     6.2389    5.90  1.0e-08 ***
+#&gt; armSP        -5.4519     1.3021   -4.19  3.8e-05 ***
+#&gt; armEP        -8.8116     1.3266   -6.64  1.6e-10 ***
+#&gt; sbp_m0        0.7397     0.0424   17.43  &lt; 2e-16 ***
+#&gt; ---
+#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#&gt; 
+#&gt; Residual standard error: 9.08 on 284 degrees of freedom
+#&gt; Multiple R-squared:  0.544,  Adjusted R-squared:  0.539 
+#&gt; F-statistic:  113 on 3 and 284 DF,  p-value: &lt;2e-16</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>tab12 <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fixef_table</span>(m_fu)  <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">analysis =</span> <span class="st">"Follow-up only"</span>),</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fixef_table</span>(m_chg) <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">analysis =</span> <span class="st">"Change score"</span>),</span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fixef_table</span>(m_anc) <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">analysis =</span> <span class="st">"ANCOVA"</span>)</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">filter</span>(term <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"armSP"</span>, <span class="st">"armEP"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(analysis, term, estimate, se, lower, upper, p)</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>tab12</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;         analysis  term estimate    se   lower  upper         p
+#&gt; 1 Follow-up only armSP   -4.777 1.869  -8.440 -1.113 1.112e-02
+#&gt; 2 Follow-up only armEP   -7.756 1.903 -11.486 -4.026 5.956e-05
+#&gt; 3   Change score armSP   -5.689 1.383  -8.399 -2.980 5.074e-05
+#&gt; 4   Change score armEP   -9.183 1.408 -11.942 -6.424 3.130e-10
+#&gt; 5         ANCOVA armSP   -5.452 1.302  -8.004 -2.900 3.776e-05
+#&gt; 6         ANCOVA armEP   -8.812 1.327 -11.412 -6.212 1.569e-10</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="cf">function</span>(a, t, col) tab12[tab12<span class="sc">$</span>analysis <span class="sc">==</span> a <span class="sc">&amp;</span> tab12<span class="sc">$</span>term <span class="sc">==</span> t, col]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="interpreting-the-output-3" class="level4">
+<h4 class="anchored" data-anchor-id="interpreting-the-output-3">Interpreting the output</h4>
+<p>In the ANCOVA output, <code>armEP</code> = -8.81 is the difference in mean month-12 SBP between EP and UC for participants with the same baseline SBP, and the <code>sbp_m0</code> coefficient <span class="math inline">\(\hat\gamma\)</span> = 0.74 says that a participant 10 mmHg higher at baseline is on average 7.4 mmHg higher at month 12. Because <span class="math inline">\(\hat\gamma\)</span> lies between 0 and 1, the ANCOVA estimate lies between the other two, as <a href="#fig-m03-three-analyses" class="quarto-xref">Figure&nbsp;<span>3.6</span></a> shows.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>tc <span class="ot">&lt;-</span> truth<span class="sc">$</span>true_change</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>tv <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">term =</span> <span class="fu">c</span>(<span class="st">"armSP"</span>, <span class="st">"armEP"</span>),</span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>                 <span class="at">truth =</span> <span class="fu">c</span>(tc<span class="sc">$</span>change[tc<span class="sc">$</span>arm <span class="sc">==</span> <span class="st">"SP"</span> <span class="sc">&amp;</span> tc<span class="sc">$</span>month <span class="sc">==</span> <span class="dv">12</span>],</span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>                           tc<span class="sc">$</span>change[tc<span class="sc">$</span>arm <span class="sc">==</span> <span class="st">"EP"</span> <span class="sc">&amp;</span> tc<span class="sc">$</span>month <span class="sc">==</span> <span class="dv">12</span>]) <span class="sc">-</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>                   tc<span class="sc">$</span>change[tc<span class="sc">$</span>arm <span class="sc">==</span> <span class="st">"UC"</span> <span class="sc">&amp;</span> tc<span class="sc">$</span>month <span class="sc">==</span> <span class="dv">12</span>])</span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>tab12 <span class="sc">|&gt;</span></span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">analysis =</span> <span class="fu">factor</span>(analysis, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Follow-up only"</span>, <span class="st">"Change score"</span>, <span class="st">"ANCOVA"</span>)),</span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">term =</span> <span class="fu">factor</span>(term, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"armSP"</span>, <span class="st">"armEP"</span>),</span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>                       <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"SP vs UC"</span>, <span class="st">"EP vs UC"</span>))) <span class="sc">|&gt;</span></span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(estimate, analysis)) <span class="sc">+</span></span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">data =</span> tv <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">term =</span> <span class="fu">factor</span>(term, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"armSP"</span>, <span class="st">"armEP"</span>),</span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a>                                               <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"SP vs UC"</span>, <span class="st">"EP vs UC"</span>))),</span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a>             <span class="fu">aes</span>(<span class="at">xintercept =</span> truth), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"#888888"</span>) <span class="sc">+</span></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbarh</span>(<span class="fu">aes</span>(<span class="at">xmin =</span> lower, <span class="at">xmax =</span> upper), <span class="at">height =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
+<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> term) <span class="sc">+</span></span>
+<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Difference in month-12 SBP vs usual care (mmHg)"</span>, <span class="at">y =</span> <span class="cn">NULL</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>#&gt; Warning: `geom_errorbarh()` was deprecated in ggplot2 4.0.0.
+#&gt; ℹ Please use the `orientation` argument of `geom_errorbar()` instead.</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>#&gt; `height` was translated to `width`.</code></pre>
+</div>
+<div class="cell-output-display">
+<div id="fig-m03-three-analyses" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-three-analyses-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-three-analyses-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-three-analyses-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.6: Estimated effect on SBP at month 12 (95% CI) of each programme compared with usual care, using three analyses of the same participants. The dashed lines mark the true values, known only because the data are simulated.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Analysis</th>
+<th>SP vs UC (95% CI)</th>
+<th>EP vs UC (95% CI)</th>
+<th>SE for EP</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Follow-up only</td>
+<td>-4.8 (-8.4 to -1.1)</td>
+<td>-7.8 (-11.5 to -4.0)</td>
+<td>1.90</td>
+</tr>
+<tr class="even">
+<td>Change score</td>
+<td>-5.7 (-8.4 to -3.0)</td>
+<td>-9.2 (-11.9 to -6.4)</td>
+<td>1.41</td>
+</tr>
+<tr class="odd">
+<td>ANCOVA</td>
+<td>-5.5 (-8.0 to -2.9)</td>
+<td>-8.8 (-11.4 to -6.2)</td>
+<td>1.33</td>
+</tr>
+</tbody>
+</table>
+<p>All three analyses agree that both programmes lower SBP, but the standard errors differ: the ANCOVA standard error for EP is 30% smaller than the follow-up-only one and 6% smaller than the change-score one. With <span class="math inline">\(\rho\)</span> = 0.69 the formulas above predict variance ratios of 1, 0.63 and 0.53, that is standard error ratios of 1, 0.79 and 0.73; the observed ratios relative to follow-up only are 0.74 and 0.70. A smaller standard error for the same estimand is equivalent to a larger trial for free.</p>
+<p>The three point estimates differ from one another by chance baseline imbalance among the 288 participants analysed. If the SP arm happened to start slightly higher, the change score credits SP with the extra regression to the mean while follow-up-only does not; ANCOVA adjusts for the imbalance by the right amount. The estimates also differ from the true values. Part of this is sampling error, and part may be bias from analysing only participants who stayed to month 12. Module 4’s primary mixed model uses all 360 participants and gives month-12 differences in mean change of -5.38 (SP) and -8.97 (EP) mmHg.</p>
+<section id="a-simulation-of-precision" class="level5">
+<h5 class="anchored" data-anchor-id="a-simulation-of-precision">A simulation of precision</h5>
+<p>The variance formulas are easy to check by simulation. We generate many randomised two-arm trials with 100 participants per arm, a true effect of −5 mmHg and different baseline–follow-up correlations, and record the spread of each estimator across trials.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>sim_three <span class="ot">&lt;-</span> <span class="cf">function</span>(rho, <span class="at">n =</span> <span class="dv">100</span>, <span class="at">effect =</span> <span class="sc">-</span><span class="dv">5</span>, <span class="at">sd =</span> <span class="dv">13</span>, <span class="at">reps =</span> <span class="dv">1000</span>) {</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>  S <span class="ot">&lt;-</span> sd<span class="sc">^</span><span class="dv">2</span> <span class="sc">*</span> <span class="fu">matrix</span>(<span class="fu">c</span>(<span class="dv">1</span>, rho, rho, <span class="dv">1</span>), <span class="dv">2</span>)</span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>  est <span class="ot">&lt;-</span> <span class="fu">replicate</span>(reps, {</span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> MASS<span class="sc">::</span><span class="fu">mvrnorm</span>(<span class="dv">2</span> <span class="sc">*</span> n, <span class="fu">c</span>(<span class="dv">145</span>, <span class="dv">145</span>), S)</span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>    trt <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>, <span class="at">each =</span> n)</span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>    y[, <span class="dv">2</span>] <span class="ot">&lt;-</span> y[, <span class="dv">2</span>] <span class="sc">+</span> effect <span class="sc">*</span> trt</span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(<span class="at">fu  =</span> <span class="fu">coef</span>(<span class="fu">lm</span>(y[, <span class="dv">2</span>] <span class="sc">~</span> trt))[<span class="dv">2</span>],</span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">chg =</span> <span class="fu">coef</span>(<span class="fu">lm</span>(<span class="fu">I</span>(y[, <span class="dv">2</span>] <span class="sc">-</span> y[, <span class="dv">1</span>]) <span class="sc">~</span> trt))[<span class="dv">2</span>],</span>
+<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">anc =</span> <span class="fu">coef</span>(<span class="fu">lm</span>(y[, <span class="dv">2</span>] <span class="sc">~</span> trt <span class="sc">+</span> y[, <span class="dv">1</span>]))[<span class="dv">2</span>])</span>
+<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb49-11"><a href="#cb49-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(<span class="at">rho =</span> rho, <span class="at">analysis =</span> <span class="fu">c</span>(<span class="st">"Follow-up only"</span>, <span class="st">"Change score"</span>, <span class="st">"ANCOVA"</span>),</span>
+<span id="cb49-12"><a href="#cb49-12" aria-hidden="true" tabindex="-1"></a>             <span class="at">mean_est =</span> <span class="fu">unname</span>(<span class="fu">rowMeans</span>(est)), <span class="at">emp_se =</span> <span class="fu">unname</span>(<span class="fu">apply</span>(est, <span class="dv">1</span>, sd)))</span>
+<span id="cb49-13"><a href="#cb49-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb49-14"><a href="#cb49-14" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">303</span>)</span>
+<span id="cb49-15"><a href="#cb49-15" aria-hidden="true" tabindex="-1"></a>sim_res <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(<span class="fu">c</span>(<span class="fl">0.2</span>, <span class="fl">0.5</span>, <span class="fl">0.7</span>, <span class="fl">0.9</span>), sim_three))</span>
+<span id="cb49-16"><a href="#cb49-16" aria-hidden="true" tabindex="-1"></a>sim_res</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    rho       analysis mean_est emp_se
+#&gt; 1  0.2 Follow-up only   -5.157 1.8309
+#&gt; 2  0.2   Change score   -5.146 2.3470
+#&gt; 3  0.2         ANCOVA   -5.153 1.8060
+#&gt; 4  0.5 Follow-up only   -5.035 1.7789
+#&gt; 5  0.5   Change score   -5.001 1.7909
+#&gt; 6  0.5         ANCOVA   -5.026 1.5464
+#&gt; 7  0.7 Follow-up only   -4.970 1.7517
+#&gt; 8  0.7   Change score   -5.007 1.4139
+#&gt; 9  0.7         ANCOVA   -5.000 1.2709
+#&gt; 10 0.9 Follow-up only   -4.975 1.8016
+#&gt; 11 0.9   Change score   -4.964 0.8365
+#&gt; 12 0.9         ANCOVA   -4.964 0.8110</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>se_at <span class="ot">&lt;-</span> <span class="cf">function</span>(r, a) sim_res<span class="sc">$</span>emp_se[sim_res<span class="sc">$</span>rho <span class="sc">==</span> r <span class="sc">&amp;</span> sim_res<span class="sc">$</span>analysis <span class="sc">==</span> a]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(sim_res, <span class="fu">aes</span>(rho, emp_se, <span class="at">colour =</span> analysis)) <span class="sc">+</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span> <span class="fu">geom_point</span>() <span class="sc">+</span></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Follow-up only"</span> <span class="ot">=</span> <span class="st">"#6B6B6B"</span>,</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"Change score"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,</span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"ANCOVA"</span> <span class="ot">=</span> <span class="st">"#D55E00"</span>), <span class="at">name =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Correlation between baseline and follow-up"</span>,</span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Empirical SE of the treatment effect (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-sim-three" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-sim-three-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-sim-three-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-sim-three-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.7: Empirical standard error of three estimators of the same treatment effect over 1,000 simulated randomised trials (100 per arm) at each baseline-follow-up correlation. ANCOVA is the most precise at every correlation.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>All three estimators are unbiased: their means across simulated trials are all close to −5 (column <code>mean_est</code>). Their precision differs. At <span class="math inline">\(\rho = 0.2\)</span> the change score is the least precise (empirical SE 2.35 against 1.83 for follow-up only), because subtracting a weakly related baseline adds noise. At <span class="math inline">\(\rho = 0.9\)</span> the change score is almost as good as ANCOVA (0.84 vs 0.81) and follow-up only is poor. ANCOVA is the most precise at every correlation. This is the main reason why baseline-adjusted ANCOVA is the recommended primary analysis for a randomised trial with a single follow-up <span class="citation" data-cites="senn2006 vickers2001 twisk2018">(<a href="../references.html#ref-senn2006" role="doc-biblioref">Senn 2006</a>; <a href="../references.html#ref-vickers2001" role="doc-biblioref">Vickers and Altman 2001</a>; <a href="../references.html#ref-twisk2018" role="doc-biblioref">Twisk et al. 2018</a>)</span>.</p>
+</section>
+<section id="lords-paradox-when-groups-are-not-randomised" class="level5">
+<h5 class="anchored" data-anchor-id="lords-paradox-when-groups-are-not-randomised">Lord’s paradox: when groups are not randomised</h5>
+<p>In a randomised trial the three analyses estimate the same quantity. In an observational comparison of pre-existing groups that differ at baseline, they do not, and change-score analysis and ANCOVA can give opposite conclusions from the same data. This is known as Lord’s paradox. The simulation below creates two groups whose true SBP levels differ by 15 mmHg and do not change at all; each measurement adds independent measurement error.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">17</span>)</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>n_l <span class="ot">&lt;-</span> <span class="dv">500</span></span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>grp <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>), <span class="at">each =</span> n_l)</span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>true_level <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(<span class="dv">2</span> <span class="sc">*</span> n_l, <span class="fu">ifelse</span>(grp <span class="sc">==</span> <span class="st">"A"</span>, <span class="dv">135</span>, <span class="dv">150</span>), <span class="dv">10</span>)</span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>lord <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">grp =</span> grp,</span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>                   <span class="at">y0 =</span> true_level <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">2</span> <span class="sc">*</span> n_l, <span class="dv">0</span>, <span class="dv">7</span>),</span>
+<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a>                   <span class="at">y1 =</span> true_level <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">2</span> <span class="sc">*</span> n_l, <span class="dv">0</span>, <span class="dv">7</span>))</span>
+<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a>lord_chg <span class="ot">&lt;-</span> <span class="fu">coef</span>(<span class="fu">summary</span>(<span class="fu">lm</span>(<span class="fu">I</span>(y1 <span class="sc">-</span> y0) <span class="sc">~</span> grp, <span class="at">data =</span> lord)))[<span class="st">"grpB"</span>, ]</span>
+<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a>lord_anc <span class="ot">&lt;-</span> <span class="fu">coef</span>(<span class="fu">summary</span>(<span class="fu">lm</span>(y1 <span class="sc">~</span> grp <span class="sc">+</span> y0, <span class="at">data =</span> lord)))[<span class="st">"grpB"</span>, ]</span>
+<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(<span class="at">change =</span> lord_chg, <span class="at">ancova =</span> lord_anc)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;        Estimate Std. Error t value  Pr(&gt;|t|)
+#&gt; change  -0.8266     0.6321  -1.308 1.913e-01
+#&gt; ancova   4.8106     0.6832   7.041 3.543e-12</code></pre>
+</div>
+</div>
+<p>The change score finds no group difference (estimate -0.83 mmHg, p = 0.191), which is correct for the question “did the groups change differently?”. ANCOVA finds that group B is 4.8 mmHg higher at follow-up than group A <em>among people with the same baseline value</em> (p &lt; 0.001). That is also a correct answer to a different question. Among people with the same observed baseline of, say, 142 mmHg, those in group B are likely to have a true level above 142 (their baseline reading was low by chance), so at follow-up they move up towards their group’s higher mean; those in group A tend to have a true level below 142 and move down. Neither analysis is wrong arithmetically; they answer different questions, and without randomisation there is no reason for those answers to coincide. In observational data the choice must follow from a clearly stated causal question, and often neither simple analysis is adequate (see <span class="citation" data-cites="hernan2020">Hernán and Robins (<a href="../references.html#ref-hernan2020" role="doc-biblioref">2020</a>)</span>). In a randomised trial the paradox disappears because the groups do not differ at baseline in expectation.</p>
+</section>
+</section>
+<section id="checking-the-model-3" class="level4">
+<h4 class="anchored" data-anchor-id="checking-the-model-3">Checking the model</h4>
+<p>For ANCOVA check, as for any regression, the residual-versus-fitted plot and a Q-Q plot, plus the assumption of a common baseline slope in each arm.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>m_anc_int <span class="ot">&lt;-</span> <span class="fu">lm</span>(sbp_m12 <span class="sc">~</span> arm <span class="sc">*</span> sbp_m0, <span class="at">data =</span> d12)</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(m_anc, m_anc_int)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; Analysis of Variance Table
+#&gt; 
+#&gt; Model 1: sbp_m12 ~ arm + sbp_m0
+#&gt; Model 2: sbp_m12 ~ arm * sbp_m0
+#&gt;   Res.Df   RSS Df Sum of Sq    F Pr(&gt;F)
+#&gt; 1    284 23438                         
+#&gt; 2    282 23436  2      2.33 0.01   0.99</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>a1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(d12, <span class="fu">aes</span>(sbp_m0, sbp_m12, <span class="at">colour =</span> arm)) <span class="sc">+</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>, <span class="at">formula =</span> y <span class="sc">~</span> x) <span class="sc">+</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_arm</span>(<span class="at">name =</span> <span class="cn">NULL</span>, <span class="at">labels =</span> walk_arm_labels) <span class="sc">+</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Baseline SBP (mmHg)"</span>, <span class="at">y =</span> <span class="st">"Month-12 SBP (mmHg)"</span>)</span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>a2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">f =</span> <span class="fu">fitted</span>(m_anc), <span class="at">r =</span> <span class="fu">resid</span>(m_anc)), <span class="fu">aes</span>(f, r)) <span class="sc">+</span></span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span> <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">colour =</span> <span class="st">"#888888"</span>) <span class="sc">+</span></span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Fitted month-12 SBP (mmHg)"</span>, <span class="at">y =</span> <span class="st">"Residual (mmHg)"</span>)</span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a>a1 <span class="sc">+</span> a2</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-anc-check" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-anc-check-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-anc-check-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-anc-check-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.8: Month-12 SBP against baseline SBP by arm with least-squares lines (left), and residuals against fitted values from the ANCOVA model (right).
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The lines are close to parallel and the test of the arm-by-baseline interaction is p = 0.986, so a common slope is reasonable. The residuals show no pattern.</p>
+</section>
+<section id="reporting-3" class="level4">
+<h4 class="anchored" data-anchor-id="reporting-3">Reporting</h4>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>“The effect of each programme on SBP at month 12 was estimated by analysis of covariance, regressing month-12 SBP on arm and baseline SBP, in the 288 participants with a month-12 measurement. Compared with usual care, mean SBP at month 12 was 5.5 mmHg lower in the standard programme (95% CI 2.9 to 8.0) and 8.8 mmHg lower in the enhanced programme (95% CI 6.2 to 11.4). This complete-case analysis excludes 72 participants without month-12 data.”</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-3" class="level4">
+<h4 class="anchored" data-anchor-id="common-mistakes-3">Common mistakes</h4>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Analysing change scores by default.</strong> In a randomised trial ANCOVA is at least as precise, and much more so when the baseline–follow-up correlation is moderate.</li>
+<li><strong>Testing for baseline imbalance and adjusting only if “significant”.</strong> In a randomised trial any baseline difference is due to chance by definition; pre-specify the baseline adjustment instead.</li>
+<li><strong>Using change as the outcome and also adjusting for baseline, then calling it different from ANCOVA.</strong> Regressing change on arm and baseline gives exactly the same arm coefficient as ANCOVA.</li>
+<li><strong>Applying ANCOVA to non-randomised groups without thinking about the causal question</strong> (Lord’s paradox).</li>
+<li><strong>Forgetting that only participants with the follow-up value are analysed.</strong> State the number and consider the dropout mechanism.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+</section>
+<section id="part-5.-separate-tests-at-each-visit" class="level2" data-number="3.5">
+<h2 data-number="3.5" class="anchored" data-anchor-id="part-5.-separate-tests-at-each-visit"><span class="header-section-number">3.5</span> Part 5. Separate tests at each visit</h2>
+<section id="why-separate-tests-at-each-visit-are-inadequate" class="level3" data-number="3.5.1">
+<h3 data-number="3.5.1" class="anchored" data-anchor-id="why-separate-tests-at-each-visit-are-inadequate"><span class="header-section-number">3.5.1</span> Why separate tests at each visit are inadequate</h3>
+<section id="the-research-question-and-estimand-4" class="level4">
+<h4 class="anchored" data-anchor-id="the-research-question-and-estimand-4">The research question and estimand</h4>
+<p>A common shortcut is to compare arms at each visit with a separate t-test or one-way ANOVA. The implied research question is vague (“when do the arms differ?”), and there is no single estimand: there are as many estimates as visits, each using a different subset of participants.</p>
+</section>
+<section id="data-structure-and-outcome-types-4" class="level4">
+<h4 class="anchored" data-anchor-id="data-structure-and-outcome-types-4">Data structure and outcome types</h4>
+<p>A continuous outcome at each scheduled visit, analysed one visit at a time from the wide file. At each visit only participants seen at that visit are included.</p>
+</section>
+<section id="intuition-4" class="level4">
+<h4 class="anchored" data-anchor-id="intuition-4">Intuition</h4>
+<p>Each test is a valid cross-sectional comparison of the people seen at that visit. Taken together, the tests are a poor analysis for three reasons. First, <strong>multiplicity</strong>: with many tests the chance of at least one false positive grows. Second, <strong>inefficiency</strong>: each test ignores the information in the participant’s other measurements, including baseline, so the standard errors are those of a follow-up-only analysis. Third, <strong>inconsistency with missing data</strong>: each visit uses a different group of people, so a change in the estimates over time mixes the treatment effect with changes in who is still in the study.</p>
+</section>
+<section id="the-model-4" class="level4">
+<h4 class="anchored" data-anchor-id="the-model-4">The model</h4>
+<p>At each visit <span class="math inline">\(j\)</span> separately,</p>
+<p><span class="math display">\[
+y_{ij} = \beta_{0j} + \beta_{1j}\text{SP}_i + \beta_{2j}\text{EP}_i + \varepsilon_{ij}, \qquad \varepsilon_{ij} \sim N(0, \sigma_j^2),
+\]</span></p>
+<p>fitted only to participants observed at visit <span class="math inline">\(j\)</span>. The symbols are as before, with a subscript <span class="math inline">\(j\)</span> because each visit has its own coefficients and residual variance. Nothing connects the models across visits.</p>
+</section>
+<section id="assumptions-and-limitations-4" class="level4">
+<h4 class="anchored" data-anchor-id="assumptions-and-limitations-4">Assumptions and limitations</h4>
+<p>Each test assumes independent observations and normality at that visit, which is reasonable. The limitations are the three listed above. With <span class="math inline">\(m\)</span> independent tests at level 0.05 the probability of at least one false positive when no effect exists is <span class="math inline">\(1 - 0.95^m\)</span>; for 6 visits and 2 comparisons (<span class="math inline">\(m = 12\)</span>) that is 0.46. The tests in a longitudinal study are positively correlated, which reduces this figure but does not remove the problem.</p>
+</section>
+<section id="fitting-the-model-in-r-4" class="level4">
+<h4 class="anchored" data-anchor-id="fitting-the-model-in-r-4">Fitting the model in R</h4>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb58"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>per_visit <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(yv, <span class="cf">function</span>(v) {</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>  d <span class="ot">&lt;-</span> wide[<span class="sc">!</span><span class="fu">is.na</span>(wide[[v]]), ]</span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fixef_table</span>(<span class="fu">lm</span>(<span class="fu">reformulate</span>(<span class="st">"arm"</span>, v), <span class="at">data =</span> d)) <span class="sc">|&gt;</span></span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(term <span class="sc">!=</span> <span class="st">"(Intercept)"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">visit =</span> v, <span class="at">n =</span> <span class="fu">nrow</span>(d))</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>}))</span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>per_visit <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(estimate, se, lower, upper), \(x) <span class="fu">round</span>(x, <span class="dv">2</span>)),</span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>                    <span class="at">p =</span> <span class="fu">signif</span>(p, <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;     term estimate   se  lower upper       p   visit   n
+#&gt; 1  armSP     1.03 1.72  -2.34  4.39 0.55000  sbp_m0 360
+#&gt; 2  armEP     1.35 1.72  -2.01  4.71 0.43000  sbp_m0 360
+#&gt; 3  armSP     0.71 1.82  -2.85  4.27 0.70000  sbp_m1 324
+#&gt; 4  armEP    -0.89 1.80  -4.43  2.64 0.62000  sbp_m1 324
+#&gt; 5  armSP    -1.31 1.79  -4.81  2.19 0.46000  sbp_m3 319
+#&gt; 6  armEP    -3.72 1.82  -7.27 -0.16 0.04100  sbp_m3 319
+#&gt; 7  armSP    -2.97 1.85  -6.59  0.65 0.11000  sbp_m6 309
+#&gt; 8  armEP    -6.79 1.84 -10.39 -3.18 0.00027  sbp_m6 309
+#&gt; 9  armSP    -4.67 1.87  -8.33 -1.00 0.01300  sbp_m9 297
+#&gt; 10 armEP    -6.80 1.90 -10.52 -3.08 0.00039  sbp_m9 297
+#&gt; 11 armSP    -4.78 1.87  -8.44 -1.11 0.01100 sbp_m12 288
+#&gt; 12 armEP    -7.76 1.90 -11.49 -4.03 0.00006 sbp_m12 288</code></pre>
+</div>
+</div>
+<p>To quantify the multiplicity problem with realistic correlation, simulate trials with <strong>no</strong> treatment effect, using the observed covariance matrix of the six visits, and count how often at least one of the 12 tests is significant.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">3</span>)</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>fwer <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">replicate</span>(<span class="dv">2000</span>, {</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> MASS<span class="sc">::</span><span class="fu">mvrnorm</span>(<span class="dv">360</span>, <span class="fu">rep</span>(<span class="dv">145</span>, <span class="dv">6</span>), S_cc)</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>  arm <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"UC"</span>, <span class="st">"SP"</span>, <span class="st">"EP"</span>), <span class="at">each =</span> <span class="dv">120</span>), <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"UC"</span>, <span class="st">"SP"</span>, <span class="st">"EP"</span>))</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">sapply</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>, <span class="cf">function</span>(j) <span class="fu">coef</span>(<span class="fu">summary</span>(<span class="fu">lm</span>(y[, j] <span class="sc">~</span> arm)))[<span class="dv">2</span><span class="sc">:</span><span class="dv">3</span>, <span class="dv">4</span>])</span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">any</span>(p <span class="sc">&lt;</span> <span class="fl">0.05</span>)</span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a>}))</span>
+<span id="cb60-8"><a href="#cb60-8" aria-hidden="true" tabindex="-1"></a>fwer</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] 0.2475</code></pre>
+</div>
+</div>
+</section>
+<section id="interpreting-the-output-4" class="level4">
+<h4 class="anchored" data-anchor-id="interpreting-the-output-4">Interpreting the output</h4>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>per_visit <span class="sc">|&gt;</span></span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">month =</span> <span class="fu">as.numeric</span>(<span class="fu">sub</span>(<span class="st">"sbp_m"</span>, <span class="st">""</span>, visit)),</span>
+<span id="cb62-3"><a href="#cb62-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">arm =</span> <span class="fu">ifelse</span>(term <span class="sc">==</span> <span class="st">"armSP"</span>, <span class="st">"SP"</span>, <span class="st">"EP"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb62-4"><a href="#cb62-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(month, estimate, <span class="at">colour =</span> arm)) <span class="sc">+</span></span>
+<span id="cb62-5"><a href="#cb62-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">colour =</span> <span class="st">"#888888"</span>) <span class="sc">+</span></span>
+<span id="cb62-6"><a href="#cb62-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_pointrange</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> lower, <span class="at">ymax =</span> upper),</span>
+<span id="cb62-7"><a href="#cb62-7" aria-hidden="true" tabindex="-1"></a>                  <span class="at">position =</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">0.6</span>)) <span class="sc">+</span></span>
+<span id="cb62-8"><a href="#cb62-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_arm</span>(<span class="at">name =</span> <span class="cn">NULL</span>, <span class="at">labels =</span> walk_arm_labels) <span class="sc">+</span></span>
+<span id="cb62-9"><a href="#cb62-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>)) <span class="sc">+</span></span>
+<span id="cb62-10"><a href="#cb62-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Scheduled month"</span>, <span class="at">y =</span> <span class="st">"Difference from usual care (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m03-per-visit" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m03-per-visit-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="03-traditional-methods_files/figure-html/fig-m03-per-visit-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m03-per-visit-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.9: Difference in mean SBP from usual care (95% CI) at each scheduled visit, from separate regressions. The number of participants analysed falls from visit to visit.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The number of participants falls from 360 at baseline to 288 at month 12. In the simulated trials with no treatment effect at any visit, at least one of the 12 tests was significant in 25% of simulated trials, against the nominal 5% (and 46% if the tests were independent). At month 12 the per-visit estimate for EP (-7.76 mmHg, SE 1.90) is the follow-up-only analysis of Part 4, and its standard error is larger than that of ANCOVA (1.33). The pattern in <a href="#fig-m03-per-visit" class="quarto-xref">Figure&nbsp;<span>3.9</span></a> looks informative, but the visit-to-visit changes partly reflect who remains in the study.</p>
+</section>
+<section id="checking-the-model-4" class="level4">
+<h4 class="anchored" data-anchor-id="checking-the-model-4">Checking the model</h4>
+<p>Each visit-specific regression can be checked with residual plots, but checking does not repair the design of the analysis. The useful check is to tabulate how many participants each test uses and whether those seen at later visits differed at baseline from those who dropped out.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a>seen12 <span class="ot">&lt;-</span> wide <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">seen_m12 =</span> <span class="sc">!</span><span class="fu">is.na</span>(sbp_m12)) <span class="sc">|&gt;</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(seen_m12) <span class="sc">|&gt;</span> <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(), <span class="at">mean_sbp0 =</span> <span class="fu">mean</span>(sbp_m0))</span>
+<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a>seen12</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 2 × 3
+#&gt;   seen_m12     n mean_sbp0
+#&gt;   &lt;lgl&gt;    &lt;int&gt;     &lt;dbl&gt;
+#&gt; 1 FALSE       72     150.4
+#&gt; 2 TRUE       288     146.1</code></pre>
+</div>
+</div>
+<p>Participants who were not seen at month 12 had higher baseline SBP on average (150.4 against 146.1 mmHg), so the month-12 comparisons are made in a selected group.</p>
+</section>
+<section id="reporting-4" class="level4">
+<h4 class="anchored" data-anchor-id="reporting-4">Reporting</h4>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Visit-specific comparisons are best reported, if at all, as secondary descriptive results from a single longitudinal model: “Estimated differences from usual care at each scheduled visit were obtained as contrasts from the primary linear mixed model (Module 4) rather than from separate tests, which would each use a different subset of participants and inflate the number of comparisons.”</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-4" class="level4">
+<h4 class="anchored" data-anchor-id="common-mistakes-4">Common mistakes</h4>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Declaring the time of “onset” of an effect from the first significant visit.</strong> Significance depends on sample size at that visit and on chance.</li>
+<li><strong>Ignoring multiplicity.</strong> Twelve tests at 5% give a much higher chance of at least one false positive.</li>
+<li><strong>Comparing estimates across visits as if they came from the same people.</strong> With dropout, they do not.</li>
+<li><strong>Correcting for multiplicity (for example Bonferroni) and believing the problem is solved.</strong> The inefficiency and the missing-data problem remain. Fit one model for all visits instead.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+</section>
+<section id="part-6.-putting-it-together" class="level2" data-number="3.6">
+<h2 data-number="3.6" class="anchored" data-anchor-id="part-6.-putting-it-together"><span class="header-section-number">3.6</span> Part 6. Putting it together</h2>
+<section id="how-the-traditional-methods-compare" class="level3" data-number="3.6.1">
+<h3 data-number="3.6.1" class="anchored" data-anchor-id="how-the-traditional-methods-compare"><span class="header-section-number">3.6.1</span> How the traditional methods compare</h3>
+<p>The table summarises what each method can and cannot do with WALK.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Question answered</th>
+<th>Participants used</th>
+<th>Uses actual times</th>
+<th>Handles missing visits</th>
+<th>Gives effect estimate with CI</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>OLS regression on long data</td>
+<td>Difference in slopes</td>
+<td>360</td>
+<td>Yes</td>
+<td>Uses all rows</td>
+<td>Yes, but SEs invalid</td>
+</tr>
+<tr class="even">
+<td>Paired t-test within arm</td>
+<td>Within-arm change</td>
+<td>Complete pairs in one arm</td>
+<td>No</td>
+<td>Complete pairs only</td>
+<td>Yes, for within-arm change</td>
+</tr>
+<tr class="odd">
+<td>RM-ANOVA</td>
+<td>Omnibus: any arm-by-visit difference</td>
+<td>238 completers</td>
+<td>No</td>
+<td>No (listwise deletion)</td>
+<td>No (F-tests)</td>
+</tr>
+<tr class="even">
+<td>Follow-up / change / ANCOVA at month 12</td>
+<td>Effect at month 12</td>
+<td>288 with month 12</td>
+<td>No</td>
+<td>Complete cases only</td>
+<td>Yes (ANCOVA most precise)</td>
+</tr>
+<tr class="odd">
+<td>Separate tests per visit</td>
+<td>Arm differences at each visit</td>
+<td>Varies by visit</td>
+<td>No</td>
+<td>Different subsets</td>
+<td>Yes, but many and inconsistent</td>
+</tr>
+</tbody>
+</table>
+<p>A linear mixed model (Module 4) answers the same question as ANCOVA, uses every observation of all 360 participants, uses actual visit times, models the correlation between repeated measurements, and is valid under MAR dropout when the model is correctly specified. When there is a single follow-up and no missing data, ANCOVA and the mixed model give very similar answers; the mixed model’s advantage grows with the number of visits and the amount of missing data.</p>
+<p><img src="../mermaid/03-traditional-methods-1.png" class="img-fluid" style="width:95.0%"></p>
+</section>
+</section>
+<section id="summary" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="summary">Summary</h2>
+<p>Traditional methods each take a narrow view of longitudinal data. Ordinary regression gives a useful mean structure but ignores the correlation between a participant’s measurements, so its standard errors cannot be trusted. A paired t-test describes change within one group and cannot, on its own, say whether an intervention worked. Repeated-measures ANOVA uses all the visits but only for participants who attended every one, assumes sphericity (which the WALK covariance matrix clearly violates, requiring the Greenhouse–Geisser or Huynh–Feldt correction), ignores actual visit times and time-varying covariates, and produces omnibus tests rather than estimates. For a single follow-up in a randomised trial, baseline-adjusted ANCOVA is the most precise of the simple analyses and is a sound primary analysis when data are complete; change scores are less efficient unless the baseline–follow-up correlation is high, and in non-randomised comparisons the two can disagree (Lord’s paradox). Separate tests at every visit multiply the chance of false positives and compare shifting subsets of participants. Module 4 shows how the linear mixed model keeps what is good in these methods and removes their main restrictions.</p>
+</section>
+<section id="further-reading" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="further-reading">Further reading</h2>
+<ul>
+<li><span class="citation" data-cites="senn2006">Senn (<a href="../references.html#ref-senn2006" role="doc-biblioref">2006</a>)</span> explains clearly why ANCOVA is preferred to change scores in randomised trials and discusses the role of baseline.</li>
+<li><span class="citation" data-cites="vickers2001">Vickers and Altman (<a href="../references.html#ref-vickers2001" role="doc-biblioref">2001</a>)</span> is a two-page summary of the same argument for clinical readers.</li>
+<li><span class="citation" data-cites="twisk2018">Twisk et al. (<a href="../references.html#ref-twisk2018" role="doc-biblioref">2018</a>)</span> compares the different ways of estimating treatment effects in trials with baseline and repeated follow-up measurements, including longitudinal mixed models.</li>
+<li><span class="citation" data-cites="greenhouse1959">Greenhouse and Geisser (<a href="../references.html#ref-greenhouse1959" role="doc-biblioref">1959</a>)</span> and <span class="citation" data-cites="huynh1976">Huynh and Feldt (<a href="../references.html#ref-huynh1976" role="doc-biblioref">1976</a>)</span> are the original sources for the sphericity corrections.</li>
+<li><span class="citation" data-cites="fitzmaurice2011">Fitzmaurice et al. (<a href="../references.html#ref-fitzmaurice2011" role="doc-biblioref">2011</a>)</span>, chapters 1–3, places these methods in the wider history of longitudinal analysis.</li>
+</ul>
+</section>
+<section id="exercises" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="exercises">Exercises</h2>
+<p>The exercises for this module are in the workbook, <code>workbook/wb03-traditional-methods.qmd</code>. Guided exercises cover the arm-by-time regression, the paired comparison, RM-ANOVA with the sphericity corrections and the three month-12 analyses; the independent exercises ask you to repeat the analyses for month 6 and to explore the precision of ANCOVA by simulation.</p>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-fitzmaurice2011" class="csl-entry" role="listitem">
+Fitzmaurice, Garrett M., Nan M. Laird, and James H. Ware. 2011. <em>Applied Longitudinal Analysis</em>. 2nd edn. Wiley Series in Probability and Statistics. John Wiley &amp; Sons. <a href="https://doi.org/10.1002/9781119513469">https://doi.org/10.1002/9781119513469</a>.
+</div>
+<div id="ref-greenhouse1959" class="csl-entry" role="listitem">
+Greenhouse, Samuel W., and Seymour Geisser. 1959. <span>‘On Methods in the Analysis of Profile Data’</span>. <em>Psychometrika</em> 24 (2): 95–112. <a href="https://doi.org/10.1007/BF02289823">https://doi.org/10.1007/BF02289823</a>.
+</div>
+<div id="ref-hernan2020" class="csl-entry" role="listitem">
+Hernán, Miguel A., and James M. Robins. 2020. <em>Causal Inference: What If</em>. Chapman &amp; Hall/CRC. <a href="https://miguelhernan.org/whatifbook">https://miguelhernan.org/whatifbook</a>.
+</div>
+<div id="ref-huynh1976" class="csl-entry" role="listitem">
+Huynh, Huynh, and Leonard S. Feldt. 1976. <span>‘Estimation of the Box Correction for Degrees of Freedom from Sample Data in Randomized Block and Split-Plot Designs’</span>. <em>Journal of Educational Statistics</em> 1 (1): 69–82. <a href="https://doi.org/10.3102/10769986001001069">https://doi.org/10.3102/10769986001001069</a>.
+</div>
+<div id="ref-senn2006" class="csl-entry" role="listitem">
+Senn, Stephen. 2006. <span>‘Change from Baseline and Analysis of Covariance Revisited’</span>. <em>Statistics in Medicine</em> 25 (24): 4334–44. <a href="https://doi.org/10.1002/sim.2682">https://doi.org/10.1002/sim.2682</a>.
+</div>
+<div id="ref-twisk2018" class="csl-entry" role="listitem">
+Twisk, Jos, Lisa Bosman, Trynke Hoekstra, Judith Rijnhart, Marieke Welten, and Martijn Heymans. 2018. <span>‘Different Ways to Estimate Treatment Effects in Randomised Controlled Trials’</span>. <em>Contemporary Clinical Trials Communications</em> 10: 80–85. <a href="https://doi.org/10.1016/j.conctc.2018.03.008">https://doi.org/10.1016/j.conctc.2018.03.008</a>.
+</div>
+<div id="ref-vickers2001" class="csl-entry" role="listitem">
+Vickers, Andrew J., and Douglas G. Altman. 2001. <span>‘Analysing Controlled Trials with Baseline and Follow up Measurements’</span>. <em>BMJ</em> 323 (7321): 1123–24. <a href="https://doi.org/10.1136/bmj.323.7321.1123">https://doi.org/10.1136/bmj.323.7321.1123</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/neu-data\.github\.io\/LDA\/book\/en\/_book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../chapters/02-data-preparation.html" class="pagination-link" aria-label="Preparing and exploring longitudinal data in R">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Preparing and exploring longitudinal data in R</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../chapters/04-linear-mixed-models.html" class="pagination-link" aria-label="Linear mixed-effects models">
+        <span class="nav-page-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Linear mixed-effects models</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

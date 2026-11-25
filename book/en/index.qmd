@@ -1,0 +1,75 @@
+# Preface {.unnumbered}
+
+Longitudinal studies measure the same people repeatedly over time. They let us ask how outcomes change, whether change differs between groups, and how individuals differ from one another in the way they change. They also bring problems that cross-sectional data do not have:
+
+* measurements on the same person are correlated;
+* visits are missed and people leave studies early;
+* measurements rarely happen exactly when planned.
+
+This book explains the methods that deal with these features, and shows how to use them well in R.
+
+The book takes each method in the same order: the research question it answers, the intuition behind it, the model equation with every term explained, its assumptions and limitations, how to fit it in R, how to interpret the estimates and their uncertainty, how to check the model, and how to report the results. Every method comes with common mistakes and how to avoid them. Worked analyses show real, executed R output, and the numbers quoted in the text are computed from that output when the book is built.
+
+## Who the book is for
+
+The book is written for researchers, analysts and postgraduate students who know basic statistics: descriptive statistics, confidence intervals, hypothesis tests and simple linear regression. Familiarity with R helps but is not required. The first, unnumbered chapter is a refresher of R and regression. Readers who are confident with both can skip it.
+
+## How the book is organised
+
+The chapters follow the modules of the course *Longitudinal Data Analysis: Concepts, Methods and Practical Applications Using R*. **Chapter numbers match module numbers**, so a reference to "Module 9" in the text means Chapter 9.
+
+* **Foundations** (refresher, Chapters 1–3): the structure of longitudinal data, preparing and exploring it in R, and the traditional methods (paired comparisons, repeated-measures ANOVA, change scores and ANCOVA) with their limitations.
+* **Linear mixed models** (Chapters 4–6): random effects, covariance structures, model choice, and interpretation through estimated marginal means, contrasts and predictions.
+* **Non-normal outcomes** (Chapters 7–8): generalized estimating equations and generalized linear mixed models for binary and count outcomes, and why their coefficients answer different questions.
+* **Extensions, missing data and practice** (Chapters 9–12): time-varying predictors, nonlinear change, missing data and dropout, diagnostics and troubleshooting, study planning, reporting and reproducibility.
+* **Advanced extensions** (Chapter 13): ordinal outcomes, three-level data, nonlinear mixed models, joint models for longitudinal and time-to-event data, and time-varying confounding.
+
+All chapters except Chapter 13 are core material. Sections inside earlier chapters that go beyond the core carry an [Advanced]{.advanced-tag} label. The appendices describe the datasets, collect the method-selection questions and diagrams, and give a glossary of terms.
+
+## The data are simulated
+
+Every example uses **simulated data from fictional studies**:
+
+* **WALK** (blood pressure in a three-arm trial) is the core example;
+* **CLEAR** has repeated binary and ordinal outcomes;
+* **DIARY** has counts with varying exposure;
+* **KIDNEY** is a cohort with irregular visits and a time-to-event outcome.
+
+The results illustrate methods and are not empirical findings. Simulation has one advantage: the true values are known, so we can check whether a method recovers them. The text points this out wherever it compares an estimate with the truth. Appendix [-@sec-data] describes each dataset.
+
+## Software and reproducibility
+
+The analyses use R and a small set of packages:
+
+* **lme4** and **lmerTest**, for linear and generalized linear mixed models;
+* **nlme**, for residual correlation structures;
+* **glmmTMB**, for negative binomial models;
+* **geepack**, for generalized estimating equations;
+* **emmeans**, for estimated marginal means, contrasts and predictions;
+* **mgcv**, for generalized additive mixed models;
+* **mice**, for multiple imputation;
+* **DHARMa**, for residual diagnostics of GLMMs;
+* the tidyverse packages **dplyr**, **tidyr**, **readr** and **ggplot2**.
+
+Chapter 13 adds **ordinal**, **survival** and **JMbayes2**.
+
+The book was built with R 4.6.1 and Quarto 1.10. The complete course, with the data, simulation scripts, numbered analysis scripts, slides, exercises and solutions, is available at <https://github.com/neu-data/LDA>, and the course materials are published at <https://neu-data.github.io/LDA/>. Each chapter begins by loading the shared set-up file `R/setup.R`, so the code runs unchanged from the course project.
+
+## Exercises
+
+Each chapter ends by pointing to the matching workbook in the course materials. Every workbook has guided exercises with partly completed code and independent exercises without scaffolding. Instructors can obtain worked solutions with verified output from the answer keys in the same repository.
+
+## Conventions
+
+* Code is shown in grey boxes, and R output follows with lines starting `#>`.
+* Mathematical notation is consistent throughout:
+  * $i$ indexes participants and $j$ measurement occasions;
+  * $y_{ij}$ is an outcome measured at time $t_{ij}$;
+  * $\boldsymbol\beta$ are fixed effects and $\mathbf b_i$ random effects with covariance matrix $G$;
+  * $\varepsilon_{ij}$ are residual errors with covariance matrix $R_i$;
+  * $V_i = Z_i G Z_i^\top + R_i$ is the marginal covariance of a participant's measurements.
+* British spelling is used, apart from the established names "generalized estimating equations" and "generalized linear mixed models".
+
+## About this edition
+
+This is the English edition. The book is organised so that other language editions can be added alongside it, built from the same analyses.

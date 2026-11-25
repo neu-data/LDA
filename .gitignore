@@ -16,3 +16,10 @@ outputs/models/m13_jm.rds
 
 # Internal authoring notes
 admin/agent_brief_common.md
+
+# Book build intermediates (the rendered book is in book/*/_book)
+book/*/chapters/*_files/
+book/*/_book_pdf/
+
+/.quarto/
+**/*.quarto_ipynb

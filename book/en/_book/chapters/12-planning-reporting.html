@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-GB" xml:lang="en-GB"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>12&nbsp; Study planning, reporting and reproducibility – Longitudinal Data Analysis in R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/13-advanced.html" rel="next">
+<link href="../chapters/11-diagnostics.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-174fd6913be23cc9900c0b0ca550f0a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../book.css">
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/09-time-varying-nonlinear.html">Extensions, missing data and practice</a></li><li class="breadcrumb-item"><a href="../chapters/12-planning-reporting.html"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">Longitudinal Data Analysis in R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/neu-data/LDA/tree/main/book/en/" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+    <a href="../Longitudinal-Data-Analysis-in-R.pdf" title="Download PDF" class="quarto-navigation-tool px-1" aria-label="Download PDF"><i class="bi bi-file-pdf"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/00-refresher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Foundations refresher: R and regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Foundations of longitudinal data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-data-preparation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Preparing and exploring longitudinal data in R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-traditional-methods.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Statistical foundations and traditional approaches</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Linear mixed models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-linear-mixed-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Linear mixed-effects models</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-covariance-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Modelling covariance and choosing a model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-interpretation-prediction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Interpretation, contrasts and prediction</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Non-normal outcomes</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-gee.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Generalized estimating equations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-glmm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Generalized linear mixed models</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Extensions, missing data and practice</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-time-varying-nonlinear.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Time-varying predictors and nonlinear change</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Missing data and dropout</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-diagnostics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Diagnostics and troubleshooting</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-planning-reporting.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Advanced extensions</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-advanced.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Advanced extensions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/a-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">The course datasets</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/b-choosing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Choosing a method</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendices/c-glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-outcomes" id="toc-learning-outcomes" class="nav-link active" data-scroll-target="#learning-outcomes">Learning outcomes</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#start-from-the-estimand" id="toc-start-from-the-estimand" class="nav-link" data-scroll-target="#start-from-the-estimand"><span class="header-section-number">12.1</span> Start from the estimand</a></li>
+  <li><a href="#choosing-measurement-occasions" id="toc-choosing-measurement-occasions" class="nav-link" data-scroll-target="#choosing-measurement-occasions"><span class="header-section-number">12.2</span> Choosing measurement occasions</a></li>
+  <li><a href="#how-design-choices-affect-precision-the-variance-of-a-slope" id="toc-how-design-choices-affect-precision-the-variance-of-a-slope" class="nav-link" data-scroll-target="#how-design-choices-affect-precision-the-variance-of-a-slope"><span class="header-section-number">12.3</span> How design choices affect precision: the variance of a slope</a>
+  <ul class="collapse">
+  <li><a href="#the-research-question-and-estimand" id="toc-the-research-question-and-estimand" class="nav-link" data-scroll-target="#the-research-question-and-estimand"><span class="header-section-number">12.3.1</span> The research question and estimand</a></li>
+  <li><a href="#data-structure-and-outcome-types" id="toc-data-structure-and-outcome-types" class="nav-link" data-scroll-target="#data-structure-and-outcome-types"><span class="header-section-number">12.3.2</span> Data structure and outcome types</a></li>
+  <li><a href="#intuition" id="toc-intuition" class="nav-link" data-scroll-target="#intuition"><span class="header-section-number">12.3.3</span> Intuition</a></li>
+  <li><a href="#the-model" id="toc-the-model" class="nav-link" data-scroll-target="#the-model"><span class="header-section-number">12.3.4</span> The model</a></li>
+  <li><a href="#assumptions-and-limitations" id="toc-assumptions-and-limitations" class="nav-link" data-scroll-target="#assumptions-and-limitations"><span class="header-section-number">12.3.5</span> Assumptions and limitations</a></li>
+  <li><a href="#fitting-the-model-in-r" id="toc-fitting-the-model-in-r" class="nav-link" data-scroll-target="#fitting-the-model-in-r"><span class="header-section-number">12.3.6</span> Fitting the model in R</a></li>
+  <li><a href="#interpreting-the-output" id="toc-interpreting-the-output" class="nav-link" data-scroll-target="#interpreting-the-output"><span class="header-section-number">12.3.7</span> Interpreting the output</a></li>
+  <li><a href="#checking-the-model" id="toc-checking-the-model" class="nav-link" data-scroll-target="#checking-the-model"><span class="header-section-number">12.3.8</span> Checking the model</a></li>
+  <li><a href="#correlation-and-a-single-follow-up" id="toc-correlation-and-a-single-follow-up" class="nav-link" data-scroll-target="#correlation-and-a-single-follow-up"><span class="header-section-number">12.3.9</span> Correlation and a single follow-up</a></li>
+  <li><a href="#dropout" id="toc-dropout" class="nav-link" data-scroll-target="#dropout"><span class="header-section-number">12.3.10</span> Dropout</a></li>
+  <li><a href="#reporting" id="toc-reporting" class="nav-link" data-scroll-target="#reporting"><span class="header-section-number">12.3.11</span> Reporting</a></li>
+  <li><a href="#common-mistakes" id="toc-common-mistakes" class="nav-link" data-scroll-target="#common-mistakes"><span class="header-section-number">12.3.12</span> Common mistakes</a></li>
+  </ul></li>
+  <li><a href="#simulation-based-power-and-sample-size" id="toc-simulation-based-power-and-sample-size" class="nav-link" data-scroll-target="#simulation-based-power-and-sample-size"><span class="header-section-number">12.4</span> Simulation-based power and sample size</a>
+  <ul class="collapse">
+  <li><a href="#the-research-question-and-estimand-1" id="toc-the-research-question-and-estimand-1" class="nav-link" data-scroll-target="#the-research-question-and-estimand-1"><span class="header-section-number">12.4.1</span> The research question and estimand</a></li>
+  <li><a href="#data-structure-and-outcome-types-1" id="toc-data-structure-and-outcome-types-1" class="nav-link" data-scroll-target="#data-structure-and-outcome-types-1"><span class="header-section-number">12.4.2</span> Data structure and outcome types</a></li>
+  <li><a href="#intuition-1" id="toc-intuition-1" class="nav-link" data-scroll-target="#intuition-1"><span class="header-section-number">12.4.3</span> Intuition</a></li>
+  <li><a href="#the-model-1" id="toc-the-model-1" class="nav-link" data-scroll-target="#the-model-1"><span class="header-section-number">12.4.4</span> The model</a></li>
+  <li><a href="#assumptions-and-limitations-1" id="toc-assumptions-and-limitations-1" class="nav-link" data-scroll-target="#assumptions-and-limitations-1"><span class="header-section-number">12.4.5</span> Assumptions and limitations</a></li>
+  <li><a href="#fitting-the-model-in-r-1" id="toc-fitting-the-model-in-r-1" class="nav-link" data-scroll-target="#fitting-the-model-in-r-1"><span class="header-section-number">12.4.6</span> Fitting the model in R</a></li>
+  <li><a href="#interpreting-the-output-1" id="toc-interpreting-the-output-1" class="nav-link" data-scroll-target="#interpreting-the-output-1"><span class="header-section-number">12.4.7</span> Interpreting the output</a></li>
+  <li><a href="#checking-the-model-1" id="toc-checking-the-model-1" class="nav-link" data-scroll-target="#checking-the-model-1"><span class="header-section-number">12.4.8</span> Checking the model</a></li>
+  <li><a href="#reporting-1" id="toc-reporting-1" class="nav-link" data-scroll-target="#reporting-1"><span class="header-section-number">12.4.9</span> Reporting</a></li>
+  <li><a href="#common-mistakes-1" id="toc-common-mistakes-1" class="nav-link" data-scroll-target="#common-mistakes-1"><span class="header-section-number">12.4.10</span> Common mistakes</a></li>
+  </ul></li>
+  <li><a href="#writing-a-longitudinal-statistical-analysis-plan" id="toc-writing-a-longitudinal-statistical-analysis-plan" class="nav-link" data-scroll-target="#writing-a-longitudinal-statistical-analysis-plan"><span class="header-section-number">12.5</span> Writing a longitudinal statistical analysis plan</a></li>
+  <li><a href="#reporting-longitudinal-analyses" id="toc-reporting-longitudinal-analyses" class="nav-link" data-scroll-target="#reporting-longitudinal-analyses"><span class="header-section-number">12.6</span> Reporting longitudinal analyses</a></li>
+  <li><a href="#reproducible-r-projects" id="toc-reproducible-r-projects" class="nav-link" data-scroll-target="#reproducible-r-projects"><span class="header-section-number">12.7</span> Reproducible R projects</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#further-reading" id="toc-further-reading" class="nav-link" data-scroll-target="#further-reading">Further reading</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises">Exercises</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/09-time-varying-nonlinear.html">Extensions, missing data and practice</a></li><li class="breadcrumb-item"><a href="../chapters/12-planning-reporting.html"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-m12" class="quarto-section-identifier"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Study planning, reporting and reproducibility</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"R"</span>, <span class="st">"setup.R"</span>))</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>walk <span class="ot">&lt;-</span> <span class="fu">load_walk</span>()</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Slow simulations are run once by scripts/12_planning.R and cached in</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># outputs/models/. If a cache is missing it is recomputed with the same seed.</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>cache_or_run <span class="ot">&lt;-</span> <span class="cf">function</span>(name, expr) {</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  f <span class="ot">&lt;-</span> <span class="fu">here</span>(<span class="st">"outputs"</span>, <span class="st">"models"</span>, <span class="fu">paste0</span>(name, <span class="st">".rds"</span>))</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">file.exists</span>(f)) <span class="fu">return</span>(<span class="fu">readRDS</span>(f))</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> expr</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">save_model</span>(x, name)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  x</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The best time to think about the analysis of a longitudinal study is before the first participant is measured. How often to measure, for how long, and on how many people determines what can be estimated and how precisely, and no analysis can recover information that the design did not collect. Planning also includes writing down the analysis before the data arrive, so that the results can be trusted; reporting it completely, so that readers can judge it; and organising the computation so that anyone, including you in two years, can reproduce it. This module covers all four. The statistical core is a pair of tools for predicting precision: a closed-form formula for the variance of a slope in a balanced design, which shows how each design choice matters, and simulation, which handles the realistic complications (dropout, unequal times, complex models) that formulas cannot.</p>
+<section id="learning-outcomes" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="learning-outcomes">Learning outcomes</h2>
+<p>By the end of this module participants will be able to:</p>
+<ol type="1">
+<li><strong>12.1</strong> Choose measurement occasions and follow-up schedules for a stated research question.</li>
+<li><strong>12.2</strong> Explain how correlation, effect size, dropout and the number of subjects affect precision.</li>
+<li><strong>12.3</strong> Estimate power and sample size by simulation, and report the Monte Carlo error.</li>
+<li><strong>12.4</strong> Write a longitudinal statistical analysis plan.</li>
+<li><strong>12.5</strong> Report model specifications, assumptions, missing-data handling and results completely and transparently.</li>
+<li><strong>12.6</strong> Organise a reproducible R project with relative paths, numbered scripts and recorded package versions.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>Module 1 (estimands for change, within-subject correlation), Module 3 (change scores and ANCOVA), Module 4 (random intercepts and slopes), Module 10 (dropout and MAR) and Module 11 (diagnostics and the analysis log).</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="Simulated data">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Simulated data
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled" title="Cached computations">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Cached computations
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The power simulations in this module need about 3,500 model fits and take roughly 10 minutes. <code>scripts/12_planning.R</code> runs them once and saves the results in <code>outputs/models/m12_power_grid.rds</code> and <code>outputs/models/m12_slope_sims.rds</code>. These notes read the saved files; if they are missing, the same code runs here with the same seeds and gives identical results.</p>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Design parameters: the defaults of sim_two_arm() in R/sim_helpers.R</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>pars <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">delta =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">sd_int =</span> <span class="dv">11</span>, <span class="at">sd_slope =</span> <span class="fl">0.4</span>, <span class="at">cor_int_slope =</span> <span class="sc">-</span><span class="fl">0.2</span>,</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">sd_resid =</span> <span class="dv">6</span>, <span class="at">times =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>))</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>s_tt <span class="ot">&lt;-</span> <span class="cf">function</span>(times) <span class="fu">sum</span>((times <span class="sc">-</span> <span class="fu">mean</span>(times))<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>var_slope_diff <span class="ot">&lt;-</span> <span class="cf">function</span>(n_per_arm, times, sd_slope, sd_resid) {</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="dv">2</span> <span class="sc">*</span> (sd_slope<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span> sd_resid<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> <span class="fu">s_tt</span>(times)) <span class="sc">/</span> n_per_arm</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>power_formula <span class="ot">&lt;-</span> <span class="cf">function</span>(n_per_arm, <span class="at">times =</span> pars<span class="sc">$</span>times, <span class="at">delta =</span> pars<span class="sc">$</span>delta,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                          <span class="at">sd_slope =</span> pars<span class="sc">$</span>sd_slope, <span class="at">sd_resid =</span> pars<span class="sc">$</span>sd_resid,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                          <span class="at">alpha =</span> <span class="fl">0.05</span>) {</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  se <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">var_slope_diff</span>(n_per_arm, times, sd_slope, sd_resid))</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pnorm</span>(<span class="fu">abs</span>(delta) <span class="sc">/</span> se <span class="sc">-</span> <span class="fu">qnorm</span>(<span class="dv">1</span> <span class="sc">-</span> alpha <span class="sc">/</span> <span class="dv">2</span>))</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>n_formula <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">power =</span> <span class="fl">0.9</span>, <span class="at">times =</span> pars<span class="sc">$</span>times, <span class="at">delta =</span> pars<span class="sc">$</span>delta,</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>                      <span class="at">sd_slope =</span> pars<span class="sc">$</span>sd_slope, <span class="at">sd_resid =</span> pars<span class="sc">$</span>sd_resid,</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>                      <span class="at">alpha =</span> <span class="fl">0.05</span>) {</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ceiling</span>(<span class="dv">2</span> <span class="sc">*</span> (<span class="fu">qnorm</span>(<span class="dv">1</span> <span class="sc">-</span> alpha <span class="sc">/</span> <span class="dv">2</span>) <span class="sc">+</span> <span class="fu">qnorm</span>(power))<span class="sc">^</span><span class="dv">2</span> <span class="sc">*</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>            (sd_slope<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span> sd_resid<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> <span class="fu">s_tt</span>(times)) <span class="sc">/</span> delta<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="start-from-the-estimand" class="level2" data-number="12.1">
+<h2 data-number="12.1" class="anchored" data-anchor-id="start-from-the-estimand"><span class="header-section-number">12.1</span> Start from the estimand</h2>
+<p>Every design decision follows from the research question and its estimand. Module 1 distinguished three kinds of question: about change (how does SBP change over a year?), about group differences in change (does the enhanced programme reduce SBP more than usual care?), and about individual trajectories (how much do participants differ in their rate of change?). They need different designs.</p>
+<ul>
+<li>A <strong>difference in mean change at a fixed time</strong> (the WALK primary estimand at month 12) needs good measurement at baseline and at that time. Intermediate visits add precision through the correlation and help under dropout, but the two end points carry most of the information.</li>
+<li>A <strong>difference in rates of change</strong> (slopes) is estimated most precisely when measurements are spread far apart in time, ideally clustered at the beginning and end of follow-up, provided change is linear.</li>
+<li><strong>The shape of change</strong> (when the effect appears, whether it plateaus or wanes) needs measurements where the curve bends. If change is expected to be early, visits should be front-loaded.</li>
+<li><strong>Individual differences in change</strong> (the random-slope variance <span class="math inline">\(\tau_1^2\)</span>) need enough measurements per participant, spread widely, to separate true slope differences from residual noise.</li>
+</ul>
+<p>The ICH E9(R1) addendum <span class="citation" data-cites="ich2019">(<a href="../references.html#ref-ich2019" role="doc-biblioref">International Council for Harmonisation of Technical Requirements for Pharmaceuticals for Human Use (ICH) 2019</a>)</span> makes the estimand explicit through five attributes: the treatment conditions, the population, the variable (endpoint), the handling of intercurrent events, and the population-level summary. Intercurrent events, such as stopping the programme or starting a new medication, have direct consequences for design: if the estimand uses the treatment-policy strategy, outcomes must be collected after such events, so the protocol must keep following participants who stop the programme.</p>
+</section>
+<section id="choosing-measurement-occasions" class="level2" data-number="12.2">
+<h2 data-number="12.2" class="anchored" data-anchor-id="choosing-measurement-occasions"><span class="header-section-number">12.2</span> Choosing measurement occasions</h2>
+<p>In WALK the programmes act quickly. The simulated truth (known only because the data are simulated) is that the mean change in each arm follows <span class="math inline">\(-A_k\{1 - \exp(-t/2)\}\)</span>, so 39% of the eventual change has happened by month 1 and 78% by month 3. <a href="#fig-m12-schedules" class="quarto-xref">Figure&nbsp;<span>12.1</span></a> shows what three schedules of the same 12-month study would see.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>truth <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="fu">here</span>(<span class="st">"data"</span>, <span class="st">"walk_truth.rds"</span>))</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>curve <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">month =</span> <span class="fu">round</span>(<span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">12</span>, <span class="at">by =</span> <span class="fl">0.1</span>), <span class="dv">1</span>),</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                     <span class="at">arm =</span> <span class="fu">c</span>(<span class="st">"UC"</span>, <span class="st">"SP"</span>, <span class="st">"EP"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">change =</span> <span class="sc">-</span>truth<span class="sc">$</span>A[<span class="fu">as.character</span>(arm)] <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> <span class="fu">exp</span>(<span class="sc">-</span>month <span class="sc">/</span> truth<span class="sc">$</span>tau)),</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">arm =</span> <span class="fu">factor</span>(arm, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"UC"</span>, <span class="st">"SP"</span>, <span class="st">"EP"</span>)))</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>schedules <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="st">"WALK: 0, 1, 3, 6, 9, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>),</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>                  <span class="st">"Equally spaced: 0, 3, 6, 9, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>),</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>                  <span class="st">"Sparse: 0, 6, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">6</span>, <span class="dv">12</span>))</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>sched_pts <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(<span class="fu">names</span>(schedules), <span class="cf">function</span>(s)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(<span class="at">schedule =</span> s, <span class="at">month =</span> schedules[[s]]))) <span class="sc">|&gt;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">schedule =</span> <span class="fu">factor</span>(schedule, <span class="at">levels =</span> <span class="fu">names</span>(schedules))) <span class="sc">|&gt;</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(curve, <span class="at">by =</span> <span class="st">"month"</span>, <span class="at">relationship =</span> <span class="st">"many-to-many"</span>)</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(curve, <span class="fu">aes</span>(month, change, <span class="at">colour =</span> arm)) <span class="sc">+</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">data =</span> sched_pts, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">data =</span> sched_pts, <span class="at">linetype =</span> <span class="dv">2</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>schedule) <span class="sc">+</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_arm</span>(<span class="at">name =</span> <span class="cn">NULL</span>, <span class="at">labels =</span> walk_arm_labels) <span class="sc">+</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>)) <span class="sc">+</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Months since randomisation"</span>, <span class="at">y =</span> <span class="st">"True mean change in SBP (mmHg)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m12-schedules" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m12-schedules-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="12-planning-reporting_files/figure-html/fig-m12-schedules-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m12-schedules-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;12.1: True mean change in SBP in the three WALK arms (solid lines) and what three follow-up schedules would observe (points joined by dashed lines). Only the front-loaded WALK schedule shows that the effect develops within three months.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The sparse schedule estimates the month-12 change just as well as the others, but it would suggest a gradual decline over the first six months when in fact almost all the change happens in the first three. If the study must also answer “how quickly does the programme work?”, or if participants are expected to drop out early, the early visits are essential. WALK’s schedule front-loads visits at months 1 and 3 for this reason and spaces them out later, when little is changing. The cost of front-loading is small for the month-12 estimand and, as the next section shows, slightly reduces precision for a linear slope compared with visits concentrated at the two ends.</p>
+<p>Other considerations matter as much as statistics. Visits cost money and burden participants, and burden increases dropout. Visit windows (the acceptable range of actual times around each scheduled visit) must be wide enough to be achievable and narrow enough that a visit still measures the intended occasion. Baseline should be measured before randomisation, and if the outcome is noisy (as blood pressure is), averaging two baseline readings or two readings at the final visit reduces measurement error where it matters most. Finally, longer follow-up answers a different question (is the effect sustained?) rather than giving a more precise answer to the same one.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Research question</th>
+<th>Schedule implication</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Difference in mean change at a fixed time</td>
+<td>Precise baseline and final measurements; some intermediate visits for efficiency and to inform missing final values</td>
+</tr>
+<tr class="even">
+<td>Difference in linear rates of change</td>
+<td>Spread measurements widely; extra measurements at the ends of follow-up are most informative if change is linear</td>
+</tr>
+<tr class="odd">
+<td>When the effect appears; shape of change</td>
+<td>Front-load visits where change is expected; enough visits to fit a curve</td>
+</tr>
+<tr class="even">
+<td>Variation between individuals in change</td>
+<td>Several measurements per participant, spread over a long period</td>
+</tr>
+<tr class="odd">
+<td>Durability of an effect</td>
+<td>Long follow-up with visits after the expected plateau</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="how-design-choices-affect-precision-the-variance-of-a-slope" class="level2" data-number="12.3">
+<h2 data-number="12.3" class="anchored" data-anchor-id="how-design-choices-affect-precision-the-variance-of-a-slope"><span class="header-section-number">12.3</span> How design choices affect precision: the variance of a slope</h2>
+<section id="the-research-question-and-estimand" class="level3" data-number="12.3.1">
+<h3 data-number="12.3.1" class="anchored" data-anchor-id="the-research-question-and-estimand"><span class="header-section-number">12.3.1</span> The research question and estimand</h3>
+<p>We want to predict, before the study, how precisely a design will estimate the difference between two arms in the mean rate of change (the slope). The estimand is <span class="math inline">\(\Delta = \beta_3\)</span>, the difference in mean slopes in a two-arm trial, here with the planning value <span class="math inline">\(\Delta = -0.5\)</span> mmHg/month.</p>
+</section>
+<section id="data-structure-and-outcome-types" class="level3" data-number="12.3.2">
+<h3 data-number="12.3.2" class="anchored" data-anchor-id="data-structure-and-outcome-types"><span class="header-section-number">12.3.2</span> Data structure and outcome types</h3>
+<p>A balanced design: <span class="math inline">\(n\)</span> participants per arm, each measured at the same times <span class="math inline">\(t_1, \dots, t_J\)</span>, with a continuous outcome and no missing data. Dropout is added later.</p>
+</section>
+<section id="intuition" class="level3" data-number="12.3.3">
+<h3 data-number="12.3.3" class="anchored" data-anchor-id="intuition"><span class="header-section-number">12.3.3</span> Intuition</h3>
+<p>Imagine fitting a straight line to each participant’s data separately. Each participant’s estimated slope differs from the arm’s mean slope for two reasons: the participant’s true slope differs from the mean (variance <span class="math inline">\(\tau_1^2\)</span>), and their measurements are noisy, so their fitted slope is uncertain (variance <span class="math inline">\(\sigma^2/S_{tt}\)</span>, as in simple linear regression). The arm’s mean slope is the average of these slopes, so its variance is their variance divided by <span class="math inline">\(n\)</span>. Spreading measurements out in time increases <span class="math inline">\(S_{tt}\)</span> and shrinks the second term; nothing about the design except the number of participants shrinks the first.</p>
+</section>
+<section id="the-model" class="level3" data-number="12.3.4">
+<h3 data-number="12.3.4" class="anchored" data-anchor-id="the-model"><span class="header-section-number">12.3.4</span> The model</h3>
+<p>The data-generating model is the random intercept and slope model used by <code>sim_two_arm()</code>:</p>
+<p><span class="math display">\[
+y_{ij} = \beta_0 + \beta_1 t_j + \beta_3\,\text{Active}_i\, t_j + b_{0i} + b_{1i} t_j + \varepsilon_{ij},
+\qquad \text{Var}(b_{1i}) = \tau_1^2,\quad \text{Var}(\varepsilon_{ij}) = \sigma^2,
+\]</span></p>
+<p>where <span class="math inline">\(t_j\)</span> is the time of occasion <span class="math inline">\(j\)</span> (the same for everyone), <span class="math inline">\(\text{Active}_i\)</span> indicates the active arm, and <span class="math inline">\(b_{0i}\)</span> and <span class="math inline">\(b_{1i}\)</span> are the random intercept and slope. (In <code>sim_two_arm()</code> there is no arm main effect, because arms are randomised; including one changes nothing below.) In a balanced, complete design, the generalized least squares estimate of <span class="math inline">\(\beta_3\)</span> is the difference between the arm averages of the participants’ ordinary least squares slopes, which gives</p>
+<p><span class="math display">\[
+\text{Var}(\hat\beta_3) = \frac{2}{n}\left(\tau_1^2 + \frac{\sigma^2}{S_{tt}}\right), \qquad S_{tt} = \sum_{j=1}^J (t_j - \bar t)^2 ,
+\]</span></p>
+<p>with <span class="math inline">\(n\)</span> participants per arm and <span class="math inline">\(\bar t\)</span> the mean of the measurement times <span class="citation" data-cites="diggle2002 fitzmaurice2011">(<a href="../references.html#ref-diggle2002" role="doc-biblioref">Diggle et al. 2002</a>; <a href="../references.html#ref-fitzmaurice2011" role="doc-biblioref">Fitzmaurice et al. 2011</a>)</span>. Notice what does <em>not</em> appear: the random-intercept variance <span class="math inline">\(\tau_0^2\)</span> and the intercept-slope covariance <span class="math inline">\(\tau_{01}\)</span>. Between-participant differences in level do not affect the precision of a slope comparison in a balanced design, because each participant serves as their own control. Setting the power equation <span class="math inline">\(|\Delta|/\sqrt{\text{Var}(\hat\beta_3)} = z_{1-\alpha/2} + z_{1-\gamma}\)</span> (for power <span class="math inline">\(1-\gamma\)</span>) and solving for <span class="math inline">\(n\)</span> gives the sample size per arm</p>
+<p><span class="math display">\[
+n = \frac{2\,(z_{1-\alpha/2} + z_{1-\gamma})^2 \,(\tau_1^2 + \sigma^2/S_{tt})}{\Delta^2}.
+\]</span></p>
+</section>
+<section id="assumptions-and-limitations" class="level3" data-number="12.3.5">
+<h3 data-number="12.3.5" class="anchored" data-anchor-id="assumptions-and-limitations"><span class="header-section-number">12.3.5</span> Assumptions and limitations</h3>
+<p>The formula assumes linear change, the same times for everyone, no missing data, independent residual errors with constant variance, and a large enough sample for the normal approximation. Serial correlation in the residuals reduces the information gained from closely spaced visits. Dropout reduces information, and unequal times break the simple structure. These are the reasons for simulation in the next section. The planning values (<span class="math inline">\(\tau_1\)</span>, <span class="math inline">\(\sigma\)</span>, <span class="math inline">\(\Delta\)</span>) are themselves uncertain; they usually come from pilot studies or published trials, and a sample size calculation should show how <span class="math inline">\(n\)</span> changes over a plausible range.</p>
+</section>
+<section id="fitting-the-model-in-r" class="level3" data-number="12.3.6">
+<h3 data-number="12.3.6" class="anchored" data-anchor-id="fitting-the-model-in-r"><span class="header-section-number">12.3.6</span> Fitting the model in R</h3>
+<p>The formula is one line of R (<code>var_slope_diff()</code> in the setup chunk). We compute it for several schedules over the same 12 months, using the planning values <span class="math inline">\(\tau_1 = 0.4\)</span> mmHg/month and <span class="math inline">\(\sigma = 6\)</span> mmHg.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>design_times <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="st">"0, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">12</span>), <span class="st">"0, 6, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">6</span>, <span class="dv">12</span>),</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>                     <span class="st">"0, 3, 6, 9, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>),</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>                     <span class="st">"0, 1, 3, 6, 9, 12 (WALK)"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">6</span>, <span class="dv">9</span>, <span class="dv">12</span>),</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                     <span class="st">"0, 2, ..., 12 (7 visits)"</span> <span class="ot">=</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">12</span>, <span class="dv">2</span>),</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>                     <span class="st">"0, 0.5, ..., 12 (25 visits)"</span> <span class="ot">=</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">12</span>, <span class="fl">0.5</span>),</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>                     <span class="st">"0, 1, 2, 10, 11, 12"</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">10</span>, <span class="dv">11</span>, <span class="dv">12</span>))</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>design_tab <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">schedule =</span> <span class="fu">names</span>(design_times),</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">n_visits =</span> <span class="fu">lengths</span>(design_times),</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">S_tt =</span> <span class="fu">vapply</span>(design_times, s_tt, <span class="dv">0</span>),</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">var_subject_slope =</span> <span class="fu">vapply</span>(design_times, <span class="cf">function</span>(t)</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    pars<span class="sc">$</span>sd_slope<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span> pars<span class="sc">$</span>sd_resid<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> <span class="fu">s_tt</span>(t), <span class="dv">0</span>),</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">se_n50 =</span> <span class="fu">vapply</span>(design_times, <span class="cf">function</span>(t)</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">sqrt</span>(<span class="fu">var_slope_diff</span>(<span class="dv">50</span>, t, pars<span class="sc">$</span>sd_slope, pars<span class="sc">$</span>sd_resid)), <span class="dv">0</span>),</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">n_per_arm_90 =</span> <span class="fu">vapply</span>(design_times, <span class="cf">function</span>(t) <span class="fu">n_formula</span>(<span class="fl">0.9</span>, <span class="at">times =</span> t), <span class="dv">0</span>))</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(design_tab) <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>design_tab</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                      schedule n_visits  S_tt var_subject_slope se_n50
+#&gt; 1                       0, 12        2  72.0            0.6600 0.1625
+#&gt; 2                    0, 6, 12        3  72.0            0.6600 0.1625
+#&gt; 3              0, 3, 6, 9, 12        5  90.0            0.5600 0.1497
+#&gt; 4    0, 1, 3, 6, 9, 12 (WALK)        6 110.8            0.4848 0.1393
+#&gt; 5    0, 2, ..., 12 (7 visits)        7 112.0            0.4814 0.1388
+#&gt; 6 0, 0.5, ..., 12 (25 visits)       25 325.0            0.2708 0.1041
+#&gt; 7         0, 1, 2, 10, 11, 12        6 154.0            0.3938 0.1255
+#&gt;   n_per_arm_90
+#&gt; 1           56
+#&gt; 2           56
+#&gt; 3           48
+#&gt; 4           41
+#&gt; 5           41
+#&gt; 6           23
+#&gt; 7           34</code></pre>
+</div>
+</div>
+</section>
+<section id="interpreting-the-output" class="level3" data-number="12.3.7">
+<h3 data-number="12.3.7" class="anchored" data-anchor-id="interpreting-the-output"><span class="header-section-number">12.3.7</span> Interpreting the output</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>Meaning</th>
+<th>Example (equally spaced, 5 visits)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>S_tt</code></td>
+<td>Spread of the measurement times</td>
+<td>90</td>
+</tr>
+<tr class="even">
+<td><code>var_subject_slope</code></td>
+<td><span class="math inline">\(\tau_1^2 + \sigma^2/S_{tt}\)</span>: variance of one participant’s slope estimate around the arm mean</td>
+<td>0.56</td>
+</tr>
+<tr class="odd">
+<td><code>se_n50</code></td>
+<td>SE of the difference in mean slopes with 50 per arm</td>
+<td>0.15 mmHg/month</td>
+</tr>
+<tr class="even">
+<td><code>n_per_arm_90</code></td>
+<td>Participants per arm for 90% power at two-sided 5%</td>
+<td>48</td>
+</tr>
+</tbody>
+</table>
+<p>Three lessons follow. First, the schedules <code>0, 12</code> and <code>0, 6, 12</code> give exactly the same precision for a linear slope (both have <span class="math inline">\(S_{tt} = 72\)</span>): a midpoint measurement adds nothing to the slope, although it does allow non-linearity to be detected. Second, more visits help with diminishing returns. Going from 5 to 25 equally spaced visits reduces the required sample size from 48 to 23 per arm, but each further visit buys less because <span class="math inline">\(\tau_1^2 = 0.16\)</span> stays and soon dominates <span class="math inline">\(\sigma^2/S_{tt}\)</span>. Third, where the visits are placed matters as much as how many there are: six visits concentrated at the ends (<code>0, 1, 2, 10, 11, 12</code>, <span class="math inline">\(S_{tt} = 154\)</span>) need 34 per arm, while WALK’s front-loaded six visits (<span class="math inline">\(S_{tt} = 110.8\)</span>) need 41. That is the price of front-loading for a linear slope, and it is worth paying when change is not linear, as in WALK.</p>
+<p><a href="#fig-m12-se-visits" class="quarto-xref">Figure&nbsp;<span>12.2</span></a> shows the diminishing returns directly, for three values of the random-slope SD.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>visits_curve <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">n_visits =</span> <span class="dv">2</span><span class="sc">:</span><span class="dv">13</span>, <span class="at">sd_slope =</span> <span class="fu">c</span>(<span class="fl">0.2</span>, <span class="fl">0.4</span>, <span class="fl">0.8</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">S =</span> <span class="fu">vapply</span>(n_visits, <span class="cf">function</span>(k) <span class="fu">s_tt</span>(<span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">12</span>, <span class="at">length.out =</span> k)), <span class="dv">0</span>),</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">se =</span> <span class="fu">sqrt</span>(<span class="dv">2</span> <span class="sc">*</span> (sd_slope<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span> pars<span class="sc">$</span>sd_resid<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> S) <span class="sc">/</span> <span class="dv">50</span>),</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">sd_slope =</span> <span class="fu">factor</span>(sd_slope))</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(visits_curve, <span class="fu">aes</span>(n_visits, se, <span class="at">colour =</span> sd_slope)) <span class="sc">+</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span> <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">1.5</span>) <span class="sc">+</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"0.2"</span> <span class="ot">=</span> <span class="st">"#009E73"</span>, <span class="st">"0.4"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"0.8"</span> <span class="ot">=</span> <span class="st">"#D55E00"</span>),</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>                      <span class="at">name =</span> <span class="st">"Random-slope SD (mmHg/month)"</span>) <span class="sc">+</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="dv">2</span><span class="sc">:</span><span class="dv">13</span>) <span class="sc">+</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Equally spaced visits over 12 months"</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"SE of difference in slopes (mmHg/month)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m12-se-visits" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m12-se-visits-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="12-planning-reporting_files/figure-html/fig-m12-se-visits-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m12-se-visits-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;12.2: Standard error of the difference in mean slopes (50 participants per arm, residual SD 6 mmHg) against the number of equally spaced visits over 12 months, for three random-slope SDs.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>When participants differ a lot in their rates of change (large <span class="math inline">\(\tau_1\)</span>), adding visits barely helps and only more participants will do. When <span class="math inline">\(\tau_1\)</span> is small, additional visits are worth more.</p>
+</section>
+<section id="checking-the-model" class="level3" data-number="12.3.8">
+<h3 data-number="12.3.8" class="anchored" data-anchor-id="checking-the-model"><span class="header-section-number">12.3.8</span> Checking the model</h3>
+<p>Does the formula agree with what actually happens when a mixed model is fitted to simulated data? We simulate 500 trials with <code>sim_two_arm()</code> (50 per arm, visits at 0, 3, 6, 9 and 12 months, no dropout) and fit the random intercept and slope model to each.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>slope_sims <span class="ot">&lt;-</span> <span class="fu">cache_or_run</span>(<span class="st">"m12_slope_sims"</span>, {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set.seed</span>(<span class="dv">1201</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">500</span>, <span class="cf">function</span>(i) {</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    d <span class="ot">&lt;-</span> <span class="fu">sim_two_arm</span>(<span class="at">n_per_arm =</span> <span class="dv">50</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    m <span class="ot">&lt;-</span> <span class="fu">suppressMessages</span>(<span class="fu">lmer</span>(y <span class="sc">~</span> time <span class="sc">*</span> trt <span class="sc">+</span> (time <span class="sc">|</span> id), <span class="at">data =</span> d,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>                               <span class="at">control =</span> <span class="fu">lmerControl</span>(<span class="at">calc.derivs =</span> <span class="cn">FALSE</span>)))</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    s <span class="ot">&lt;-</span> <span class="fu">coef</span>(<span class="fu">summary</span>(m))[<span class="st">"time:trt"</span>, ]</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">data.frame</span>(<span class="at">sim =</span> i, <span class="at">est =</span> s[[<span class="st">"Estimate"</span>]], <span class="at">se =</span> s[[<span class="st">"Std. Error"</span>]],</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>               <span class="at">p =</span> s[[<span class="st">"Pr(&gt;|t|)"</span>]])</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  }))</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>se_formula <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">var_slope_diff</span>(<span class="dv">50</span>, pars<span class="sc">$</span>times, pars<span class="sc">$</span>sd_slope, pars<span class="sc">$</span>sd_resid))</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>emp_sd <span class="ot">&lt;-</span> <span class="fu">sd</span>(slope_sims<span class="sc">$</span>est)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>mcse_emp_sd <span class="ot">&lt;-</span> emp_sd <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="dv">2</span> <span class="sc">*</span> (<span class="fu">nrow</span>(slope_sims) <span class="sc">-</span> <span class="dv">1</span>))</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">formula_se =</span> se_formula, <span class="at">empirical_sd =</span> emp_sd, <span class="at">mcse_of_sd =</span> mcse_emp_sd,</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">mean_model_se =</span> <span class="fu">mean</span>(slope_sims<span class="sc">$</span>se), <span class="at">mean_estimate =</span> <span class="fu">mean</span>(slope_sims<span class="sc">$</span>est))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    formula_se  empirical_sd    mcse_of_sd mean_model_se mean_estimate 
+#&gt;      0.149666      0.158618      0.005021      0.149032     -0.494350</code></pre>
+</div>
+</div>
+<p>The formula gives an SE of 0.1497. The average model-based SE from the fitted mixed models is 0.149, essentially identical, and the average estimate is -0.494, close to the true <span class="math inline">\(-0.5\)</span>. The empirical SD of the 500 estimates is 0.1586, which is 1.8 Monte Carlo standard errors (MCSE 0.005) above the formula. A discrepancy of this size can arise by chance in 500 simulations, so the formula is confirmed to within simulation error; with more simulated trials the comparison would be sharper.</p>
+</section>
+<section id="correlation-and-a-single-follow-up" class="level3" data-number="12.3.9">
+<h3 data-number="12.3.9" class="anchored" data-anchor-id="correlation-and-a-single-follow-up"><span class="header-section-number">12.3.9</span> Correlation and a single follow-up</h3>
+<p>The same reasoning explains how within-subject correlation affects precision. Suppose the estimand is the difference in mean outcome at one follow-up time, with outcome variance <span class="math inline">\(\sigma_y^2\)</span> at baseline and follow-up and correlation <span class="math inline">\(\rho\)</span> between them. Three analyses are possible <span class="citation" data-cites="vickers2001 senn2006">(<a href="../references.html#ref-vickers2001" role="doc-biblioref">Vickers and Altman 2001</a>; <a href="../references.html#ref-senn2006" role="doc-biblioref">Senn 2006</a>)</span>:</p>
+<p><span class="math display">\[
+\text{Var}_{\text{follow-up}} \propto \sigma_y^2,\qquad
+\text{Var}_{\text{change}} \propto 2\sigma_y^2(1-\rho),\qquad
+\text{Var}_{\text{ANCOVA}} \propto \sigma_y^2(1-\rho^2).
+\]</span></p>
+<p>Analysing change from baseline beats analysing the follow-up value only when <span class="math inline">\(\rho &gt; 0.5\)</span>; ANCOVA, which adjusts the follow-up value for baseline, is always at least as precise as both (<a href="#fig-m12-rho" class="quarto-xref">Figure&nbsp;<span>12.3</span></a>). In WALK the observed correlation between baseline and month-12 SBP is 0.69, so ANCOVA needs about 53% of the sample size of a follow-up-only analysis. The mixed models used in this course for WALK, with baseline as an outcome, achieve precision close to ANCOVA in randomised trials.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>rho_curve <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">rho =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="fl">0.95</span>, <span class="at">by =</span> <span class="fl">0.01</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="st">`</span><span class="at">Follow-up only</span><span class="st">`</span> <span class="ot">=</span> <span class="dv">1</span>, <span class="st">`</span><span class="at">Change score</span><span class="st">`</span> <span class="ot">=</span> <span class="dv">2</span> <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> rho),</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">ANCOVA =</span> <span class="dv">1</span> <span class="sc">-</span> rho<span class="sc">^</span><span class="dv">2</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>rho, <span class="at">names_to =</span> <span class="st">"analysis"</span>, <span class="at">values_to =</span> <span class="st">"rel_var"</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(rho_curve, <span class="fu">aes</span>(rho, rel_var, <span class="at">colour =</span> analysis)) <span class="sc">+</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Follow-up only"</span> <span class="ot">=</span> <span class="st">"#6B6B6B"</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"Change score"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">ANCOVA =</span> <span class="st">"#D55E00"</span>), <span class="at">name =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Correlation between baseline and follow-up"</span>,</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Variance relative to follow-up only"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m12-rho" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m12-rho-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="12-planning-reporting_files/figure-html/fig-m12-rho-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m12-rho-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;12.3: Variance of the treatment effect at one follow-up time, relative to analysing the follow-up value alone, as a function of the correlation between baseline and follow-up.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The effect of correlation therefore depends on the comparison. Positive correlation helps within-subject comparisons (change, slopes) and hurts between-subject comparisons of averages over visits, exactly as Module 1 showed by simulation for standard errors.</p>
+</section>
+<section id="dropout" class="level3" data-number="12.3.10">
+<h3 data-number="12.3.10" class="anchored" data-anchor-id="dropout"><span class="header-section-number">12.3.10</span> Dropout</h3>
+<p>With monotone dropout, some participants contribute fewer visits and so less information about their slope. A participant seen at the first <span class="math inline">\(k\)</span> visits contributes slope information <span class="math inline">\(w_k = 1/(\tau_1^2 + \sigma^2/S_{tt,k})\)</span>, where <span class="math inline">\(S_{tt,k}\)</span> is computed from their <span class="math inline">\(k\)</span> visit times, and a participant seen only at baseline contributes none. If <span class="math inline">\(\pi_k\)</span> is the probability of being seen at exactly the first <span class="math inline">\(k\)</span> visits, then approximately</p>
+<p><span class="math display">\[
+\text{Var}(\hat\beta_3) \approx \frac{2}{n \sum_k \pi_k w_k}.
+\]</span></p>
+<p>This ignores the small amount of information that flows through the correlation between intercepts and slopes, so it is an approximation, and it assumes that dropout is unrelated to the outcome (MCAR). In <code>sim_two_arm()</code> each participant drops out before each post-baseline visit with probability <span class="math inline">\(p\)</span>, so <span class="math inline">\(\pi_k = p(1-p)^{k-1}\)</span> for <span class="math inline">\(k &lt; J\)</span> and <span class="math inline">\(\pi_J = (1-p)^{J-1}\)</span>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>power_formula_dropout <span class="ot">&lt;-</span> <span class="cf">function</span>(n_per_arm, dropout, <span class="at">times =</span> pars<span class="sc">$</span>times,</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">delta =</span> pars<span class="sc">$</span>delta, <span class="at">sd_slope =</span> pars<span class="sc">$</span>sd_slope,</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">sd_resid =</span> pars<span class="sc">$</span>sd_resid, <span class="at">alpha =</span> <span class="fl">0.05</span>) {</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  J <span class="ot">&lt;-</span> <span class="fu">length</span>(times)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  pk <span class="ot">&lt;-</span> <span class="cf">if</span> (dropout <span class="sc">==</span> <span class="dv">0</span>) <span class="fu">c</span>(<span class="fu">rep</span>(<span class="dv">0</span>, J <span class="sc">-</span> <span class="dv">1</span>), <span class="dv">1</span>) <span class="cf">else</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(dropout <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> dropout)<span class="sc">^</span>(<span class="dv">0</span><span class="sc">:</span>(J <span class="sc">-</span> <span class="dv">2</span>)), (<span class="dv">1</span> <span class="sc">-</span> dropout)<span class="sc">^</span>(J <span class="sc">-</span> <span class="dv">1</span>))</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  info <span class="ot">&lt;-</span> <span class="fu">vapply</span>(<span class="fu">seq_len</span>(J), <span class="cf">function</span>(k) <span class="cf">if</span> (k <span class="sc">&lt;</span> <span class="dv">2</span>) <span class="dv">0</span> <span class="cf">else</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="dv">1</span> <span class="sc">/</span> (sd_slope<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span> sd_resid<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> <span class="fu">s_tt</span>(times[<span class="dv">1</span><span class="sc">:</span>k])), <span class="dv">0</span>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  se <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="dv">2</span> <span class="sc">/</span> (n_per_arm <span class="sc">*</span> <span class="fu">sum</span>(pk <span class="sc">*</span> info)))</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pnorm</span>(<span class="fu">abs</span>(delta) <span class="sc">/</span> se <span class="sc">-</span> <span class="fu">qnorm</span>(<span class="dv">1</span> <span class="sc">-</span> alpha <span class="sc">/</span> <span class="dv">2</span>))</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="fu">sapply</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span>), <span class="cf">function</span>(p) <span class="fu">power_formula_dropout</span>(<span class="dv">50</span>, p))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] 0.9163 0.8122 0.6679</code></pre>
+</div>
+</div>
+<p>With 50 participants per arm, the approximate power falls from 0.92 without dropout to 0.81 and 0.67 with per-visit dropout probabilities of 0.1 and 0.2 (that is, 34% and 59% of participants lost before the final visit). A common shortcut, inflating <span class="math inline">\(n\)</span> by <span class="math inline">\(1/(1 - \text{proportion lost})\)</span>, treats dropouts as contributing nothing; a mixed model uses their early visits, so the shortcut is conservative for slopes.</p>
+</section>
+<section id="reporting" class="level3" data-number="12.3.11">
+<h3 data-number="12.3.11" class="anchored" data-anchor-id="reporting"><span class="header-section-number">12.3.11</span> Reporting</h3>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The sample size was based on the difference in mean rates of change in SBP between arms. Assuming visits at 0, 3, 6, 9 and 12 months, a random-slope SD of 0.4 mmHg/month and a residual SD of 6 mmHg (from pilot data), the variance of the estimated difference in slopes is <span class="math inline">\(2(\tau_1^2 + \sigma^2/S_{tt})/n\)</span> with <span class="math inline">\(S_{tt} = 90\)</span>. To detect a difference of 0.5 mmHg/month with 90% power at a two-sided 5% significance level requires 48 participants per arm with complete data. The effect of dropout was assessed by simulation (see below).</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes" class="level3" data-number="12.3.12">
+<h3 data-number="12.3.12" class="anchored" data-anchor-id="common-mistakes"><span class="header-section-number">12.3.12</span> Common mistakes</h3>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Using a cross-sectional sample-size formula</strong> for a longitudinal estimand, ignoring the correlation and the number of visits.</li>
+<li><strong>Adding visits to rescue a study with too few participants.</strong> When participants vary in their slopes, only more participants reduce <span class="math inline">\(\tau_1^2/n\)</span>.</li>
+<li><strong>Taking planning values at face value.</strong> Show how <span class="math inline">\(n\)</span> changes over plausible values of <span class="math inline">\(\tau_1\)</span>, <span class="math inline">\(\sigma\)</span> and <span class="math inline">\(\Delta\)</span>.</li>
+<li><strong>Planning for a slope when the estimand is change at a fixed time</strong> (or the reverse). The formula must match the primary analysis.</li>
+<li><strong>Inflating for dropout as if dropouts contribute nothing</strong> without saying so, or ignoring dropout entirely.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+<section id="simulation-based-power-and-sample-size" class="level2" data-number="12.4">
+<h2 data-number="12.4" class="anchored" data-anchor-id="simulation-based-power-and-sample-size"><span class="header-section-number">12.4</span> Simulation-based power and sample size</h2>
+<section id="the-research-question-and-estimand-1" class="level3" data-number="12.4.1">
+<h3 data-number="12.4.1" class="anchored" data-anchor-id="the-research-question-and-estimand-1"><span class="header-section-number">12.4.1</span> The research question and estimand</h3>
+<p>How many participants per arm are needed for a given power to detect the difference in mean slopes, when participants drop out and the analysis is a mixed model? We also want to know how precise the simulation’s own answer is.</p>
+</section>
+<section id="data-structure-and-outcome-types-1" class="level3" data-number="12.4.2">
+<h3 data-number="12.4.2" class="anchored" data-anchor-id="data-structure-and-outcome-types-1"><span class="header-section-number">12.4.2</span> Data structure and outcome types</h3>
+<p>Simulated two-arm trials from <code>sim_two_arm()</code> with visits at 0, 3, 6, 9 and 12 months, 20 to 80 participants per arm, and monotone dropout with probability 0, 0.1 or 0.2 before each post-baseline visit. The outcome is continuous.</p>
+</section>
+<section id="intuition-1" class="level3" data-number="12.4.3">
+<h3 data-number="12.4.3" class="anchored" data-anchor-id="intuition-1"><span class="header-section-number">12.4.3</span> Intuition</h3>
+<p>Power is the probability that the planned analysis rejects the null hypothesis when the planning alternative is true. If we can simulate the trial and run the analysis, we can estimate that probability by doing it many times and counting rejections. Simulation can include anything we can program (dropout, irregular times, the exact model of the primary analysis, a different analysis method), so it is the most flexible planning tool <span class="citation" data-cites="arnold2011">(<a href="../references.html#ref-arnold2011" role="doc-biblioref">Arnold et al. 2011</a>)</span>. Its answers are estimates, with Monte Carlo error that must be reported <span class="citation" data-cites="morris2019">(<a href="../references.html#ref-morris2019" role="doc-biblioref">Morris et al. 2019</a>)</span>.</p>
+</section>
+<section id="the-model-1" class="level3" data-number="12.4.4">
+<h3 data-number="12.4.4" class="anchored" data-anchor-id="the-model-1"><span class="header-section-number">12.4.4</span> The model</h3>
+<p>For each scenario we generate <span class="math inline">\(n_{\text{sim}}\)</span> datasets, fit the analysis model, and record whether <span class="math inline">\(p &lt; \alpha\)</span> for the time-by-arm interaction. The power estimate and its Monte Carlo standard error are</p>
+<p><span class="math display">\[
+\widehat{\text{power}} = \frac{1}{n_{\text{sim}}}\sum_{s=1}^{n_{\text{sim}}} \mathbb{1}(p_s &lt; \alpha),
+\qquad
+\text{MCSE} = \sqrt{\frac{\widehat{\text{power}}(1-\widehat{\text{power}})}{n_{\text{sim}}}} .
+\]</span></p>
+<p>The MCSE is largest when power is near 0.5. To estimate a power near 0.8 with MCSE no larger than 0.01 needs <span class="math inline">\(n_{\text{sim}} = 0.8 \times 0.2 / 0.01^2 = 1600\)</span> simulated trials; with 200, the MCSE is about 0.028. <span class="citation" data-cites="morris2019">Morris et al. (<a href="../references.html#ref-morris2019" role="doc-biblioref">2019</a>)</span> recommend planning every simulation study through its aims, data-generating mechanisms, estimands, methods and performance measures, and choosing <span class="math inline">\(n_{\text{sim}}\)</span> from the MCSE you need.</p>
+</section>
+<section id="assumptions-and-limitations-1" class="level3" data-number="12.4.5">
+<h3 data-number="12.4.5" class="anchored" data-anchor-id="assumptions-and-limitations-1"><span class="header-section-number">12.4.5</span> Assumptions and limitations</h3>
+<p>The simulated power is only as good as the data-generating model and its planning values. <code>sim_two_arm()</code> assumes linear trajectories, normal random effects and residuals, and dropout that is completely at random (MCAR). If dropout in the real study depends on the outcome, power and bias will both differ. Simulations are slow when each fit takes time, which is why the results here are cached. The <code>power_two_arm()</code> helper fits the model with <code>lmerTest</code> and uses the Satterthwaite t-test, which is the planned analysis; the formula above uses the normal approximation, so the two can differ slightly in small samples.</p>
+</section>
+<section id="fitting-the-model-in-r-1" class="level3" data-number="12.4.6">
+<h3 data-number="12.4.6" class="anchored" data-anchor-id="fitting-the-model-in-r-1"><span class="header-section-number">12.4.6</span> Fitting the model in R</h3>
+<p><code>power_two_arm()</code> (in <code>R/sim_helpers.R</code>) wraps the simulation: it calls <code>sim_two_arm()</code> <code>n_sims</code> times with the arguments you pass, fits the mixed model, and returns the power, its MCSE and the number of simulations. One scenario looks like this (not run here; it takes about 30 seconds):</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">power_two_arm</span>(<span class="at">n_sims =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">n_per_arm =</span> <span class="dv">50</span>, <span class="at">dropout =</span> <span class="fl">0.1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The grid of 15 scenarios with 200 simulated trials each is run in <code>scripts/12_planning.R</code>:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">n_per_arm =</span> <span class="fu">c</span>(<span class="dv">20</span>, <span class="dv">35</span>, <span class="dv">50</span>, <span class="dv">65</span>, <span class="dv">80</span>),</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">dropout =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span>))</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>power_grid <span class="ot">&lt;-</span> <span class="fu">cache_or_run</span>(<span class="st">"m12_power_grid"</span>, {</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>(<span class="fu">lapply</span>(<span class="fu">seq_len</span>(<span class="fu">nrow</span>(grid)), <span class="cf">function</span>(k) {</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    pw <span class="ot">&lt;-</span> <span class="fu">power_two_arm</span>(<span class="at">n_sims =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1200</span> <span class="sc">+</span> k,</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">n_per_arm =</span> grid<span class="sc">$</span>n_per_arm[k],</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>                        <span class="at">dropout =</span> grid<span class="sc">$</span>dropout[k])</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">data.frame</span>(grid[k, ], <span class="at">power =</span> pw[[<span class="st">"power"</span>]], <span class="at">mcse =</span> pw[[<span class="st">"mcse"</span>]],</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>               <span class="at">n_sims =</span> pw[[<span class="st">"n_sims"</span>]])</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  }))</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>power_grid <span class="ot">&lt;-</span> power_grid <span class="sc">|&gt;</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">formula =</span> <span class="fu">mapply</span>(power_formula_dropout, n_per_arm, dropout),</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>         <span class="at">lower =</span> <span class="fu">pmax</span>(<span class="dv">0</span>, power <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> mcse),</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>         <span class="at">upper =</span> <span class="fu">pmin</span>(<span class="dv">1</span>, power <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> mcse))</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>power_grid</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    n_per_arm dropout power     mcse n_sims formula  lower  upper
+#&gt; 1         20     0.0 0.485 0.035339    200  0.5608 0.4157 0.5543
+#&gt; 2         35     0.0 0.775 0.029528    200  0.7982 0.7171 0.8329
+#&gt; 3         50     0.0 0.880 0.022978    200  0.9163 0.8350 0.9250
+#&gt; 4         65     0.0 0.965 0.012995    200  0.9678 0.9395 0.9905
+#&gt; 5         80     0.0 0.980 0.009899    200  0.9883 0.9606 0.9994
+#&gt; 6         20     0.1 0.390 0.034489    200  0.4365 0.3224 0.4576
+#&gt; 7         35     0.1 0.675 0.033119    200  0.6632 0.6101 0.7399
+#&gt; 8         50     0.1 0.795 0.028546    200  0.8122 0.7390 0.8510
+#&gt; 9         65     0.1 0.895 0.021677    200  0.9006 0.8525 0.9375
+#&gt; 10        80     0.1 0.960 0.013856    200  0.9495 0.9328 0.9872
+#&gt; 11        20     0.2 0.310 0.032703    200  0.3278 0.2459 0.3741
+#&gt; 12        35     0.2 0.495 0.035354    200  0.5171 0.4257 0.5643
+#&gt; 13        50     0.2 0.650 0.033727    200  0.6679 0.5839 0.7161
+#&gt; 14        65     0.2 0.780 0.029292    200  0.7792 0.7226 0.8374
+#&gt; 15        80     0.2 0.835 0.026246    200  0.8573 0.7836 0.8864</code></pre>
+</div>
+</div>
+</section>
+<section id="interpreting-the-output-1" class="level3" data-number="12.4.7">
+<h3 data-number="12.4.7" class="anchored" data-anchor-id="interpreting-the-output-1"><span class="header-section-number">12.4.7</span> Interpreting the output</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>formula_lines <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">n_per_arm =</span> <span class="dv">15</span><span class="sc">:</span><span class="dv">150</span>, <span class="at">dropout =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">formula =</span> <span class="fu">mapply</span>(power_formula_dropout, n_per_arm, dropout))</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(power_grid, <span class="fu">aes</span>(n_per_arm, power, <span class="at">colour =</span> <span class="fu">factor</span>(dropout))) <span class="sc">+</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fu">c</span>(<span class="fl">0.8</span>, <span class="fl">0.9</span>), <span class="at">colour =</span> <span class="st">"grey75"</span>) <span class="sc">+</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">data =</span> <span class="fu">filter</span>(formula_lines, n_per_arm <span class="sc">&lt;=</span> <span class="dv">85</span>), <span class="fu">aes</span>(<span class="at">y =</span> formula),</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">linetype =</span> <span class="dv">2</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_pointrange</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> lower, <span class="at">ymax =</span> upper),</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>                  <span class="at">position =</span> <span class="fu">position_dodge</span>(<span class="at">width =</span> <span class="fl">2.5</span>), <span class="at">size =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"0"</span> <span class="ot">=</span> <span class="st">"#222222"</span>, <span class="st">"0.1"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"0.2"</span> <span class="ot">=</span> <span class="st">"#D55E00"</span>),</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>                      <span class="at">name =</span> <span class="st">"Dropout probability per visit"</span>) <span class="sc">+</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Participants per arm"</span>, <span class="at">y =</span> <span class="st">"Power"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m12-power" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m12-power-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="12-planning-reporting_files/figure-html/fig-m12-power-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m12-power-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;12.4: Simulated power (points with 95% Monte Carlo intervals, 200 simulated trials each) and the approximate formula (dashed lines) for the difference in mean slopes, by participants per arm and per-visit dropout probability. Grey lines mark 80% and 90% power.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output</th>
+<th>What it means</th>
+<th>Example: 50 per arm, dropout 0.1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>power</code></td>
+<td>Proportion of simulated trials with <span class="math inline">\(p &lt; 0.05\)</span></td>
+<td>0.795</td>
+</tr>
+<tr class="even">
+<td><code>mcse</code></td>
+<td>Monte Carlo SE of that proportion</td>
+<td>0.029</td>
+</tr>
+<tr class="odd">
+<td><code>lower</code>, <code>upper</code></td>
+<td>95% Monte Carlo interval for the true power</td>
+<td>0.74 to 0.85</td>
+</tr>
+<tr class="even">
+<td><code>formula</code></td>
+<td>Approximate analytic power</td>
+<td>0.812</td>
+</tr>
+</tbody>
+</table>
+<p>Power rises steeply with the number of participants and falls with dropout. With 50 per arm the simulated power is 0.88 without dropout, 0.80 with dropout probability 0.1 per visit and 0.65 with 0.2. The formula curves pass through or close to the Monte Carlo intervals: the largest difference between simulated and formula power is 2.1 MCSEs. Reading the formula curves, 80% power needs about 36, 49 and 69 participants per arm for the three dropout scenarios, and 90% power about 48, 65 and 92. In practice one would confirm the chosen <span class="math inline">\(n\)</span> with a larger simulation at that single design point.</p>
+<p>The Monte Carlo error itself deserves attention. <a href="#fig-m12-mc" class="quarto-xref">Figure&nbsp;<span>12.5</span></a> shows the running power estimate from the 500 stored trials at 50 per arm without dropout.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>mc_running <span class="ot">&lt;-</span> slope_sims <span class="sc">|&gt;</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">reject =</span> p <span class="sc">&lt;</span> <span class="fl">0.05</span>, <span class="at">n_sims =</span> <span class="fu">seq_along</span>(reject),</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">power =</span> <span class="fu">cumsum</span>(reject) <span class="sc">/</span> n_sims,</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">mcse =</span> <span class="fu">sqrt</span>(power <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">-</span> power) <span class="sc">/</span> n_sims))</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(mc_running, <span class="fu">aes</span>(n_sims, power)) <span class="sc">+</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> <span class="fu">pmax</span>(<span class="dv">0</span>, power <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> mcse),</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ymax =</span> <span class="fu">pmin</span>(<span class="dv">1</span>, power <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> mcse)), <span class="at">fill =</span> <span class="st">"grey85"</span>) <span class="sc">+</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fu">power_formula</span>(<span class="dv">50</span>), <span class="at">linetype =</span> <span class="dv">2</span>, <span class="at">colour =</span> <span class="st">"#D55E00"</span>) <span class="sc">+</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_cartesian</span>(<span class="at">ylim =</span> <span class="fu">c</span>(<span class="fl">0.6</span>, <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Number of simulated trials"</span>, <span class="at">y =</span> <span class="st">"Running power estimate"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-m12-mc" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-m12-mc-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="12-planning-reporting_files/figure-html/fig-m12-mc-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-m12-mc-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;12.5: Running estimate of power (black) with its 95% Monte Carlo interval (grey) as the number of simulated trials increases; 50 per arm, no dropout. The dashed line is the formula value.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>After 50 simulated trials the interval is wide (MCSE 0.034); after 500 the estimate is 0.894 with MCSE 0.014, against a formula value of 0.916. A power estimate reported without its MCSE cannot be judged.</p>
+</section>
+<section id="checking-the-model-1" class="level3" data-number="12.4.8">
+<h3 data-number="12.4.8" class="anchored" data-anchor-id="checking-the-model-1"><span class="header-section-number">12.4.8</span> Checking the model</h3>
+<p>Before trusting a power simulation, check that the simulation does what you intend. Simulate one large dataset and confirm that the fitted model recovers the planning values; run the simulation with <span class="math inline">\(\Delta = 0\)</span> and confirm that the rejection rate is close to <span class="math inline">\(\alpha\)</span> (the type I error); and check that the number of failed or singular fits is small and recorded. Compare with a formula wherever one exists, as here.</p>
+</section>
+<section id="reporting-1" class="level3" data-number="12.4.9">
+<h3 data-number="12.4.9" class="anchored" data-anchor-id="reporting-1"><span class="header-section-number">12.4.9</span> Reporting</h3>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Power was estimated by simulation <span class="citation" data-cites="arnold2011 morris2019">(<a href="../references.html#ref-arnold2011" role="doc-biblioref">Arnold et al. 2011</a>; <a href="../references.html#ref-morris2019" role="doc-biblioref">Morris et al. 2019</a>)</span>. Data were generated from a linear mixed model with random intercepts and slopes (SDs 11 mmHg and 0.4 mmHg/month, correlation −0.2), residual SD 6 mmHg, visits at 0, 3, 6, 9 and 12 months, a difference in mean slopes of -0.5 mmHg/month, and dropout before each post-baseline visit with probability 0.1 (completely at random). Each simulated trial was analysed with the planned model (<code>lme4</code>/<code>lmerTest</code>, Satterthwaite t-test). With 65 participants per arm, the estimated power from 200 simulated trials was 0.895 (Monte Carlo SE 0.022). The code is in <code>scripts/12_planning.R</code>.</p>
+</div>
+</div>
+</section>
+<section id="common-mistakes-1" class="level3" data-number="12.4.10">
+<h3 data-number="12.4.10" class="anchored" data-anchor-id="common-mistakes-1"><span class="header-section-number">12.4.10</span> Common mistakes</h3>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Reporting simulated power without its Monte Carlo SE</strong>, or choosing <span class="math inline">\(n_{\text{sim}}\)</span> without considering the precision needed.</li>
+<li><strong>Simulating from one model and analysing with another</strong> without saying so. The analysis in the simulation should be the planned analysis.</li>
+<li><strong>Forgetting to set and record the seed.</strong> The simulation must be reproducible.</li>
+<li><strong>Treating MCAR dropout in the simulation as realistic</strong> when dropout is likely to depend on the outcome.</li>
+<li><strong>Not checking type I error</strong> under the null.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+<section id="writing-a-longitudinal-statistical-analysis-plan" class="level2" data-number="12.5">
+<h2 data-number="12.5" class="anchored" data-anchor-id="writing-a-longitudinal-statistical-analysis-plan"><span class="header-section-number">12.5</span> Writing a longitudinal statistical analysis plan</h2>
+<p>A statistical analysis plan (SAP) is a detailed, dated description of the analysis, written before the data that bear on the main comparison have been seen. It protects against the many small, data-driven choices described in Module 11, makes the analysis reproducible, and tells reviewers what was planned. <span class="citation" data-cites="gamble2017">Gamble et al. (<a href="../references.html#ref-gamble2017" role="doc-biblioref">2017</a>)</span> give consensus guidance on the content of SAPs for clinical trials, and the ICH E9(R1) addendum <span class="citation" data-cites="ich2019">(<a href="../references.html#ref-ich2019" role="doc-biblioref">International Council for Harmonisation of Technical Requirements for Pharmaceuticals for Human Use (ICH) 2019</a>)</span> sets out the estimand framework that a modern SAP uses.</p>
+<p>The course provides a complete template, <code>final-project/sap_template.md</code>, and a filled example for WALK, <code>admin/templates/walk_sap_example.md</code>. The template follows the section structure of Gamble et al.: administrative information and version history; introduction and objectives; study methods (design, randomisation, sample size, interim analyses, timing); statistical principles (confidence intervals, multiplicity, analysis populations); the trial population; the analysis itself; and reporting. It adds the items that longitudinal analyses need:</p>
+<ul>
+<li><strong>the schedule of measurement occasions and visit windows</strong>, and how out-of-window measurements are handled;</li>
+<li><strong>the time scale</strong> (scheduled or actual time, or both, as in the WALK primary model);</li>
+<li><strong>the estimand</strong> with all five ICH E9(R1) attributes, including the strategy for each intercurrent event, and an explicit statement of whether the summary is conditional (subject-specific) or marginal (population-average);</li>
+<li><strong>the full model specification</strong>: mean model, random effects and/or residual correlation, distribution and link, estimation method and degrees-of-freedom method, and how the estimand is computed from the model;</li>
+<li><strong>the pre-specified response to diagnostic problems and fitting problems</strong>, in order (for example: rescale; compare optimisers; then remove the intercept-slope correlation; then the random slope);</li>
+<li><strong>missing data</strong>: the assumption of the primary analysis, how the model uses incomplete data, and the sensitivity analyses with their purposes;</li>
+<li><strong>reproducibility</strong>: software, package versions, and where the code is archived.</li>
+</ul>
+<p>The primary estimand from the WALK example SAP shows the level of detail expected.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Attribute</th>
+<th>WALK</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Treatment conditions</td>
+<td>Assignment to EP (or SP) versus assignment to UC</td>
+</tr>
+<tr class="even">
+<td>Population</td>
+<td>Adults with raised SBP meeting the trial eligibility criteria</td>
+</tr>
+<tr class="odd">
+<td>Variable</td>
+<td>Change in SBP from baseline to month 12</td>
+</tr>
+<tr class="even">
+<td>Intercurrent events</td>
+<td>Stopping programme attendance: treatment policy. Starting or changing antihypertensive medication: treatment policy (hypothetical strategy as a supplementary estimand)</td>
+</tr>
+<tr class="odd">
+<td>Population-level summary</td>
+<td>Difference in mean change (programme minus UC), mmHg</td>
+</tr>
+</tbody>
+</table>
+<p>The WALK SAP also states the sample size reasoning (a difference of 5 mmHg in mean change, SD of change about 10 mmHg, two comparisons at <span class="math inline">\(\alpha = 0.025\)</span>, 90% power, 15% loss, giving 120 per arm), the primary model in equation and R syntax, the rule for influential participants (check data and run a sensitivity analysis if one participant changes a contrast by more than half its SE; Module 11 found none), and a table of sensitivity analyses, each tied to the assumption it relaxes. Read it alongside the template; Independent exercise I2 in the workbook asks you to write the corresponding sections for the CLEAR trial.</p>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Writing the SAP after seeing the results</strong>, or changing it without a dated record.</li>
+<li><strong>Describing the model in words only</strong> (“a mixed model was used”). Give the equation or the exact syntax.</li>
+<li><strong>Omitting intercurrent events</strong> or mixing them up with missing data. Stopping treatment is an intercurrent event; a missed visit is missing data.</li>
+<li><strong>Listing sensitivity analyses without saying what each one tests.</strong></li>
+<li><strong>No plan for fitting problems</strong>, so the response to a warning is decided after seeing what each option does to the effect.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="reporting-longitudinal-analyses" class="level2" data-number="12.6">
+<h2 data-number="12.6" class="anchored" data-anchor-id="reporting-longitudinal-analyses"><span class="header-section-number">12.6</span> Reporting longitudinal analyses</h2>
+<p>A report of a longitudinal analysis should let a reader reconstruct the model, judge its assumptions and see the main result with its uncertainty. The reporting checklist in Appendix A of <code>final-project/sap_template.md</code> organises this under design and data, estimand, model, assumptions and diagnostics, missing data, results and reproducibility. Most deficiencies in published longitudinal analyses are omissions: the covariance structure is not stated, the handling of time is unclear, the number of observations used is missing, or the missing-data assumption is not mentioned. Irregular visit times are a related problem that is often unreported <span class="citation" data-cites="pullenayegum2016">(<a href="../references.html#ref-pullenayegum2016" role="doc-biblioref">Pullenayegum and Lim 2016</a>)</span>.</p>
+<p>Here is a complete example for the WALK primary analysis, with every number computed from the model in this document.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>m_pri <span class="ot">&lt;-</span> <span class="fu">lmer</span>(sbp <span class="sc">~</span> visit_f <span class="sc">*</span> arm <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> month <span class="sc">|</span> id), <span class="at">data =</span> walk,</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>              <span class="at">control =</span> lmer_ctrl)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>emm <span class="ot">&lt;-</span> <span class="fu">emmeans</span>(m_pri, <span class="sc">~</span> visit_f <span class="sc">|</span> arm)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>chg <span class="ot">&lt;-</span> <span class="fu">contrast</span>(emm, <span class="fu">list</span>(<span class="at">change12 =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">1</span>)))</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>chg_tab <span class="ot">&lt;-</span> <span class="fu">summary</span>(chg, <span class="at">infer =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>dic_tab <span class="ot">&lt;-</span> <span class="fu">summary</span>(<span class="fu">contrast</span>(chg, <span class="at">method =</span> <span class="st">"trt.vs.ctrl"</span>, <span class="at">by =</span> <span class="cn">NULL</span>,</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>                            <span class="at">adjust =</span> <span class="st">"none"</span>), <span class="at">infer =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>vc <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">VarCorr</span>(m_pri))</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>chg_tab</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; arm = UC:
+#&gt;  contrast estimate    SE  df lower.CL upper.CL t.ratio p.value
+#&gt;  change12    -1.33 1.010 490    -3.32    0.665  -1.309  0.1912
+#&gt; 
+#&gt; arm = SP:
+#&gt;  contrast estimate    SE  df lower.CL upper.CL t.ratio p.value
+#&gt;  change12    -6.70 0.997 476    -8.66   -4.744  -6.724 &lt;0.0001
+#&gt; 
+#&gt; arm = EP:
+#&gt;  contrast estimate    SE  df lower.CL upper.CL t.ratio p.value
+#&gt;  change12   -10.29 1.020 492   -12.30   -8.294 -10.109 &lt;0.0001
+#&gt; 
+#&gt; Degrees-of-freedom method: satterthwaite 
+#&gt; Confidence level used: 0.95</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>dic_tab</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;  contrast                  estimate   SE  df lower.CL upper.CL t.ratio
+#&gt;  change12 SP - change12 UC    -5.38 1.42 483    -8.17    -2.58  -3.782
+#&gt;  change12 EP - change12 UC    -8.97 1.44 491   -11.79    -6.15  -6.243
+#&gt;  p.value
+#&gt;   0.0002
+#&gt;  &lt;0.0001
+#&gt; 
+#&gt; Degrees-of-freedom method: satterthwaite 
+#&gt; Confidence level used: 0.95</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example: statistical methods">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example: statistical methods
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>SBP was analysed with a linear mixed-effects model including scheduled visit (months 0, 1, 3, 6, 9, 12) as a categorical variable, arm, and their interaction as fixed effects, and a random intercept and random slope on actual time since randomisation (months) for each participant, with an unstructured 2 × 2 covariance matrix and independent residual errors. Baseline SBP was included as an outcome. The model was fitted by restricted maximum likelihood with lme4 <span class="citation" data-cites="bates2015">(<a href="../references.html#ref-bates2015" role="doc-biblioref">Bates et al. 2015</a>)</span> and lmerTest <span class="citation" data-cites="kuznetsova2017">(<a href="../references.html#ref-kuznetsova2017" role="doc-biblioref">Kuznetsova et al. 2017</a>)</span> in R 4.6.1, with Satterthwaite degrees of freedom. The primary estimand was the difference between each programme and usual care in mean change in SBP from baseline to month 12 (treatment-policy strategy for stopping the programme), estimated as a contrast of estimated marginal means with emmeans <span class="citation" data-cites="lenth2026">(<a href="../references.html#ref-lenth2026" role="doc-biblioref">Lenth and Piaskowski 2026</a>)</span>. All observed measurements were used; the analysis is valid if missing visits and dropout are missing at random given arm and the observed SBP history. Assumptions were checked with residual plots, influence analysis and random-effects plots (Module 11), and sensitivity to departures from MAR was assessed with delta-adjusted multiple imputation (Module 10).</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="Reporting example: results">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Reporting example: results
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The analysis included 1897 measurements from all 360 randomised participants; 95, 100, 93 participants (UC, SP, EP) attended the month-12 visit. The estimated mean change in SBP from baseline to month 12 (95% confidence interval) was -1.3 (-3.3 to 0.7) mmHg in the usual care arm, -6.7 (-8.7 to -4.7) mmHg in the standard programme arm and -10.3 (-12.3 to -8.3) mmHg in the enhanced programme arm. The difference in mean change compared with usual care was -5.4 (-8.2 to -2.6) mmHg for the standard programme (p &lt; 0.001) and -9.0 (-11.8 to -6.1) mmHg for the enhanced programme (p &lt; 0.001). The between-participant SD of SBP at baseline was 12.4 mmHg, the SD of individual rates of change 0.54 mmHg/month, and the residual SD 5.6 mmHg. No participant changed the enhanced-versus-usual-care estimate by more than a small fraction of its standard error when omitted.</p>
+</div>
+</div>
+<p>Because the data are simulated, we can compare these estimates with the truth, which is never possible in a real study: the true differences in mean change are −4.6 mmHg (SP) and −8.1 mmHg (EP), both inside the confidence intervals above.</p>
+<p>A useful habit is to keep three levels of reporting apart. The <strong>main text</strong> gives the estimand, the model in a sentence or two, the main estimates with confidence intervals, and the key sensitivity analysis. The <strong>supplement</strong> gives the full model specification, variance components, all contrasts, diagnostic figures and all sensitivity analyses. The <strong>code and analysis log</strong>, archived and cited, give everything else.</p>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Reporting p-values without estimates and confidence intervals</strong>, or estimates without units.</li>
+<li><strong>Not stating the covariance structure</strong> or the random effects.</li>
+<li><strong>Reporting the number of participants but not the number of observations</strong> used, or not saying how many were seen at the primary time point.</li>
+<li><strong>Presenting observed means as if they were model estimates.</strong> Under dropout they differ; say which is which.</li>
+<li><strong>Calling a conditional (subject-specific) odds ratio a population effect</strong> for binary GLMMs (Module 8).</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="reproducible-r-projects" class="level2" data-number="12.7">
+<h2 data-number="12.7" class="anchored" data-anchor-id="reproducible-r-projects"><span class="header-section-number">12.7</span> Reproducible R projects</h2>
+<p>A result is reproducible if someone else, given your data and code, obtains the same numbers. That requires three things: code that runs from start to finish without manual steps, paths that work on any computer, and the same versions of R and its packages. This course is itself organised as a reproducible project, and its layout is a good template.</p>
+<pre><code>LDA_course/
+├── LDA_course.Rproj        R project file: opening it sets the working directory
+├── R/                      shared functions, loaded by R/setup.R
+├── data-raw/               scripts that create the data (fixed seeds)
+├── data/                   analysis datasets (never edited by hand)
+├── scripts/                numbered analysis scripts: 00_make_data.R, 04_..., 11_..., 12_...
+├── outputs/
+│   ├── figures/            written by save_fig()
+│   ├── tables/             written by save_table()
+│   └── models/             written by save_model(); caches of slow computations
+├── notes/, slides/, ...    Quarto documents that source R/setup.R
+└── admin/templates/        analysis log and SAP example</code></pre>
+<p><strong>Projects and relative paths.</strong> Opening <code>LDA_course.Rproj</code> in RStudio makes the project folder the working directory. Inside scripts and Quarto documents, <code>here::here("data", "walk_long.csv")</code> builds the path from the project root whatever the current working directory is (Quarto, for example, runs each document from its own folder). Never use <code>setwd()</code> or absolute paths such as <code>C:/Users/...</code>: they work on one computer only.</p>
+<p><strong>Numbered scripts and one-way data flow.</strong> Raw data are read, never edited. Scripts are numbered in the order they run, each script reads only inputs created by earlier steps, and each saves its outputs to <code>outputs/</code>. <code>00_make_data.R</code> regenerates every dataset; <code>11_diagnostics.R</code> and <code>12_planning.R</code> regenerate everything in these two modules. A new analyst should be able to run the scripts in order and obtain every table and figure. Slow steps can be cached, as here, provided the cache is clearly labelled and can be deleted and rebuilt.</p>
+<p><strong>Record the environment.</strong> At the end of an analysis, save the output of <code>sessionInfo()</code> (R version, operating system, attached packages and versions):</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>si <span class="ot">&lt;-</span> <span class="fu">sessionInfo</span>()</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">R =</span> si<span class="sc">$</span>R.version<span class="sc">$</span>version.string,</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">lme4 =</span> <span class="fu">as.character</span>(<span class="fu">packageVersion</span>(<span class="st">"lme4"</span>)),</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">emmeans =</span> <span class="fu">as.character</span>(<span class="fu">packageVersion</span>(<span class="st">"emmeans"</span>)),</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">DHARMa =</span> <span class="fu">as.character</span>(<span class="fu">packageVersion</span>(<span class="st">"DHARMa"</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                                   R                                lme4 
+#&gt; "R version 4.6.1 (2026-06-24 ucrt)"                             "2.1.0" 
+#&gt;                             emmeans                              DHARMa 
+#&gt;                             "2.0.3"                             "0.5.0"</code></pre>
+</div>
+</div>
+<p><code>scripts/12_planning.R</code> writes the full output to <code>outputs/m12_session_info.txt</code>. This records what was used but does not restore it.</p>
+<p><strong>Restore the environment with renv.</strong> The renv package <span class="citation" data-cites="ushey2026">(<a href="../references.html#ref-ushey2026" role="doc-biblioref">Ushey and Wickham 2026</a>)</span> gives each project its own package library and a lockfile, <code>renv.lock</code>, that lists the exact version and source of every package. The workflow has three commands:</p>
+<ul>
+<li><code>renv::init()</code> sets up a project library and creates <code>renv.lock</code> from the packages the project uses (run once, at the start).</li>
+<li><code>renv::snapshot()</code> updates <code>renv.lock</code> after you install or update packages, so that the lockfile matches the library (run whenever packages change, and before sign-off).</li>
+<li><code>renv::restore()</code> installs the versions recorded in <code>renv.lock</code> (run by a collaborator, or by you on a new computer, to recreate the environment).</li>
+</ul>
+<p>The lockfile is committed to version control with the code. The course project does not use renv itself, because participants install packages in different ways; for a real study it is strongly recommended.</p>
+<p><strong>Version control.</strong> Git records every change to the code and documents with a message, so you can see what changed, when, and why, and return to any earlier state. Commit small, coherent changes with informative messages; keep data files that contain personal information out of the repository (list them in <code>.gitignore</code>); and tag the commit that produced the reported results (for example <code>git tag v1.0-primary-analysis</code>). The analysis log (Module 11) then cites commits rather than vague descriptions, and a reviewer can check out exactly the code that produced the paper.</p>
+<div class="callout callout-style-default callout-important callout-titled" title="Common mistakes">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Common mistakes
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong><code>setwd()</code> and absolute paths</strong>, which break on every other computer.</li>
+<li><strong>Editing data by hand</strong> in a spreadsheet, leaving no record. Make every change in code.</li>
+<li><strong>Scripts that only run in a particular order known to the author</strong>, or that depend on objects left in the workspace. Restart R and run from the top before sign-off.</li>
+<li><strong>Not recording package versions.</strong> Results from mixed models can change between package versions (for example optimiser defaults, or DHARMa’s default simulation settings, which changed in version 0.5.0).</li>
+<li><strong>Committing the renv library instead of the lockfile</strong>, or forgetting <code>renv::snapshot()</code> after updating packages.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="summary" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="summary">Summary</h2>
+<p>Design comes first because it fixes what can be learned. The schedule should follow the estimand: front-load visits when change is early, as in WALK, and spread them widely when the target is a linear rate of change. The variance of a slope in a balanced design, <span class="math inline">\(2(\tau_1^2 + \sigma^2/S_{tt})/n\)</span>, shows why more participants beat more visits once individual differences in change dominate, why midpoints add nothing to a linear slope, and why between-participant differences in level do not matter for within-participant comparisons. Correlation helps change scores and ANCOVA, and dropout removes information that a mixed model partly recovers. Simulation extends these calculations to realistic designs; its power estimates are themselves estimates, and their Monte Carlo SE must be reported. The analysis is then fixed in a statistical analysis plan with a full estimand and model specification, reported against a checklist, and carried out in a project whose paths, scripts and package versions let anyone reproduce it.</p>
+</section>
+<section id="further-reading" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="further-reading">Further reading</h2>
+<ul>
+<li><span class="citation" data-cites="diggle2002">Diggle et al. (<a href="../references.html#ref-diggle2002" role="doc-biblioref">2002</a>)</span>, chapter on design considerations, including sample size for longitudinal studies.</li>
+<li><span class="citation" data-cites="morris2019">Morris et al. (<a href="../references.html#ref-morris2019" role="doc-biblioref">2019</a>)</span> on planning, running and reporting simulation studies, including Monte Carlo standard errors.</li>
+<li><span class="citation" data-cites="arnold2011">Arnold et al. (<a href="../references.html#ref-arnold2011" role="doc-biblioref">2011</a>)</span> on simulation-based power calculations for complex designs.</li>
+<li><span class="citation" data-cites="gamble2017">Gamble et al. (<a href="../references.html#ref-gamble2017" role="doc-biblioref">2017</a>)</span> on the content of statistical analysis plans, and the ICH E9(R1) addendum <span class="citation" data-cites="ich2019">(<a href="../references.html#ref-ich2019" role="doc-biblioref">International Council for Harmonisation of Technical Requirements for Pharmaceuticals for Human Use (ICH) 2019</a>)</span> on estimands.</li>
+<li><span class="citation" data-cites="ushey2026">Ushey and Wickham (<a href="../references.html#ref-ushey2026" role="doc-biblioref">2026</a>)</span>, the renv documentation.</li>
+</ul>
+</section>
+<section id="exercises" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="exercises">Exercises</h2>
+<p>Work through <code>workbook/wb12-planning-reporting.qmd</code>. Solutions are in <code>answer-key/ak12-planning-reporting.qmd</code>.</p>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-arnold2011" class="csl-entry" role="listitem">
+Arnold, Benjamin F., Daniel R. Hogan, John M. Colford, and Alan E. Hubbard. 2011. <span>‘Simulation Methods to Estimate Design Power: An Overview for Applied Research’</span>. <em>BMC Medical Research Methodology</em> 11: 94. <a href="https://doi.org/10.1186/1471-2288-11-94">https://doi.org/10.1186/1471-2288-11-94</a>.
+</div>
+<div id="ref-bates2015" class="csl-entry" role="listitem">
+Bates, Douglas, Martin Mächler, Ben Bolker, and Steve Walker. 2015. <span>‘Fitting Linear Mixed-Effects Models Using <span class="nocase">lme4</span>’</span>. <em>Journal of Statistical Software</em> 67 (1): 1–48. <a href="https://doi.org/10.18637/jss.v067.i01">https://doi.org/10.18637/jss.v067.i01</a>.
+</div>
+<div id="ref-diggle2002" class="csl-entry" role="listitem">
+Diggle, Peter J., Patrick J. Heagerty, Kung-Yee Liang, and Scott L. Zeger. 2002. <em>Analysis of Longitudinal Data</em>. 2nd edn. Vol. 25. Oxford Statistical Science Series. Oxford University Press. <a href="https://doi.org/10.1093/oso/9780198524847.001.0001">https://doi.org/10.1093/oso/9780198524847.001.0001</a>.
+</div>
+<div id="ref-fitzmaurice2011" class="csl-entry" role="listitem">
+Fitzmaurice, Garrett M., Nan M. Laird, and James H. Ware. 2011. <em>Applied Longitudinal Analysis</em>. 2nd edn. Wiley Series in Probability and Statistics. John Wiley &amp; Sons. <a href="https://doi.org/10.1002/9781119513469">https://doi.org/10.1002/9781119513469</a>.
+</div>
+<div id="ref-gamble2017" class="csl-entry" role="listitem">
+Gamble, Carrol, Ashma Krishan, Deborah Stocken, et al. 2017. <span>‘Guidelines for the Content of Statistical Analysis Plans in Clinical Trials’</span>. <em>JAMA</em> 318 (23): 2337–43. <a href="https://doi.org/10.1001/jama.2017.18556">https://doi.org/10.1001/jama.2017.18556</a>.
+</div>
+<div id="ref-ich2019" class="csl-entry" role="listitem">
+International Council for Harmonisation of Technical Requirements for Pharmaceuticals for Human Use (ICH). 2019. <em><span>ICH</span> Harmonised Guideline <span>E9(R1)</span>: Addendum on Estimands and Sensitivity Analysis in Clinical Trials to the Guideline on Statistical Principles for Clinical Trials</em>. Step 4 guideline. ICH. <a href="https://www.ema.europa.eu/documents/scientific-guideline/ich-e9-r1-addendum-estimands-sensitivity-analysis-clinical-trials-guideline-statistical-principles_en.pdf">https://www.ema.europa.eu/documents/scientific-guideline/ich-e9-r1-addendum-estimands-sensitivity-analysis-clinical-trials-guideline-statistical-principles_en.pdf</a>.
+</div>
+<div id="ref-kuznetsova2017" class="csl-entry" role="listitem">
+Kuznetsova, Alexandra, Per B. Brockhoff, and Rune H. B. Christensen. 2017. <span>‘<span class="nocase">lmerTest</span> Package: Tests in Linear Mixed Effects Models’</span>. <em>Journal of Statistical Software</em> 82 (13): 1–26. <a href="https://doi.org/10.18637/jss.v082.i13">https://doi.org/10.18637/jss.v082.i13</a>.
+</div>
+<div id="ref-lenth2026" class="csl-entry" role="listitem">
+Lenth, Russell V., and Julia Piaskowski. 2026. <em><span class="nocase">emmeans</span>: Estimated Marginal Means, Aka Least-Squares Means</em>. <a href="https://CRAN.R-project.org/package=emmeans">https://CRAN.R-project.org/package=emmeans</a>.
+</div>
+<div id="ref-morris2019" class="csl-entry" role="listitem">
+Morris, Tim P., Ian R. White, and Michael J. Crowther. 2019. <span>‘Using Simulation Studies to Evaluate Statistical Methods’</span>. <em>Statistics in Medicine</em> 38 (11): 2074–102. <a href="https://doi.org/10.1002/sim.8086">https://doi.org/10.1002/sim.8086</a>.
+</div>
+<div id="ref-pullenayegum2016" class="csl-entry" role="listitem">
+Pullenayegum, Eleanor M., and Lily S. H. Lim. 2016. <span>‘Longitudinal Data Subject to Irregular Observation: A Review of Methods with a Focus on Visit Processes, Assumptions, and Study Design’</span>. <em>Statistical Methods in Medical Research</em> 25 (6): 2992–3014. <a href="https://doi.org/10.1177/0962280214536537">https://doi.org/10.1177/0962280214536537</a>.
+</div>
+<div id="ref-senn2006" class="csl-entry" role="listitem">
+Senn, Stephen. 2006. <span>‘Change from Baseline and Analysis of Covariance Revisited’</span>. <em>Statistics in Medicine</em> 25 (24): 4334–44. <a href="https://doi.org/10.1002/sim.2682">https://doi.org/10.1002/sim.2682</a>.
+</div>
+<div id="ref-ushey2026" class="csl-entry" role="listitem">
+Ushey, Kevin, and Hadley Wickham. 2026. <em><span class="nocase">renv</span>: Project Environments</em>. <a href="https://CRAN.R-project.org/package=renv">https://CRAN.R-project.org/package=renv</a>.
+</div>
+<div id="ref-vickers2001" class="csl-entry" role="listitem">
+Vickers, Andrew J., and Douglas G. Altman. 2001. <span>‘Analysing Controlled Trials with Baseline and Follow up Measurements’</span>. <em>BMJ</em> 323 (7321): 1123–24. <a href="https://doi.org/10.1136/bmj.323.7321.1123">https://doi.org/10.1136/bmj.323.7321.1123</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/neu-data\.github\.io\/LDA\/book\/en\/_book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../chapters/11-diagnostics.html" class="pagination-link" aria-label="Diagnostics and troubleshooting">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Diagnostics and troubleshooting</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../chapters/13-advanced.html" class="pagination-link" aria-label="Advanced extensions">
+        <span class="nav-page-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Advanced extensions</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

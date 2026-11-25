@@ -6,6 +6,20 @@ The course is organised into progressive modules (0–13) without dates or fixed
 
 **All datasets are simulated.** The WALK, CLEAR, DIARY, KIDNEY and MOOD studies are fictional. Results illustrate methods and are not empirical findings.
 
+## Online materials and the book
+
+The rendered materials are published with GitHub Pages at <https://neu-data.github.io/LDA/>.
+
+The course notes are also published as a book, *Longitudinal Data Analysis in R: Concepts, Methods and Practical Applications* (English edition), online at <https://neu-data.github.io/LDA/book/en/_book/> with a PDF download. The book's chapters are generated from `notes/`, so the notes remain the single source. To rebuild the book after editing the notes:
+
+```
+Rscript book/make_book_sources.R
+cd book/en
+quarto render
+```
+
+Chapter numbers match module numbers. The `book/en/` folder is the English edition; other language editions can be added as `book/<language>/`.
+
 ## Quick start
 
 1. Install R (version 4.4 or later; the materials were run with **R 4.6.1** on Windows 11) and RStudio. RStudio includes Quarto. Quarto 1.4 or later is needed to re-render documents; the materials were rendered with Quarto 1.10.18.

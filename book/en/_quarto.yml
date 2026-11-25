@@ -1,0 +1,101 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Longitudinal Data Analysis in R"
+  subtitle: "Concepts, Methods and Practical Applications"
+  author: "Neudata Consultancy"
+  date: "2026-11-25"
+  date-format: "MMMM YYYY"
+  repo-url: https://github.com/neu-data/LDA
+  repo-subdir: book/en
+  site-url: https://neu-data.github.io/LDA/book/en/_book/
+  downloads: [pdf]
+  search: true
+  chapters:
+    - index.qmd
+    - part: "Foundations"
+      chapters:
+        - chapters/00-refresher.qmd
+        - chapters/01-foundations.qmd
+        - chapters/02-data-preparation.qmd
+        - chapters/03-traditional-methods.qmd
+    - part: "Linear mixed models"
+      chapters:
+        - chapters/04-linear-mixed-models.qmd
+        - chapters/05-covariance-models.qmd
+        - chapters/06-interpretation-prediction.qmd
+    - part: "Non-normal outcomes"
+      chapters:
+        - chapters/07-gee.qmd
+        - chapters/08-glmm.qmd
+    - part: "Extensions, missing data and practice"
+      chapters:
+        - chapters/09-time-varying-nonlinear.qmd
+        - chapters/10-missing-data.qmd
+        - chapters/11-diagnostics.qmd
+        - chapters/12-planning-reporting.qmd
+    - part: "Advanced extensions"
+      chapters:
+        - chapters/13-advanced.qmd
+    - references.qmd
+  appendices:
+    - appendices/a-datasets.qmd
+    - appendices/b-choosing.qmd
+    - appendices/c-glossary.qmd
+
+bibliography: ../../references/references.bib
+lang: en-GB
+
+execute:
+  freeze: auto
+  echo: true
+  warning: true
+  message: false
+
+knitr:
+  opts_chunk:
+    comment: "#>"
+    fig.align: center
+    dpi: 150
+    fig.width: 7
+    fig.height: 4.3
+    out.width: "90%"
+
+mermaid:
+  theme: neutral
+
+format:
+  html:
+    theme: cosmo
+    css: book.css
+    toc-depth: 3
+    code-overflow: wrap
+    code-link: false
+    number-depth: 3
+  pdf:
+    documentclass: scrbook
+    classoption: [oneside, open=any]
+    papersize: a4
+    geometry: [margin=24mm]
+    pdf-engine: lualatex
+    mainfont: Cambria
+    sansfont: "Segoe UI"
+    monofont: Consolas
+    mathfont: "Cambria Math"
+    fontsize: 10.5pt
+    linestretch: 1.15
+    toc-depth: 2
+    number-depth: 3
+    colorlinks: true
+    linkcolor: "blue"
+    fig-pos: "H"
+    fig-format: png
+    fig-dpi: 220
+    include-in-header:
+      text: |
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+        \fvset{breaklines=true, breakanywhere=true}
+        \usepackage{float}

@@ -16,6 +16,13 @@ This page links every course material. Begin with the [syllabus](syllabus/syllab
 
 All examples use **simulated** data from fictional studies. The results illustrate the methods and are not empirical findings.
 
+## The book
+
+*Longitudinal Data Analysis in R: Concepts, Methods and Practical Applications* brings the course notes together as one book, with a preface, appendices on the datasets and on choosing a method, a glossary and references.
+
+* [Read the book online (English)](book/en/_book/index.html)
+* [Download the PDF (English)](book/en/_book/Longitudinal-Data-Analysis-in-R.pdf)
+
 ## Modules
 
 ```{r}
