@@ -1,0 +1,6 @@
+flowchart TD
+  A[Continuous outcome, repeated measurements] --> B{Single follow-up of interest<br/>and complete data?}
+  B -- Yes, randomised --> C[Baseline-adjusted ANCOVA]
+  B -- No --> D{Several visits, missing data,<br/>irregular times or time-varying covariates?}
+  D -- Yes --> E[Linear mixed model, Module 4]
+  D -- No: complete, balanced, fixed visits --> F[RM-ANOVA with GG/HF correction<br/>or LMM; prefer LMM for estimates]

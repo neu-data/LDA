@@ -1,0 +1,8 @@
+flowchart TD
+  A["Is each unit measured more than once?"] -->|No| B["Are units grouped,<br/>e.g. patients in clinics?"]
+  B -->|No| C["Cross-sectional,<br/>independent units"]
+  B -->|Yes| D["Clustered"]
+  A -->|Yes| E["Is time, or the order<br/>of measurements, of interest?"]
+  E -->|No| F["Repeated measures<br/>(no time axis)"]
+  E -->|Yes| G["Longitudinal"]
+  G --> H["Units also grouped?<br/>Then multilevel: longitudinal and clustered"]

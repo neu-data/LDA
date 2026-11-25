@@ -144,35 +144,31 @@ for (f in files) {
     label <- opt("label"); cap <- opt("fig-cap")
     cap   <- if (is.na(cap)) "" else gsub('^"|"$', "", cap)
     attrs <- paste0("{", if (!is.na(label)) paste0("#", label, " ") else "",
-                    "width=95%}")
+                    ".diagram width=95%}")
     img <- sprintf("![%s](../mermaid/%s.png)%s", cap, id, attrs)
     out <- c(out, x[pos:(s - 1)], img)
     pos <- e + 1
-    blocks[[id]] <- blk[!grepl("^%%[|] (label|fig-cap):", blk)]
+    # Mermaid source of this diagram: either the block body or the file it
+    # points to (paths in `%%| file:` are relative to the chapter file)
+    src_file <- opt("file")
+    code <- if (!is.na(src_file)) {
+      readLines(file.path(dirname(f), src_file), encoding = "UTF-8", warn = FALSE)
+    } else {
+      blk[-c(1, length(blk))][!grepl("^%%[|]", blk[-c(1, length(blk))])]
+    }
+    blocks[[id]] <- code
   }
   out <- c(out, if (pos <= length(x)) x[pos:length(x)])
   writeLines(out, f, useBytes = TRUE)
 }
 
-if (length(blocks)) {
-  doc <- c("---", "format:", "  gfm:", "    mermaid-format: png",
-           "mermaid:", "  theme: neutral", "---", "")
-  for (b in blocks) doc <- c(doc, b, "")
-  src <- file.path(mm_dir, "all-diagrams.qmd")
-  writeLines(doc, src, useBytes = TRUE)
-  quarto <- Sys.getenv("QUARTO_PATH",
-    "C:/Program Files/RStudio/resources/app/bin/quarto/bin/quarto.exe")
-  # Quarto may report an error while shutting down the browser after the
-  # images are written; the PNG files are checked below instead.
-  # The timeout stops R waiting for a browser process that does not exit.
-  system2(quarto, c("render", shQuote(src)), stdout = FALSE, stderr = FALSE,
-          timeout = 300)
-  pngs <- file.path(mm_dir, "all-diagrams_files", "figure-commonmark",
-                    paste0("mermaid-figure-", seq_along(blocks), ".png"))
-  stopifnot("Mermaid PNG rendering failed" = all(file.exists(pngs)))
-  file.copy(pngs, file.path(mm_dir, paste0(names(blocks), ".png")),
-            overwrite = TRUE)
-  unlink(c(src, file.path(mm_dir, "all-diagrams.md"),
-           file.path(mm_dir, "all-diagrams_files")), recursive = TRUE)
-  message("Rendered ", length(blocks), " Mermaid diagrams to PNG in ", mm_dir)
+# Write one .mmd source per diagram; book/render_diagrams.py turns each into
+# book/<lang>/mermaid/<id>.png (one file per diagram, so names cannot mix up).
+src_dir <- file.path(mm_dir, "src")
+dir.create(src_dir, showWarnings = FALSE)
+unlink(list.files(src_dir, full.names = TRUE))
+for (id in names(blocks)) {
+  writeLines(blocks[[id]], file.path(src_dir, paste0(id, ".mmd")), useBytes = TRUE)
 }
+message("Wrote ", length(blocks), " diagram sources to ", src_dir,
+        "; now run: python book/render_diagrams.py ", lang)

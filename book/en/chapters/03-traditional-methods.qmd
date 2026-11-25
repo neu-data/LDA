@@ -829,7 +829,7 @@ The table summarises what each method can and cannot do with WALK.
 
 A linear mixed model (Module 4) answers the same question as ANCOVA, uses every observation of all `r n_distinct(walk$id)` participants, uses actual visit times, models the correlation between repeated measurements, and is valid under MAR dropout when the model is correctly specified. When there is a single follow-up and no missing data, ANCOVA and the mixed model give very similar answers; the mixed model's advantage grows with the number of visits and the amount of missing data.
 
-![](../mermaid/03-traditional-methods-1.png){width=95%}
+![](../mermaid/03-traditional-methods-1.png){.diagram width=95%}
 
 ## Summary {.unnumbered}
 

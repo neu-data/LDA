@@ -10,3 +10,5 @@ pre:not(.sourceCode) { background: #fbfbfa; border-left: 3px solid #cfcfcf; padd
   background: #f8ece4; color: #8a3b0a; border: 1px solid #e5c2ab; }
 table { font-size: 0.92rem; }
 figcaption { color: #555; }
+/* Pre-rendered diagrams: keep tall ones within the screen */
+img.diagram { max-height: 88vh; width: auto !important; max-width: 100%; display: block; margin: 0 auto; }

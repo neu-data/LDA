@@ -1,0 +1,19 @@
+%% D2. Paired tests, repeated-measures ANOVA, LMM, GEE and GLMM
+%% A guide to reasoning, not an automatic rule for choosing a model.
+flowchart TD
+  A["Two occasions only, complete pairs, a within-group question?"] -->|Yes| P["Paired t-test; for group comparisons, ANCOVA on follow-up (Module 3)"]
+  A -->|No| B["Fixed occasions shared by all, complete data, continuous outcome?"]
+  B -->|"Yes, and a descriptive test of time is enough"| R["Repeated-measures ANOVA with Greenhouse-Geisser or Huynh-Feldt correction (Module 3)"]
+  B -->|"No: missed visits, dropout, irregular times, time-varying covariates"| C["Continuous outcome?"]
+  R -.->|"An LMM answers the same question and more"| L
+  C -->|Yes| L["Linear mixed model, or GLS with a chosen covariance (Modules 4-6)"]
+  C -->|"No: binary, count"| D["Population-average or subject-specific target? (diagram D3)"]
+  D -->|Population-average| G["GEE with robust SEs (Module 7); check the number of clusters and the missing-data assumption"]
+  D -->|"Subject-specific, or MAR validity from likelihood needed"| M["GLMM (Module 8)"]
+  L --> N["Then: missing data (D5) and diagnostics (D6)"]
+  G --> N
+  M --> N
+  classDef q fill:#ffffff,stroke:#555555,color:#222222;
+  classDef m fill:#eef4f8,stroke:#0b5d8f,color:#222222;
+  class A,B,C,D,N q;
+  class P,R,L,G,M m;

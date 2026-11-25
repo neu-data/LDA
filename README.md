@@ -14,9 +14,13 @@ The course notes are also published as a book, *Longitudinal Data Analysis in R:
 
 ```
 Rscript book/make_book_sources.R
+python book/render_diagrams.py en
 cd book/en
-quarto render
+quarto render --to html
+quarto render --to pdf --output-dir _book_pdf
 ```
+
+Then copy `book/en/_book_pdf/Longitudinal-Data-Analysis-in-R.pdf` into `book/en/_book/` so that the online book's download link works. The book's Mermaid diagrams are pre-rendered to PNG by `render_diagrams.py` (Python with Pillow, plus Edge or Chrome). Quarto's own Mermaid rendering for PDF stopped the book build on the build machine. Rendering the PDF to a separate folder keeps the HTML edition intact.
 
 Chapter numbers match module numbers. The `book/en/` folder is the English edition; other language editions can be added as `book/<language>/`.
 

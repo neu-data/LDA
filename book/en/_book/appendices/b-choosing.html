@@ -389,32 +389,32 @@ window.Quarto = {
 <section id="d1.-outcome-type-and-data-structure" class="level3" data-number="B.2.1">
 <h3 data-number="B.2.1" class="anchored" data-anchor-id="d1.-outcome-type-and-data-structure"><span class="header-section-number">B.2.1</span> D1. Outcome type and data structure</h3>
 <p>The first question is what kind of outcome you have and how the observations are grouped. Remember that the outcome type narrows the choice of model family. It does not settle the choice.</p>
-<p><img src="../mermaid/b-choosing-1.png" class="img-fluid" style="width:95.0%"></p>
+<p><img src="../mermaid/b-choosing-1.png" class="diagram img-fluid" style="width:95.0%"></p>
 </section>
 <section id="d2.-paired-tests-repeated-measures-anova-lmm-gee-and-glmm" class="level3" data-number="B.2.2">
 <h3 data-number="B.2.2" class="anchored" data-anchor-id="d2.-paired-tests-repeated-measures-anova-lmm-gee-and-glmm"><span class="header-section-number">B.2.2</span> D2. Paired tests, repeated-measures ANOVA, LMM, GEE and GLMM</h3>
 <p>Traditional methods suit only narrow situations. They need complete data, fixed occasions and continuous outcomes. As soon as visits are missed or irregular, or covariates change over time, model-based approaches are needed.</p>
-<p><img src="../mermaid/b-choosing-2.png" class="img-fluid" style="width:95.0%"></p>
+<p><img src="../mermaid/b-choosing-2.png" class="diagram img-fluid" style="width:95.0%"></p>
 </section>
 <section id="d3.-population-average-or-subject-specific" class="level3" data-number="B.2.3">
 <h3 data-number="B.2.3" class="anchored" data-anchor-id="d3.-population-average-or-subject-specific"><span class="header-section-number">B.2.3</span> D3. Population-average or subject-specific?</h3>
 <p>This question decides between GEE and GLMM for non-continuous outcomes. Answer it from the research question before fitting anything.</p>
-<p><img src="../mermaid/b-choosing-3.png" class="img-fluid" style="width:95.0%"></p>
+<p><img src="../mermaid/b-choosing-3.png" class="diagram img-fluid" style="width:95.0%"></p>
 </section>
 <section id="d4.-time-random-effects-and-residual-correlation" class="level3" data-number="B.2.4">
 <h3 data-number="B.2.4" class="anchored" data-anchor-id="d4.-time-random-effects-and-residual-correlation"><span class="header-section-number">B.2.4</span> D4. Time, random effects and residual correlation</h3>
 <p>These three choices interact. Together they determine the implied marginal covariance <span class="math inline">\(V_i = Z_i G Z_i^\top + R_i\)</span> (Module 5).</p>
-<p><img src="../mermaid/b-choosing-4.png" class="img-fluid" style="width:95.0%"></p>
+<p><img src="../mermaid/b-choosing-4.png" class="diagram img-fluid" style="width:95.0%"></p>
 </section>
 <section id="d5.-missing-data" class="level3" data-number="B.2.5">
 <h3 data-number="B.2.5" class="anchored" data-anchor-id="d5.-missing-data"><span class="header-section-number">B.2.5</span> D5. Missing data</h3>
 <p>No analysis can confirm that data are missing at random. Background knowledge about why data are missing matters as much as any statistic.</p>
-<p><img src="../mermaid/b-choosing-5.png" class="img-fluid" style="width:95.0%"></p>
+<p><img src="../mermaid/b-choosing-5.png" class="diagram img-fluid" style="width:95.0%"></p>
 </section>
 <section id="d6.-diagnostics-and-interpretation" class="level3" data-number="B.2.6">
 <h3 data-number="B.2.6" class="anchored" data-anchor-id="d6.-diagnostics-and-interpretation"><span class="header-section-number">B.2.6</span> D6. Diagnostics and interpretation</h3>
 <p>Diagnostics exist to find problems that affect the estimand. Use them to understand your model, never to search for a model that gives the result you hoped for.</p>
-<p><img src="../mermaid/b-choosing-6.png" class="img-fluid" style="width:95.0%"></p>
+<p><img src="../mermaid/b-choosing-6.png" class="diagram img-fluid" style="width:95.0%"></p>
 
 
 </section>
