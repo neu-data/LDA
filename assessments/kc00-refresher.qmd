@@ -1,0 +1,137 @@
+---
+title: "Module 0. Foundations refresher: R and regression"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk_base <- load_walk("baseline") |>
+  mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29,
+         hyp150 = as.integer(sbp0 >= 150))
+```
+
+This knowledge check has 13 questions. If you can answer them confidently, you are ready for Module 1. Each question lists the learning outcome it assesses. Answers and explanations are at the end.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Questions
+
+**Q1 (LO 0.1).** A colleague's script starts with `setwd("C:/Users/anna/Desktop/LDA")` and then `read_csv("data/walk_baseline.csv")`. Which change makes it work on any computer that has the course project?
+
+A. Replace the `setwd()` path with your own path.
+B. Open the project and use `read_csv(here::here("data", "walk_baseline.csv"))`.
+C. Use `read.csv()` instead of `read_csv()`.
+D. Move the data file to the desktop.
+
+**Q2 (LO 0.1).** Which `dplyr` pipeline gives the mean baseline SBP for each arm, among women only?
+
+A. `walk_base |> group_by(arm) |> filter(sex == "Female") |> mutate(m = mean(sbp0))`
+B. `walk_base |> filter(sex == "Female") |> group_by(arm) |> summarise(m = mean(sbp0))`
+C. `walk_base |> select(sex == "Female") |> summarise(m = mean(sbp0))`
+D. `walk_base |> arrange(arm) |> summarise(m = mean(sbp0))`
+
+Questions 3 to 6 refer to this output.
+
+```{r}
+#| label: q-lin
+m_lin <- lm(sbp0 ~ age10 + sex + bmi_c, data = walk_base)
+round(cbind(coef(summary(m_lin)), confint(m_lin)), 3)
+```
+
+**Q3 (LO 0.2).** Interpret the `bmi_c` row in one sentence, with units and the confidence interval.
+
+**Q4 (LO 0.2).** What does the intercept represent here, and why is it meaningful?
+
+**Q5 (LO 0.2). True or false, with justification:** "Because the p-value for `age10` is greater than 0.05, age is not associated with baseline SBP."
+
+**Q6 (LO 0.2).** The model has $R^2$ = `r round(summary(m_lin)$r.squared, 3)`. Which statement is correct?
+
+A. The coefficients are unreliable because the model explains little variance.
+B. About `r round(100 * summary(m_lin)$r.squared)`% of the variance in baseline SBP is explained by age, sex and BMI; the coefficients can still be estimated precisely.
+C. The residuals must be non-normal.
+D. Age should be removed from the model.
+
+Questions 7 and 8 refer to this output.
+
+```{r}
+#| label: q-int
+m_int <- lm(sbp0 ~ age10 * sex + bmi_c, data = walk_base)
+round(coef(summary(m_int)), 3)
+```
+
+**Q7 (LO 0.3).** What is the estimated age slope (per 10 years) in women? Show how you obtain it.
+
+**Q8 (LO 0.3).** What does the `sexFemale` coefficient mean in this model? How would its meaning change if `age` were used uncentred?
+
+**Q9 (LO 0.2).** Logistic regression gives these odds ratios for baseline SBP ≥ 150 mmHg:
+
+```{r}
+#| label: q-log
+m_log <- glm(hyp150 ~ age10 + sex + bmi_c, family = binomial, data = walk_base)
+round(exp(cbind(OR = coef(m_log), confint(m_log))), 3)
+```
+
+Which statement is correct?
+
+A. Women have a 33% lower probability of SBP ≥ 150 than men.
+B. Women have 0.67 times the odds of SBP ≥ 150 compared with men of the same age and BMI.
+C. The odds ratio for women is significant because the interval excludes 0.
+D. Each 1 kg/m² of BMI raises SBP by 1.07 mmHg.
+
+**Q10 (LO 0.2).** Why should a 95% confidence interval for a predicted probability be computed on the log-odds scale and then transformed?
+
+**Q11 (LO 0.4).** Match each pattern to the assumption it suggests is violated: (i) a residual-versus-fitted plot with a U-shaped smooth curve; (ii) a residual-versus-fitted plot whose spread widens from left to right; (iii) a Q–Q plot where both ends bend away from the line in opposite directions (an S shape).
+
+**Q12 (LO 0.4). True or false, with justification:** "If the residual-versus-fitted and Q–Q plots look fine, the independence assumption is satisfied."
+
+**Q13 (LO 0.5).** For 60-year-old men with BMI 35, the model in Q3 gives:
+
+```{r}
+#| label: q-cipi
+nd <- data.frame(age10 = 0, bmi_c = 6, sex = factor("Male", levels = c("Male", "Female")))
+rbind(confidence = predict(m_lin, nd, interval = "confidence"),
+      prediction = predict(m_lin, nd, interval = "prediction")) |> round(1)
+```
+
+A clinician asks what SBP to expect for her next patient of this description. Which interval answers her question, and why is it so much wider than the other?
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| include: false
+co <- coef(m_lin); ci <- confint(m_lin); pv <- coef(summary(m_lin))[, 4]
+ci_int <- coef(m_int)
+pr_ci <- predict(m_lin, nd, interval = "confidence")
+pr_pi <- predict(m_lin, nd, interval = "prediction")
+```
+
+**Q1. B.** Opening the project sets the root, and `here()` builds the path from the root, so the code runs anywhere. A only moves the problem to a different computer; C and D do not address paths.
+
+**Q2. B.** Filter to women first, then group by arm and summarise. A keeps every row and adds a column; C misuses `select()`, which chooses columns; D ignores both the sex restriction and the grouping.
+
+**Q3.** Among participants of the same age and sex, each 1 kg/m² higher BMI is associated with `r round(co["bmi_c"], 2)` mmHg higher mean baseline SBP (95% CI `r round(ci["bmi_c", 1], 2)` to `r round(ci["bmi_c", 2], 2)`). Full credit requires units, the interval and "same age and sex".
+
+**Q4.** The intercept, `r round(co[1], 1)` mmHg, is the estimated mean baseline SBP for a 60-year-old man with BMI 29 kg/m². It is meaningful because age and BMI were centred at 60 and 29, so "all predictors zero" describes a realistic participant, and male is the reference level of sex.
+
+**Q5. False.** The p-value (`r round(pv["age10"], 3)`) says the data are not strongly incompatible with no association, but the 95% CI (`r round(ci["age10", 1], 1)` to `r round(ci["age10", 2], 1)` mmHg per 10 years) includes associations of nearly 3 mmHg per decade. Absence of evidence is not evidence of absence. (Because the data are simulated, we know the true value is 3.0 mmHg per decade.)
+
+**Q6. B.** $R^2$ describes explained variance. The precision of the coefficients depends on their standard errors.
+
+**Q7.** Slope in women = `age10` + `age10:sexFemale` = `r round(ci_int["age10"], 3)` + `r round(ci_int["age10:sexFemale"], 3)` = `r round(ci_int["age10"] + ci_int["age10:sexFemale"], 3)` mmHg per 10 years. A common wrong answer is `r round(ci_int["age10:sexFemale"], 3)`, which is the difference in slopes.
+
+**Q8.** It is the difference in mean SBP between women and men aged 60 (where `age10` = 0), at the same BMI. With uncentred age it would be the sex difference at age 0, an extrapolation far outside the data with a large standard error. The model fit and the interaction would be unchanged.
+
+**Q9. B.** A confuses odds with probability: an odds ratio of 0.67 is not a 33% lower probability, especially with a common outcome. C: for a ratio the null value is 1, not 0, and this interval includes 1. D confuses an odds ratio with a difference in mmHg.
+
+**Q10.** The log-odds scale is unbounded and the sampling distribution of the estimate is closer to normal there. An interval built as probability ± 1.96 × SE can extend below 0 or above 1 and is poorly calibrated near the boundaries. Transforming the limits with the inverse logit keeps the interval inside (0, 1).
+
+**Q11.** (i) Wrong mean structure: a missing nonlinear term or interaction. (ii) Non-constant variance (heteroscedasticity). (iii) Non-normal residuals with heavier (or lighter) tails than normal.
+
+**Q12. False.** Neither plot checks independence. Independence is judged from the design: for example, repeated measurements on the same person, or people in the same household, are not independent even if the residual plots look perfect.
+
+**Q13.** The prediction interval (`r round(pr_pi[2], 1)` to `r round(pr_pi[3], 1)` mmHg), because she wants a range for one individual. The confidence interval (`r round(pr_ci[2], 1)` to `r round(pr_ci[3], 1)` mmHg) describes only the mean SBP of all such men. The prediction interval adds the residual variance ($\hat\sigma$ = `r round(sigma(m_lin), 1)` mmHg), the scatter of individuals around the mean, which does not shrink as the sample size increases.

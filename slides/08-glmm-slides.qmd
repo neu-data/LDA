@@ -1,0 +1,417 @@
+---
+title: "Module 8. Generalized linear mixed models"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+clear <- load_clear() |> arrange(id, week) |> mutate(age45 = (age - 45) / 10)
+diary <- load_diary() |> arrange(id, period)
+truth_clear <- readRDS(here("data", "clear_truth.rds"))
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+
+# Same model specifications and helpers as notes/08-glmm.qmd
+gauss_hermite <- function(n) {
+  i <- seq_len(n - 1)
+  J <- matrix(0, n, n); J[cbind(i, i + 1)] <- J[cbind(i + 1, i)] <- sqrt(i / 2)
+  e <- eigen(J, symmetric = TRUE)
+  list(x = e$values, w = sqrt(pi) * e$vectors[1, ]^2)
+}
+gh <- gauss_hermite(30)
+marginal_p <- function(eta, sigma)
+  sapply(eta, function(e) sum(gh$w / sqrt(pi) * plogis(e + sqrt(2) * sigma * gh$x)))
+
+agq <- c(1, 5, 10, 25)
+fits_q <- lapply(agq, function(q)
+  glmer(itch ~ week * arm + (1 | id), data = clear, family = binomial, nAGQ = q))
+glmm_clear <- fits_q[[4]]
+fit_tmb <- glmmTMB(itch ~ week * arm + (1 | id), data = clear, family = binomial)
+quad_tab <- rbind(
+  do.call(rbind, lapply(seq_along(agq), function(k) data.frame(
+    method = paste0("glmer, nAGQ = ", agq[k]), t(fixef(fits_q[[k]])),
+    sd_b = attr(VarCorr(fits_q[[k]])$id, "stddev"), check.names = FALSE))),
+  data.frame(method = "glmmTMB (Laplace)", t(fixef(fit_tmb)$cond),
+             sd_b = attr(VarCorr(fit_tmb)$cond$id, "stddev"), check.names = FALSE))
+fc <- fixef(glmm_clear); sc <- sqrt(diag(as.matrix(vcov(glmm_clear))))
+sig <- attr(VarCorr(glmm_clear)$id, "stddev")
+ft <- fixef_table(glmm_clear, exponentiate = TRUE)
+
+gee_clear <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+                    data = clear, family = binomial, corstr = "exchangeable")
+atten <- 1 / sqrt(1 + 0.346 * sig^2)
+grid <- expand.grid(week = truth_clear$weeks,
+                    arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")))
+grid$p_marg <- marginal_p(model.matrix(~ week * arm, grid) %*% fc, sig)
+implied <- coef(suppressWarnings(glm(p_marg ~ week * arm, family = binomial, data = grid)))
+true_c <- c(0, -0.06, 0, -0.16)
+atten_tab <- data.frame(GLMM = fc, `Approx. marginal` = fc * atten,
+                        `Exact marginal` = implied, GEE = coef(gee_clear),
+                        `Truth (cond.)` = true_c,
+                        `Truth (approx. marg.)` = true_c / sqrt(1 + 0.346 * 4),
+                        check.names = FALSE)
+
+H <- glmm_clear@optinfo$derivs$Hessian
+V_joint <- 2 * solve(H)
+set.seed(808)
+draws <- MASS::mvrnorm(4000, mu = c(getME(glmm_clear, "theta"), fc), Sigma = V_joint)
+pg <- expand.grid(arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")),
+                  week = c(0, 12))
+Xp <- model.matrix(~ week * arm, pg)
+marg_draws <- apply(draws, 1, function(d) marginal_p(Xp %*% d[-1], abs(d[1])))
+pg$conditional <- plogis(Xp %*% fc)
+pg$marginal <- marginal_p(Xp %*% fc, sig)
+pg$lower <- apply(marg_draws, 1, quantile, 0.025)
+pg$upper <- apply(marg_draws, 1, quantile, 0.975)
+rd <- c(pg$marginal[4] - pg$marginal[3],
+        quantile(marg_draws[4, ] - marg_draws[3, ], c(0.025, 0.975)))
+
+pois_glmm <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                     data = diary, family = poisson)
+nb_glmm <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                   data = diary, family = nbinom2)
+zinb_glmm <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                     ziformula = ~ 1, data = diary, family = nbinom2)
+res_pois <- simulateResiduals(pois_glmm, n = 1000, seed = 8)
+res_nb <- simulateResiduals(nb_glmm, n = 1000, seed = 8)
+fp <- fixef(pois_glmm)$cond; fn <- fixef(nb_glmm)$cond
+sp <- sqrt(diag(vcov(pois_glmm)$cond)); sn <- sqrt(diag(vcov(nb_glmm)$cond))
+sig_nb <- attr(VarCorr(nb_glmm)$cond$id, "stddev")
+tn <- fixef_table(nb_glmm, exponentiate = TRUE)
+em <- as.data.frame(emmeans(nb_glmm, ~ arm | post, offset = log(28), type = "response",
+                            bias.adjust = TRUE, sigma = sig_nb))
+ec <- as.data.frame(emmeans(nb_glmm, ~ arm | post, offset = log(28), type = "response"))
+```
+
+# From GLMs to GLMMs
+
+## A GLMM adds random effects to a generalized linear model
+
+$$
+g\{E(Y_{ij} \mid \mathbf{b}_i)\} = \mathbf{x}_{ij}^\top\boldsymbol\beta + \mathbf{z}_{ij}^\top\mathbf{b}_i,
+\qquad \mathbf{b}_i \sim N(\mathbf{0}, G)
+$$
+
+- Given $\mathbf{b}_i$: independent binomial, Poisson or negative binomial outcomes.
+- Correlation within a participant comes from the shared $\mathbf{b}_i$.
+- Coefficients are **subject-specific (conditional)**: they compare situations for the same participant.
+
+::: {.notes}
+Connect to Module 4: the linear mixed model is the special case with identity link and normal outcomes. Emphasise the conditional nature of the mean: E(Y given b). Contrast with GEE from Module 7, which models E(Y) directly and gives population-average (marginal) coefficients. Ask: for which link do the two kinds of coefficient coincide? Identity. For log with random intercept, slopes coincide too. For logit, they do not.
+:::
+
+## The likelihood needs an integral over the random effects
+
+$$
+L_i = \int \prod_{j} f(y_{ij} \mid \mathbf{b}_i)\, \varphi(\mathbf{b}_i; G)\, d\mathbf{b}_i
+$$
+
+- No closed form for non-normal outcomes: software approximates it.
+- **Laplace**: a normal approximation around the peak (`nAGQ = 1`, `glmmTMB`).
+- **Adaptive Gauss–Hermite quadrature**: a weighted sum over several points (`glmer`, random intercept only).
+- Matters most for **binary data, few observations per participant, large $\tau_0$**.
+
+::: {.notes}
+Draw an integrand on the board: a bump in b. Laplace fits a normal curve to the bump; AGQ evaluates it at several points around the peak and adds them with weights. More points, more accuracy. CLEAR is the hard case: binary outcome, at most six visits per participant, random-intercept SD near 2.
+:::
+
+# Logistic mixed models for CLEAR
+
+## The model for CLEAR
+
+$$
+\operatorname{logit} P(Y_{ij}=1 \mid b_{0i}) = \beta_0 + \beta_1 t_{ij} + \beta_2\text{Active}_i + \beta_3 t_{ij}\text{Active}_i + b_{0i},\quad b_{0i}\sim N(0,\tau_0^2)
+$$
+
+```{r}
+#| echo: true
+#| eval: false
+glmm_clear <- glmer(itch ~ week * arm + (1 | id), data = clear,
+                    family = binomial, nAGQ = 25)
+```
+
+- No residual variance: for binary data it is fixed by the probability.
+- Truth (simulated data): $\beta_1 = -0.06$, $\beta_3 = -0.16$, $\tau_0 = 2.0$.
+
+::: {.notes}
+Walk through each coefficient with "for a given participant" attached. beta0 is the log-odds at week 0 on placebo for someone with b equal to zero. The truth is available because the data are simulated; the generating model also includes age and sex, which the unadjusted model omits.
+:::
+
+## Laplace underestimates the random-intercept SD here
+
+```{r}
+#| echo: false
+knitr::kable(quad_tab |> mutate(across(where(is.numeric), \(x) round(x, 4))),
+             col.names = c("Method", "Intercept", "week", "armActive",
+                           "week:armActive", "SD b"))
+```
+
+- Results stabilise by 10 quadrature points; use AGQ for a binary random-intercept model.
+
+::: {.notes}
+Point at the SD column: 1.67 with Laplace versus 1.76 with AGQ. Fixed effects move less, but in the same direction, towards zero. glmmTMB uses Laplace and agrees with glmer nAGQ = 1. Warn against comparing log-likelihoods across nAGQ settings: they approximate the same likelihood. Likely question: why not always use AGQ? glmer offers it only for a single scalar random effect; with random slopes Laplace is the practical choice.
+:::
+
+## Coefficients are within-participant odds ratios
+
+```{r}
+#| echo: false
+knitr::kable(ft |> mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+               select(term, estimate, lower, upper, p),
+             col.names = c("Term", "Odds ratio", "Lower", "Upper", "p"))
+```
+
+- For a given participant: odds of itch $\times$ `r f2(exp(fc[2]), 3)` per week on placebo, a further $\times$ `r f2(ft$estimate[4], 3)` per week on active.
+- $\hat\tau_0$ = `r f2(sig)`: latent-scale ICC `r f2(sig^2 / (sig^2 + pi^2 / 3))`.
+
+::: {.notes}
+Read the interaction as a ratio of weekly odds ratios, within participant. Over 12 weeks, the conditional odds ratio is about 0.21. The random-intercept SD is a key result: participants one SD apart differ in their odds of itch by a factor of about 6 at every visit. The latent ICC uses pi squared over 3 as the variance of the logistic latent residual.
+:::
+
+## DHARMa: simulation-based residuals for any GLMM
+
+```{r}
+#| echo: false
+#| fig-height: 4.4
+res_clear <- simulateResiduals(glmm_clear, n = 1000, seed = 8)
+plot(res_clear, quantreg = FALSE)
+```
+
+::: {.notes}
+Explain the idea: simulate many datasets from the fitted model, and for each observation find where the observed value falls among the simulated values. Under a correct model these scaled residuals are uniform on 0 to 1, whatever the outcome type. Here the QQ plot follows the diagonal and the tests show nothing. For binary data overdispersion at the observation level cannot exist, but the test still detects problems in the random-effects part. DHARMa 0.5.0 simulates conditionally on the fitted random effects by default, which suits these observation-level checks; for checks aggregated by participant use simulateREs = "unconditional", otherwise correct models are rejected far too often.
+:::
+
+## Try it
+
+Workbook **Exercises 1 and 2**: fit the CLEAR GLMM with Laplace and AGQ, interpret the coefficients, and check it with DHARMa.
+
+::: {.notes}
+Ask participants to write the interpretation of week:armActive with the phrase "for a given participant".
+:::
+
+# Why GLMM and GEE coefficients differ
+
+## The average of steep curves is a flatter curve
+
+```{r}
+#| echo: false
+#| fig-height: 4.4
+wk <- seq(0, 12, by = 0.25)
+arms <- factor(c("Placebo", "Active"), levels = c("Placebo", "Active"))
+curves <- expand.grid(week = wk, b = qnorm(c(0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.95)) * sig,
+                      arm = arms)
+curves$p <- plogis(model.matrix(~ week * arm, curves) %*% fc + curves$b)
+avg <- expand.grid(week = wk, arm = arms)
+Xa <- model.matrix(~ week * arm, avg)
+avg$`Participant with b = 0` <- plogis(Xa %*% fc)
+avg$`Population average` <- marginal_p(Xa %*% fc, sig)
+avg_long <- pivot_longer(avg, -c(week, arm), names_to = "curve", values_to = "p")
+ggplot() +
+  geom_line(data = curves, aes(week, p, group = b), colour = "grey70", linewidth = 0.4) +
+  geom_line(data = avg_long, aes(week, p, linetype = curve), colour = "#222222",
+            linewidth = 0.9) +
+  facet_wrap(~ arm) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 12)) +
+  labs(x = "Week", y = "Probability of moderate or severe itch", linetype = NULL)
+```
+
+::: {.notes}
+Grey lines are individual curves at seven percentiles of the random-intercept distribution. The solid line is a participant with b equal to zero; the dashed line is the population average. Participants at the extremes have probabilities near 0 or 1 that barely change, which dilutes the average change. This is the core of learning outcome 8.4.
+:::
+
+## The attenuation approximation
+
+$$
+\boldsymbol\beta_M \approx \frac{\boldsymbol\beta_C}{\sqrt{1 + 0.346\,\tau_0^2}}
+$$
+
+- $0.346 = \{16\sqrt{3}/(15\pi)\}^2$; logit link, normal random intercept [@zeger1988; @neuhaus1991].
+- $\tau_0 = 1$: factor `r f2(1 / sqrt(1 + 0.346))`; $\tau_0 = 2$: factor `r f2(1 / sqrt(1 + 0.346 * 4))`.
+- CLEAR: $\hat\tau_0$ = `r f2(sig)`, factor `r f2(atten, 3)`.
+
+::: {.notes}
+The constant comes from approximating the logistic by a normal distribution function. The factor depends only on the random-intercept variance. With random slopes the attenuation varies over time and a single factor no longer applies. For the exact marginal coefficients, integrate numerically, as in the next slide.
+:::
+
+## On CLEAR the GLMM-implied marginal effects match GEE
+
+```{r}
+#| echo: false
+knitr::kable(round(atten_tab, 4))
+```
+
+::: {.notes}
+Read across the week:armActive row: conditional about -0.13; approximate marginal about -0.090; exact marginal about -0.089; GEE about -0.084. The methods agree once we compare like with like. The truth columns show that the conditional truth (-0.16) should be compared with the GLMM and the approximate marginal truth (about -0.10) with GEE. Comparing across would wrongly suggest bias.
+:::
+
+## Which effect is the right target?
+
+- **Population-average**: public-health impact, proportions of responders, regulatory endpoints.
+- **Subject-specific**: change within individuals, individual prediction, mechanisms.
+- State the estimand in the protocol; do not compare across kinds.
+- A GLMM can give both: conditional coefficients, and marginal summaries by integration.
+
+::: {.notes}
+Neither is better in general. In a randomised trial both are valid summaries of the treatment effect but they are different numbers. Note the advantage of the GLMM under MAR dropout: it is likelihood-based. Activity prompt: ask participants which estimand a health insurer would want, and which a patient choosing a treatment might want.
+:::
+
+## Try it
+
+Workbook **Exercise 3**: compute the attenuation factor and the exact marginal coefficients for CLEAR and compare with GEE.
+
+::: {.notes}
+Participants need the Gauss-Hermite function from the notes; it is provided in the workbook setup.
+:::
+
+# Predicted probabilities and effect summaries
+
+## Conditional at $b = 0$ versus population-averaged
+
+```{r}
+#| echo: false
+knitr::kable(pg |> mutate(across(c(conditional, marginal, lower, upper), \(x) round(x, 3))),
+             col.names = c("Arm", "Week", "P at b = 0", "Population P", "Lower", "Upper"))
+```
+
+Marginal risk difference at week 12: `r f2(rd[1], 3)` (95% interval `r f2(rd[2], 3)` to `r f2(rd[3], 3)`).
+
+::: {.notes}
+emmeans with type = "response" gives the conditional column: the probability for a median participant. The population column integrates over the random intercepts; intervals come from 4,000 draws of the fixed effects and the random-intercept SD from their joint approximate sampling distribution (glmer stores the Hessian with respect to both). Population proportions are pulled towards 0.5. They match the GEE proportions of Module 7.
+:::
+
+## Uncertainty for marginal summaries: draw, integrate, summarise
+
+```{r}
+#| echo: true
+#| eval: false
+V_joint <- 2 * solve(glmm_clear@optinfo$derivs$Hessian)   # (theta, beta)
+draws <- MASS::mvrnorm(4000, c(getME(glmm_clear, "theta"), fixef(glmm_clear)),
+                       V_joint)
+marg <- apply(draws, 1, function(d) marginal_p(Xp %*% d[-1], abs(d[1])))
+quantile(marg[4, ] - marg[3, ], c(0.025, 0.975))           # risk difference
+```
+
+- Parametric bootstrap (`bootMer`) is the more thorough alternative.
+- `emmeans` bias adjustment is a second-order approximation: here it overstates the placebo proportion.
+
+::: {.notes}
+Explain each line. The Hessian is of the deviance, so the covariance is twice its inverse; its beta block reproduces vcov(). The bootMer alternative simulates new outcomes, refits and recomputes; it is slower with 25 quadrature points. The emmeans bias adjustment with sigma equal to the random-intercept SD gives about 0.41 for placebo at week 12 against 0.34 by integration: with an SD near 1.8, a Taylor expansion is not accurate enough.
+:::
+
+## Try it
+
+Workbook **Exercise 4**: compute population-averaged probabilities, a risk difference and a risk ratio with intervals.
+
+::: {.notes}
+Encourage participants to report absolute risks alongside relative measures.
+:::
+
+# Count outcomes: DIARY
+
+## Poisson and negative binomial GLMMs with an offset
+
+$$
+\log E(Y_{ij} \mid b_{0i}) = \log(\text{days}_{ij}) + \beta_0 + \beta_1\text{post}_{ij} + \beta_2\text{Active}_i + \beta_3\text{post}_{ij}\text{Active}_i + b_{0i}
+$$
+
+```{r}
+#| echo: true
+#| eval: false
+nb_glmm <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                   data = diary, family = nbinom2)   # Var = mu + mu^2 / theta
+```
+
+- Log link with random intercept: conditional and marginal **rate ratios are equal**; intercepts differ by $\tau_0^2/2$.
+
+::: {.notes}
+The offset turns the model into a model for the rate per diary day. The treatment effect is the interaction, a ratio of rate ratios. Point out that for the log link there is no attenuation, which is why the GEE rate ratio of Module 7 is comparable with the GLMM rate ratio.
+:::
+
+## Overdispersion: the random intercept is not enough
+
+```{r}
+#| echo: false
+pearson_ratio <- function(m) sum(residuals(m, type = "pearson")^2) / df.residual(m)
+knitr::kable(data.frame(
+  Model = c("Poisson GLMM", "NB GLMM", "ZINB GLMM"),
+  `Pearson ratio` = c(pearson_ratio(pois_glmm), pearson_ratio(nb_glmm), NA),
+  `DHARMa dispersion` = c(testDispersion(res_pois, plot = FALSE)$statistic,
+                          testDispersion(res_nb, plot = FALSE)$statistic, NA),
+  `DHARMa zeros obs/sim` = c(testZeroInflation(res_pois, plot = FALSE)$statistic,
+                             testZeroInflation(res_nb, plot = FALSE)$statistic, NA),
+  AIC = sapply(list(pois_glmm, nb_glmm, zinb_glmm), AIC), check.names = FALSE) |>
+    mutate(across(where(is.numeric), \(x) round(x, 2))))
+```
+
+- Poisson: treatment effect `r f2(fp[4], 3)` (SE `r f2(sp[4], 3)`); NB: `r f2(fn[4], 3)` (SE `r f2(sn[4], 3)`).
+
+::: {.notes}
+The Poisson model shows overdispersion even with a random intercept: migraines cluster within participants beyond what a constant personal rate implies. Consequence: the Poisson SE is too small and the Poisson model would call the treatment effect significant, the NB model not. The NB size parameter is about 4.5 (truth 5).
+:::
+
+## Apparent zero inflation was overdispersion
+
+- Poisson GLMM: `r f2(testZeroInflation(res_pois, plot = FALSE)$statistic)` times the expected zeros ($p < 0.001$).
+- NB GLMM: `r f2(testZeroInflation(res_nb, plot = FALSE)$statistic)` times ($p$ = `r f2(testZeroInflation(res_nb, plot = FALSE)$p.value)`).
+- ZINB: zero-inflation log-odds `r f2(summary(zinb_glmm)$coefficients$zi[1, 1], 1)`, same log-likelihood, higher AIC.
+- Truth: no excess zeros. Test zero inflation **against NB**, and only with a substantive reason.
+
+::: {.notes}
+This is learning outcome 8.2: assess zero inflation only where justified. A model that cannot handle overdispersion also under-predicts zeros, so testing zero inflation on a Poisson model mostly detects overdispersion. Substantive reasons for zero inflation: a subgroup who cannot experience the event in a period. The huge SE of the zero-inflation intercept is a sign the parameter is on the boundary.
+:::
+
+## DHARMa residuals: Poisson versus negative binomial
+
+```{r}
+#| echo: false
+#| fig-height: 4.4
+par(mfrow = c(1, 2))
+plotQQunif(res_pois, testDispersion = TRUE, testOutliers = FALSE, main = "Poisson GLMM")
+plotQQunif(res_nb, testDispersion = TRUE, testOutliers = FALSE, main = "NB GLMM")
+par(mfrow = c(1, 1))
+```
+
+::: {.notes}
+The Poisson QQ plot bends away from the diagonal; the NB plot does not. Point out that the same DHARMa workflow applies to binary, count and other GLMMs, which is its main practical advantage.
+:::
+
+## Rate ratios and expected migraine days per 28 days
+
+- Ratio of rate ratios: `r f2(tn$estimate[4])` (95% CI `r f2(tn$lower[4])` to `r f2(tn$upper[4])`); truth 0.67.
+- Per 28 days during treatment, participant with $b = 0$: `r f2(ec$response[3], 1)` (placebo), `r f2(ec$response[4], 1)` (active).
+- Population mean (`bias.adjust = TRUE`, exact for log link): `r f2(em$response[3], 1)` and `r f2(em$response[4], 1)`.
+
+```{r}
+#| echo: true
+#| eval: false
+emmeans(nb_glmm, ~ arm | post, offset = log(28), type = "response",
+        bias.adjust = TRUE, sigma = sigma_b)
+```
+
+::: {.notes}
+Population means are exp(tau squared over 2), about 1.14, times the conditional ones. Compare with the GEE of Module 7: about 4.7 and 3.5. The estimated rate ratio is closer to 1 than the truth, about 1.7 standard errors away, within sampling variation for a trial of 160 participants.
+:::
+
+## Try it
+
+Workbook **Exercises 5 and 6**: Poisson versus negative binomial GLMM for DIARY, overdispersion and zero-inflation checks, rate ratios and expected counts.
+
+::: {.notes}
+Ask participants to justify, in one sentence, why they would not report a zero-inflated model for DIARY.
+:::
+
+# Summary
+
+## Key messages
+
+- GLMM coefficients are **conditional**: within-participant comparisons.
+- Logistic GLMM and GEE coefficients differ by about $\sqrt{1 + 0.346\,\tau_0^2}$; compare like with like.
+- Check quadrature for binary GLMMs (Laplace vs AGQ).
+- Report **probabilities, risk differences, expected counts**, stating conditional or marginal.
+- Counts: offset, overdispersion (NB), zero inflation only when justified; check with **DHARMa**.
+
+::: {.notes}
+Recap. Point to the practical assessment pa08, which asks for a complete GLMM analysis with these elements.
+:::

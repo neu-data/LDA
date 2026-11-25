@@ -1,0 +1,602 @@
+---
+title: "Module 7. Generalized estimating equations"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk  <- load_walk()  |> arrange(id, month)
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary() |> arrange(id, period)
+truth_clear <- readRDS(here("data", "clear_truth.rds"))
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+
+# Same helper functions and model specifications as notes/07-gee.qmd
+sandwich_gee <- function(fit, correction = c("none", "MD")) {
+  correction <- match.arg(correction)
+  X <- model.matrix(fit); y <- fit$y; mu <- fitted(fit)
+  fam <- family(fit); eta <- fit$linear.predictors
+  w <- fit$prior.weights; if (is.null(w)) w <- rep(1, length(y))
+  alpha <- fit$geese$alpha
+  cl <- split(seq_along(y), fit$id)
+  p <- ncol(X); B <- matrix(0, p, p); parts <- vector("list", length(cl))
+  for (k in seq_along(cl)) {
+    r <- cl[[k]]; n <- length(r); R <- diag(n)
+    if (fit$corstr == "exchangeable" && n > 1) { R[] <- alpha; diag(R) <- 1 }
+    if (fit$corstr == "ar1" && n > 1) R <- alpha^abs(outer(1:n, 1:n, "-"))
+    A <- diag(sqrt(fam$variance(mu[r]) / w[r]), n)
+    Vinv <- solve(A %*% R %*% A)
+    D <- fam$mu.eta(eta[r]) * X[r, , drop = FALSE]
+    B <- B + t(D) %*% Vinv %*% D
+    parts[[k]] <- list(D = D, Vinv = Vinv, e = y[r] - mu[r])
+  }
+  Binv <- solve(B); M <- matrix(0, p, p)
+  for (pk in parts) {
+    e <- pk$e
+    if (correction == "MD") {
+      H <- pk$D %*% Binv %*% t(pk$D) %*% pk$Vinv
+      e <- solve(diag(nrow(H)) - H, e)
+    }
+    u <- t(pk$D) %*% pk$Vinv %*% e
+    M <- M + u %*% t(u)
+  }
+  V <- Binv %*% M %*% Binv
+  dimnames(V) <- list(colnames(X), colnames(X)); V
+}
+gee_unstructured <- function(formula, data, id, wave, maxit = 50, tol = 1e-8) {
+  mf <- model.frame(formula, data); X <- model.matrix(formula, mf)
+  y <- model.response(mf); idv <- data[[id]]; wv <- data[[wave]]
+  K <- max(wv); cl <- split(seq_along(y), idv); p <- ncol(X)
+  beta <- qr.solve(X, y)
+  for (it in seq_len(maxit)) {
+    e <- as.vector(y - X %*% beta)
+    phi <- sum(e^2) / (length(y) - p); rs <- e / sqrt(mean(e^2))
+    S <- matrix(0, K, K); Nn <- matrix(0, K, K)
+    for (r in cl) {
+      S[wv[r], wv[r]]  <- S[wv[r], wv[r]] + rs[r] %o% rs[r]
+      Nn[wv[r], wv[r]] <- Nn[wv[r], wv[r]] + 1
+    }
+    Rw <- S / Nn; diag(Rw) <- 1
+    B <- matrix(0, p, p); u <- rep(0, p)
+    for (r in cl) {
+      Ri <- solve(Rw[wv[r], wv[r], drop = FALSE])
+      B <- B + t(X[r, , drop = FALSE]) %*% Ri %*% X[r, , drop = FALSE]
+      u <- u + t(X[r, , drop = FALSE]) %*% Ri %*% y[r]
+    }
+    new <- as.vector(solve(B, u)); done <- max(abs(new - beta)) < tol
+    beta <- new; if (done) break
+  }
+  e <- as.vector(y - X %*% beta); Binv <- solve(B); M <- matrix(0, p, p)
+  for (r in cl) {
+    s <- t(X[r, , drop = FALSE]) %*% solve(Rw[wv[r], wv[r], drop = FALSE], e[r])
+    M <- M + s %*% t(s)
+  }
+  names(beta) <- colnames(X)
+  list(coefficients = beta, vcov_robust = Binv %*% M %*% Binv,
+       vcov_naive = phi * Binv)
+}
+
+# WALK
+gee_walk <- geeglm(sbp ~ visit_f * arm, id = factor(id), waves = visit,
+                   data = walk, corstr = "exchangeable")
+emm_walk <- emmeans(gee_walk, ~ visit_f | arm)
+dw <- as.data.frame(confint(contrast(contrast(emm_walk,
+        list(change_m12 = c(-1, 0, 0, 0, 0, 1))), "trt.vs.ctrl", by = NULL),
+        adjust = "none"))
+cs <- c("independence", "exchangeable", "ar1")
+fits <- lapply(cs, function(s) geeglm(sbp ~ visit_f * arm, id = factor(id),
+                                      waves = visit, data = walk, corstr = s))
+names(fits) <- cs
+un <- gee_unstructured(sbp ~ visit_f * arm, data = walk, id = "id", wave = "visit")
+k <- c("visit_f12:armSP", "visit_f12:armEP")
+wc <- rbind(
+  do.call(rbind, lapply(cs, function(s) data.frame(
+    corstr = s, term = k, estimate = coef(fits[[s]])[k],
+    se_robust = sqrt(diag(vcov(fits[[s]])))[k],
+    se_model = sqrt(diag(fits[[s]]$geese$vbeta.naiv))[match(k, names(coef(fits[[s]])))]))),
+  data.frame(corstr = "unstructured", term = k, estimate = un$coefficients[k],
+             se_robust = sqrt(diag(un$vcov_robust))[match(k, names(un$coefficients))],
+             se_model = sqrt(diag(un$vcov_naive))[match(k, names(un$coefficients))]))
+rownames(wc) <- NULL
+qic <- t(sapply(fits, QIC))
+
+# CLEAR
+gee_clear <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+                    data = clear, family = binomial, corstr = "exchangeable")
+cc <- coef(gee_clear); sc <- sqrt(diag(vcov(gee_clear)))
+se_tab <- data.frame(estimate  = coef(gee_clear),
+                     se_model  = sqrt(diag(gee_clear$geese$vbeta.naiv)),
+                     se_robust = sqrt(diag(vcov(gee_clear))),
+                     se_md     = sqrt(diag(sandwich_gee(gee_clear, "MD"))))
+ec <- as.data.frame(emmeans(gee_clear, ~ arm | week, at = list(week = c(0, 12)),
+                            type = "response"))
+rd <- as.data.frame(confint(contrast(regrid(emmeans(gee_clear, ~ arm | week,
+                     at = list(week = 12))), "revpairwise")))
+
+# DIARY
+gee_diary <- geeglm(migraine_days ~ post * arm + offset(log(days)),
+                    id = factor(id), waves = period + 1, data = diary,
+                    family = poisson, corstr = "exchangeable")
+cd <- coef(gee_diary); sd_ <- sqrt(diag(vcov(gee_diary)))
+ed <- as.data.frame(emmeans(gee_diary, ~ arm | post, offset = log(28),
+                            type = "response"))
+```
+
+# Why marginal models?
+
+## GEE answers a question about populations, not individuals
+
+- **Population-average (marginal)**: how does the *average* outcome in the population change? $\mu_{ij} = E(Y_{ij} \mid \mathbf{x}_{ij})$
+- **Subject-specific (conditional)**: how does the outcome change *for a given participant*? $E(Y_{ij} \mid \mathbf{x}_{ij}, \mathbf{b}_i)$
+- Identity link: the two coincide. Logit link: they do not (Module 8).
+- In GEE a participant is a **cluster**; clusters are independent.
+
+::: {.notes}
+Open with the two questions. A planner asks how many fewer patients will have moderate or severe itch if everyone is treated: that is population-average. A clinician asks how this patient's odds will change: subject-specific. Stress that neither is "more correct"; they are different estimands. Point out that for a continuous outcome with an identity link the fixed effects of a mixed model are also population-average, which participants saw in Module 6. Introduce the word cluster now: in longitudinal data one participant is one cluster, and the effective sample size for GEE is the number of clusters. Likely question: "Is GEE just for binary data?" No, it works for any GLM family, and we will use it on all three course datasets.
+:::
+
+## GEE keeps the GLM score equations and adds two ideas
+
+1. Weight each participant's residuals jointly, using a **working correlation** (a guess).
+2. Do **not** trust the guess for the standard errors: use the **sandwich**.
+
+> The mean model must be right. The correlation model only has to be reasonable.
+
+::: {.notes}
+Give the intuition before the algebra. If observations were independent we would fit an ordinary GLM. GEE does the same, but lets the residuals of one participant be weighted together using a guessed correlation. A good guess buys precision; a bad guess costs precision, not validity. The sandwich standard error measures the actual variability of each participant's contribution directly from the data. Ask participants: what must be correct for this to work? Answer: the mean model, independence between clusters, enough clusters, and (as we will see) MCAR missingness.
+:::
+
+## The generalized estimating equations
+
+$$
+U(\boldsymbol\beta) = \sum_{i=1}^{N} D_i^\top V_i^{-1} (\mathbf{y}_i - \boldsymbol\mu_i) = \mathbf{0},
+\qquad V_i = \phi\, A_i^{1/2} R_i(\boldsymbol\alpha) A_i^{1/2}
+$$
+
+- $g(\mu_{ij}) = \mathbf{x}_{ij}^\top\boldsymbol\beta$: marginal mean model; $D_i = \partial\boldsymbol\mu_i / \partial\boldsymbol\beta^\top$
+- $A_i$: variance functions $v(\mu_{ij})$; $\phi$: scale; $R_i(\boldsymbol\alpha)$: working correlation
+- $R_i = I$: ordinary GLM score equations; identity link: generalized least squares
+
+::: {.notes}
+Read the equation from right to left: residual vector, weighted and decorrelated by the inverse working covariance, multiplied by the derivative matrix, summed over independent clusters. Point out the two special cases: with independence it is exactly glm(); with the identity link it is GLS. Alpha and phi are estimated by moments from Pearson residuals, alternating with updates of beta. Do not spend long on the algorithm; the key is the structure of U.
+:::
+
+## Why a wrong working correlation does not bias $\hat{\boldsymbol\beta}$
+
+- At the true $\boldsymbol\beta$: $E(\mathbf{y}_i - \boldsymbol\mu_i) = \mathbf{0}$ if the mean model is right.
+- So $E\{U(\boldsymbol\beta)\} = \mathbf{0}$ **whatever** matrix $V_i^{-1}$ multiplies the residuals.
+- Unbiased estimating equations give **consistent** estimates ($N \to \infty$).
+- The working correlation changes only the weights, hence **efficiency**.
+
+::: {.notes}
+This is learning outcome 7.2 and is the single most important idea of the module. Write E(U) = sum D' V^-1 E(y - mu) = 0 on the board. Emphasise the two conditions hidden in "E(y - mu) = 0": the mean model is right, and the observed data are representative (MCAR). Activity prompt: ask what happens to E(U) if people with high blood pressure are more likely to miss their month-12 visit. The residuals among those observed no longer average zero. That previews the missing-data section.
+:::
+
+## The sandwich: bread from the model, meat from the data
+
+$$
+\widehat{\operatorname{Var}}(\hat{\boldsymbol\beta}) = B^{-1} M B^{-1},\quad
+B = \sum_i D_i^\top V_i^{-1} D_i,\quad
+M = \sum_i D_i^\top V_i^{-1} \hat{\mathbf{e}}_i\hat{\mathbf{e}}_i^\top V_i^{-1} D_i
+$$
+
+- If $V_i$ is right, $M \approx B$ and the sandwich reduces to the **model-based** $B^{-1}$.
+- If $V_i$ is wrong, $B^{-1}$ is wrong; $B^{-1}MB^{-1}$ is still consistent.
+- `geeglm()` reports the sandwich; the model-based variance is in `fit$geese$vbeta.naiv`.
+
+::: {.notes}
+Explain the names. The bread comes from the working model; the meat replaces the model's claim about Var(y_i) by the empirical outer product of each cluster's residuals. Note that the meat is an average over N clusters, which foreshadows the small-sample problem: with 10 clusters this average is noisy and biased downwards. Point out where to find the model-based variance in geeglm, since students often ask how to get it.
+:::
+
+# GEE for a continuous outcome: WALK
+
+## Fitting GEE with geepack: sort, factor id, waves
+
+```{r}
+#| echo: true
+#| eval: false
+walk <- load_walk() |> arrange(id, month)      # clusters contiguous, in time order
+gee_walk <- geeglm(sbp ~ visit_f * arm, id = factor(id), waves = visit,
+                   data = walk, corstr = "exchangeable")
+emm_walk <- emmeans(gee_walk, ~ visit_f | arm)  # uses the sandwich covariance
+contrast(contrast(emm_walk, list(change_m12 = c(-1, 0, 0, 0, 0, 1))),
+         "trt.vs.ctrl", by = NULL)
+```
+
+- `id = factor(id)`: a character id ("W001") gives "NAs introduced by coercion" and **wrong clusters**.
+- Rows of a cluster must be contiguous; `waves` tells AR(1)/unstructured which visit each row is.
+
+::: {.notes}
+Walk through the three extra arguments. The character-id problem is a real trap: geeglm converts the id to numbers internally, character identifiers become NA, the clustering breaks silently apart from one warning, and standard errors can come out as NaN or nonsense. Always pass factor(id) or an integer. Sorting matters because geeglm treats runs of consecutive rows with the same id as a cluster. waves is needed when the working correlation depends on time order and some visits are missing.
+:::
+
+## GEE and the mixed model agree for a continuous outcome
+
+```{r}
+#| echo: false
+lmm_walk <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+                 control = lmer_ctrl)
+dl <- as.data.frame(confint(contrast(contrast(emmeans(lmm_walk, ~ visit_f | arm),
+        list(change_m12 = c(-1, 0, 0, 0, 0, 1))), "trt.vs.ctrl", by = NULL),
+        adjust = "none"))
+knitr::kable(data.frame(
+  Contrast = c("SP vs UC", "EP vs UC"),
+  `GEE (exchangeable)` = fmt_ci(dw$estimate, dw$lower.CL, dw$upper.CL, 2),
+  `Primary LMM` = fmt_ci(dl$estimate, dl$lower.CL, dl$upper.CL, 2),
+  Truth = c("-4.6", "-8.1"), check.names = FALSE),
+  caption = "Difference in mean change in SBP, baseline to month 12 (mmHg, 95% CI)")
+```
+
+- Working correlation $\hat\alpha$ = `r f2(gee_walk$geese$alpha)`; `r length(unique(walk$id))` clusters.
+- Identity link: GEE and LMM target the same quantity. They differ in the missing-data assumption (MCAR vs MAR).
+
+::: {.notes}
+Point at the near-identical estimates. Ask why they agree: with an identity link the marginal and conditional means coincide. The truth column is available only because the data are simulated; both methods overestimate the benefit by less than one standard error, consistent with sampling variation. Mention that GEE needs MCAR whereas the mixed model is valid under MAR, which is why the course's primary analysis is the mixed model.
+:::
+
+## Try it
+
+Workbook **Exercise 1**: fit the WALK GEE, find the scale and working correlation, and estimate the difference in mean change at month 12.
+
+::: {.notes}
+Give participants time to fit the model and to reproduce the estimate with emmeans. Circulate and check that they used factor(id) and sorted data.
+:::
+
+# Working correlation structures
+
+## Four common working correlations
+
+| `corstr` | Correlation between occasions $j$ and $k$ | Parameters |
+|---|---|---|
+| `independence` | 0 | 0 |
+| `exchangeable` | $\alpha$ | 1 |
+| `ar1` | $\alpha^{\lvert j-k\rvert}$ | 1 |
+| `unstructured` | $\alpha_{jk}$ | $n(n-1)/2$ |
+
+- Same shapes as Module 5, different role: a weighting scheme, not part of a likelihood.
+
+::: {.notes}
+Connect to Module 5. In gls and mixed models the covariance structure is part of the likelihood and getting it wrong biases the standard errors. In GEE the sandwich repairs the standard errors, so the structure only affects efficiency. Practical note: geepack 1.3.13 crashes R when unstructured is combined with waves on incomplete data; the notes show a short hand-coded Gaussian version, verified against geeglm on the complete teaching file.
+:::
+
+## Estimates barely move; model-based SEs move a lot
+
+```{r}
+#| echo: false
+knitr::kable(wc |> mutate(term = sub("visit_f12:arm", "", term)) |>
+               mutate(across(where(is.numeric), \(x) round(x, 2))),
+             col.names = c("Working correlation", "Arm vs UC", "Estimate",
+                           "Robust SE", "Model-based SE"))
+```
+
+::: {.notes}
+Three lessons. One: the non-independence structures give very similar estimates and robust SEs. Two: independence is less efficient (robust SE about 1.6 versus about 1.4), because it ignores a correlation near 0.8; its estimate also differs partly because, under blood-pressure-dependent dropout, independence uses only those still present at month 12. Three: the model-based SEs depend heavily on the structure: under independence they are far too large, under exchangeable slightly too small. The sandwich SEs hardly change. This is learning outcome 7.2 and 7.3 in one table.
+:::
+
+## The working correlation changes precision, not the target
+
+```{r}
+#| echo: false
+#| fig-height: 3.6
+ggplot(wc, aes(estimate, factor(corstr, levels = rev(c(cs, "unstructured"))))) +
+  geom_pointrange(aes(xmin = estimate - 1.96 * se_robust,
+                      xmax = estimate + 1.96 * se_robust)) +
+  facet_wrap(~ term) +
+  labs(x = "Difference in mean change at month 12 vs usual care (mmHg)",
+       y = "Working correlation")
+```
+
+::: {.notes}
+Same results as a figure. Ask the group which structure they would prespecify for WALK. Reasonable answers: exchangeable or unstructured (six occasions, 360 clusters). Independence is valid but wasteful here.
+:::
+
+## Choosing the working correlation in practice
+
+- Follow the **design**: few occasions, many clusters: unstructured or exchangeable; many equally spaced: AR(1).
+- Look at the **empirical correlation** of Pearson residuals.
+- Compare **model-based and sandwich SEs**: close agreement suggests a good guess.
+- **Few clusters**: keep it simple. **Prespecify** it.
+- `geepack::QIC()` exists, but QIC is weak for choosing correlation structures.
+
+```{r}
+#| echo: false
+knitr::kable(round(qic[, c("QIC", "CIC")], 2))
+```
+
+::: {.notes}
+QIC is the quasi-likelihood under independence plus a penalty; its quasi-likelihood part does not see the correlation, so it tends to favour whatever fits the marginal means best. Here QIC is smallest for independence, the structure we know to be furthest from the truth, while CIC (the penalty alone) is smallest for AR(1) and exchangeable. Some older materials say geepack has no QIC; version 1.3.13 does. Stress prespecification: choosing the structure that gives the smallest p-value is a form of multiple testing.
+:::
+
+## Try it
+
+Workbook **Exercise 2**: refit WALK with independence, exchangeable and AR(1) working correlations and compare estimates, robust and model-based SEs.
+
+::: {.notes}
+Ask participants to write one sentence explaining why the estimates are similar and one explaining why the model-based SEs differ.
+:::
+
+# Model-based versus robust standard errors
+
+## For CLEAR the two SEs are close
+
+```{r}
+#| echo: false
+knitr::kable(round(se_tab, 4), col.names = c("Estimate", "Model-based SE",
+             "Robust SE", "Mancl-DeRouen SE"))
+```
+
+- The hand-coded sandwich reproduces `geeglm` to rounding error.
+- CLEAR was generated with a random intercept only, so exchangeable is a good guess.
+
+::: {.notes}
+Explain that close agreement is a diagnostic: the working correlation is close to the truth. Which to report? By default the sandwich, because it is valid whatever the true correlation provided there are enough clusters. The model-based SE can be preferable when clusters are very few and the working covariance is credible. The Mancl-DeRouen column is explained in the small-cluster section; with 200 clusters it differs only slightly from the plain sandwich.
+:::
+
+# GEE for binary and count outcomes
+
+## CLEAR: a population-average logistic model
+
+$$
+\operatorname{logit}\mu_{ij} = \beta_0 + \beta_1 t_{ij} + \beta_2\text{Active}_i + \beta_3 t_{ij}\text{Active}_i
+$$
+
+```{r}
+#| echo: true
+#| eval: false
+gee_clear <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+                    data = clear, family = binomial, corstr = "exchangeable")
+```
+
+- $\exp(\hat\beta_3)$ = `r f2(exp(cc[4]), 3)` (95% CI `r f2(exp(cc[4] - 1.96 * sc[4]), 3)` to `r f2(exp(cc[4] + 1.96 * sc[4]), 3)`): extra weekly multiplicative change in the **population** odds on active treatment.
+- Over 12 weeks: odds ratio `r f2(exp(12 * cc[4]))`.
+
+::: {.notes}
+Interpret each coefficient: beta1 is the weekly change in population log-odds on placebo, beta3 the extra change per week on active. Stress "population" each time. Compound to 12 weeks for a more tangible number. The working correlation is 0.33 on the binary scale, a nuisance parameter; do not report it as "the" correlation of itch.
+:::
+
+## Report probabilities and risk differences too
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+pred_clear <- expand.grid(week = seq(0, 12, 0.25),
+                          arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")))
+pred_clear$p <- predict(gee_clear, newdata = pred_clear, type = "response")
+obs_clear <- clear |> group_by(arm, week) |> summarise(p = mean(itch), n = n())
+ggplot(pred_clear, aes(week, p, colour = arm)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(data = obs_clear, aes(size = n), alpha = 0.7) +
+  scale_colour_arm(name = NULL) + scale_size_area(max_size = 3, guide = "none") +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 12)) +
+  labs(x = "Week", y = "Proportion with moderate or severe itch")
+```
+
+Week 12: `r f2(ec$prob[3])` (placebo) vs `r f2(ec$prob[4])` (active); risk difference `r f2(rd$estimate)` (95% CI `r f2(rd$lower.CL)` to `r f2(rd$upper.CL)`).
+
+::: {.notes}
+The risk difference is the most communicable summary: about 19 fewer people per 100 with moderate or severe itch at week 12 if the whole population were treated. It comes from emmeans with regrid(), using the sandwich covariance. Remind the group that the observed proportions at later weeks come from those still in the study, and dropout depended on severity.
+:::
+
+## DIARY: a log-linear marginal model with an offset
+
+```{r}
+#| echo: true
+#| eval: false
+gee_diary <- geeglm(migraine_days ~ post * arm + offset(log(days)),
+                    id = factor(id), waves = period + 1, data = diary,
+                    family = poisson, corstr = "exchangeable")
+emmeans(gee_diary, ~ arm | post, offset = log(28), type = "response")
+```
+
+- Ratio of rate ratios $\exp(\hat\beta_3)$ = `r f2(exp(cd[4]))` (95% CI `r f2(exp(cd[4] - 1.96 * sd_[4]))` to `r f2(exp(cd[4] + 1.96 * sd_[4]))`); truth 0.67.
+- Expected migraine days per 28 days after baseline: `r f2(ed$rate[3], 1)` (placebo), `r f2(ed$rate[4], 1)` (active).
+- Scale $\hat\phi$ = `r f2(gee_diary$geese$gamma, 1)`: overdispersion is absorbed by $\phi$ and the sandwich.
+
+::: {.notes}
+The offset makes the model about rates: periods with fewer diary days are expected to have fewer migraine days. The treatment effect is the interaction, a ratio of rate ratios; armActive is the baseline difference. No need for a negative binomial family in GEE: the Poisson variance with an estimated scale and the sandwich are enough for the mean model. With a log link and a random intercept, marginal and conditional rate ratios coincide, so this is comparable with the GLMM of Module 8.
+:::
+
+## Try it
+
+Workbook **Exercises 3 and 4**: CLEAR binary GEE (odds ratios, predicted probabilities, risk difference) and DIARY count GEE (rate ratio, expected days per 28 days).
+
+::: {.notes}
+Ask participants to write the interpretation of the interaction in words, for both outcomes, before computing probabilities.
+:::
+
+# How many clusters?
+
+## The sandwich needs many clusters
+
+- The meat $M$ averages $N$ cluster outer products: noisy and **biased downwards** when $N$ is small.
+- **Mancl–DeRouen**: replace $\hat{\mathbf{e}}_i$ by $(I - H_{ii})^{-1}\hat{\mathbf{e}}_i$, with $H_{ii} = D_i B^{-1} D_i^\top V_i^{-1}$ [@mancl2001].
+- Easy to code by hand; for a linear model it equals the leave-one-cluster-out jackknife.
+
+::: {.notes}
+Residuals from a fitted model are on average smaller than the true errors, especially for clusters with high leverage. The Mancl-DeRouen correction inflates each cluster's residuals by the inverse of one minus its leverage, the cluster version of HC3. The notes implement it in a short function and verify it two ways: switched off it reproduces geeglm exactly, and for a linear model with independence it equals the jackknife variance to 1e-13.
+:::
+
+## Simulation: 10, 40 and 200 clusters
+
+```{r}
+#| echo: false
+sim_small_clusters <- function(n_clusters, times = 0:4, effect = -0.5,
+                               sd_b0 = 2, sd_b1 = 0.5, sd_e = 1.5) {
+  d <- expand.grid(time = times, id = seq_len(n_clusters))
+  d$active <- as.integer(d$id > n_clusters / 2)
+  b0 <- rnorm(n_clusters, 0, sd_b0); b1 <- rnorm(n_clusters, 0, sd_b1)
+  d$y <- -0.5 * d$time + effect * d$active * d$time +
+    b0[d$id] + b1[d$id] * d$time + rnorm(nrow(d), 0, sd_e)
+  fit <- geeglm(y ~ time * active, id = id, data = d, corstr = "exchangeable")
+  k <- "time:active"
+  c(estimate = unname(coef(fit)[k]),
+    se_model = sqrt(fit$geese$vbeta.naiv[4, 4]),
+    se_sandwich = sqrt(vcov(fit)[k, k]),
+    se_md = sqrt(sandwich_gee(fit, "MD")[k, k]))
+}
+set.seed(2027)
+n_sim <- 1000
+sims <- bind_rows(lapply(c(10, 40, 200), function(N)
+  data.frame(N = N, t(replicate(n_sim, sim_small_clusters(N))))))
+covers <- function(est, se, q = qnorm(0.975)) abs(est - (-0.5)) <= q * se
+ss <- sims |> group_by(N) |>
+  summarise(empirical_sd = sd(estimate), mean_se_sandwich = mean(se_sandwich),
+            mean_se_md = mean(se_md),
+            cover_model = mean(covers(estimate, se_model)),
+            cover_sandwich = mean(covers(estimate, se_sandwich)),
+            cover_md = mean(covers(estimate, se_md)),
+            cover_md_t = mean(covers(estimate, se_md, qt(0.975, N - 4))))
+knitr::kable(ss |> mutate(across(-N, \(x) round(x, 3))),
+             col.names = c("N", "Empirical SD", "Mean sandwich SE", "Mean MD SE",
+                           "Cover model", "Cover sandwich", "Cover MD (z)",
+                           "Cover MD (t)"))
+```
+
+Monte Carlo SE of each coverage: about `r f2(sqrt(0.95 * 0.05 / n_sim), 3)` (1,000 replications).
+
+::: {.notes}
+Design: two arms, five times, random intercept and slope, exchangeable working correlation (so slightly wrong), target interaction -0.5. Read the N = 10 row: the sandwich SE underestimates the empirical SD by about 9 per cent and coverage falls to about 0.92. Mancl-DeRouen restores coverage to about 0.96; with a t reference on N - p degrees of freedom it becomes conservative. At 200 clusters all sandwich versions are fine. The model-based SE undercovers at every N because the working correlation is wrong: more clusters do not fix a misspecified model-based variance. Always report Monte Carlo error with simulation results.
+:::
+
+## Coverage improves with clusters, not with observations
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+cov_long <- ss |> select(N, starts_with("cover")) |>
+  pivot_longer(-N, names_to = "method", values_to = "coverage") |>
+  mutate(method = factor(method,
+           levels = c("cover_model", "cover_sandwich", "cover_md", "cover_md_t"),
+           labels = c("Model-based", "Sandwich", "Mancl-DeRouen (z)",
+                      "Mancl-DeRouen (t, N-4 df)")),
+         mcse = sqrt(coverage * (1 - coverage) / n_sim))
+ggplot(cov_long, aes(factor(N), coverage, colour = method)) +
+  geom_hline(yintercept = 0.95, linetype = 2, colour = "grey50") +
+  geom_pointrange(aes(ymin = coverage - 1.96 * mcse, ymax = coverage + 1.96 * mcse),
+                  position = position_dodge(width = 0.5)) +
+  scale_colour_manual(values = unname(course_colours[c("grey", "blue", "orange", "green")]),
+                      name = NULL) +
+  labs(x = "Number of clusters", y = "Coverage of nominal 95% CI")
+```
+
+::: {.notes}
+Rough guidance: below about 40 to 50 clusters use a bias-corrected sandwich and consider t reference distributions; below about 20 be very cautious and consider alternatives. Ask: in WALK, what happens if we treat clinics as clusters? There are only 8, firmly in the danger zone.
+:::
+
+## Try it
+
+Workbook **Exercise 5**: run a smaller version of the simulation and compute Monte Carlo standard errors.
+
+::: {.notes}
+Suggest 200 replications per scenario to keep run time short, and ask participants to judge which differences are larger than Monte Carlo error.
+:::
+
+# Missing data and weighted GEE <span class="advanced-tag">ADVANCED</span>
+
+## Standard GEE needs MCAR
+
+- GEE requires $E(Y_{ij} - \mu_{ij} \mid \text{observed}) = 0$.
+- In CLEAR, dropout depends on the **last observed severity** (MAR).
+- Those still present at week 12 have less itch than the whole population: unweighted GEE is biased.
+- Likelihood methods are protected under MAR; GEE is not.
+
+::: {.notes}
+This is learning outcome 7.6. The MAR argument for mixed models relies on the likelihood factorising; GEE has no likelihood, so it needs MCAR or missingness depending only on covariates in the mean model. Ask the group in which direction the placebo slope will be biased: people with severe itch leave, so the remaining population looks as if it improves faster.
+:::
+
+## Inverse-probability weights let observed participants stand in for dropouts
+
+$$
+\hat\pi_{ij} = \prod_{k=2}^{j} \widehat{P}(R_{ik} = 1 \mid R_{i,k-1} = 1, \text{last severity}, \text{arm}),
+\qquad w_{ij} = 1 / \hat\pi_{ij}
+$$
+
+```{r}
+#| echo: true
+#| eval: false
+drop_model <- glm(stay ~ prev_sev + arm, family = binomial, data = risk)
+gee_ipw <- geeglm(itch ~ week * arm, id = factor(id), data = clear_w,
+                  family = binomial, corstr = "independence", weights = ipw)
+```
+
+- Use an **independence** working correlation with observation-level weights [@robins1995].
+
+::: {.notes}
+Explain the risk set: from visit 2 to the visit at which a participant dropped out; the outcome is whether they stayed. The weight is the inverse of the cumulative probability of remaining up to that visit. Independence is needed because observation-specific weights combined with a non-diagonal working correlation can bias the estimating equations. The full code is in the notes and in scripts/07a_gee.R.
+:::
+
+## IPW moves the placebo slope towards the truth
+
+```{r}
+#| echo: false
+build_ipw <- function(obs) {
+  grid <- obs |> distinct(id, arm) |> crossing(visit = 1:6) |>
+    left_join(select(obs, id, visit, severity), by = c("id", "visit")) |>
+    group_by(id) |>
+    mutate(last_visit = max(visit[!is.na(severity)]), last_sev = severity) |>
+    tidyr::fill(last_sev, .direction = "down") |>
+    mutate(prev_sev = lag(last_sev)) |> ungroup()
+  risk <- grid |> filter(visit >= 2, visit <= pmin(last_visit + 1, 6)) |>
+    mutate(stay = as.integer(visit <= last_visit))
+  drop_model <- glm(stay ~ prev_sev + arm, family = binomial, data = risk)
+  risk$p_stay <- fitted(drop_model)
+  risk <- risk |> group_by(id) |> mutate(cum_p = cumprod(p_stay)) |> ungroup()
+  out <- obs |> left_join(select(risk, id, visit, cum_p), by = c("id", "visit")) |>
+    mutate(cum_p = ifelse(visit == 1, 1, cum_p), ipw = 1 / cum_p)
+  list(data = out, model = drop_model)
+}
+ipw_clear <- build_ipw(clear)
+gee_unw <- geeglm(itch ~ week * arm, id = factor(id), data = ipw_clear$data,
+                  family = binomial, corstr = "independence")
+gee_ipw <- suppressWarnings(geeglm(itch ~ week * arm, id = factor(id),
+                  data = ipw_clear$data, family = binomial,
+                  corstr = "independence", weights = ipw))
+z <- qnorm((1:200 - 0.5) / 200)
+base <- distinct(clear, id, age, sex)
+g <- expand.grid(week = truth_clear$weeks,
+                 arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")))
+g$p <- sapply(seq_len(nrow(g)), function(k) {
+  lp <- -truth_clear$cuts[2] + truth_clear$beta_week * g$week[k] +
+    truth_clear$beta_trtweek * (g$arm[k] == "Active") * g$week[k] +
+    truth_clear$beta_age * (base$age - 45) / 10 + truth_clear$beta_female * (base$sex == "Female")
+  mean(plogis(outer(lp, truth_clear$sd_b * z, "+")))
+})
+true_marg <- coef(suppressWarnings(glm(p ~ week * arm, family = binomial, data = g)))
+knitr::kable(data.frame(`True marginal` = true_marg, Unweighted = coef(gee_unw),
+                        `SE unw.` = sqrt(diag(vcov(gee_unw))), IPW = coef(gee_ipw),
+                        `SE IPW` = sqrt(diag(vcov(gee_ipw))), check.names = FALSE) |>
+               round(4))
+```
+
+- Weights `r f2(min(ipw_clear$data$ipw))` to `r f2(max(ipw_clear$data$ipw))`. Differences are below one SE: one dataset cannot prove the bias.
+- A 20,000-participant simulation (notes, script `07b`) shows the bias in the placebo slope and its removal by IPW.
+- SEs treat the estimated weights as known: **approximate**.
+
+::: {.notes}
+The true marginal column is available only because the data are simulated: we integrate the true conditional model over the random intercept and the participants' ages and sexes. Weighting moves the placebo week slope from about -0.072 to -0.057, towards -0.036. Be honest: in a single dataset the change is smaller than one standard error. The large simulation in the notes shows an unweighted bias of about 5 complete-data standard errors, almost entirely removed by IPW. Also be honest about the standard errors: the sandwich ignores the estimation of the weights; a bootstrap that re-estimates the weights is the more complete approach.
+:::
+
+## Try it
+
+Workbook **Exercise 6** (advanced): build the dropout model and weights for CLEAR and compare weighted with unweighted GEE.
+
+::: {.notes}
+Encourage participants to add week to the dropout model and see whether the weighted estimates change: a sensitivity check of the dropout model.
+:::
+
+# Summary
+
+## Key messages
+
+- GEE estimates **population-average** effects from a marginal mean model.
+- The **working correlation** affects efficiency, not consistency.
+- Report **sandwich SEs**, and correct them (Mancl–DeRouen, $t$) when clusters are few.
+- Use `id = factor(id)` and sorted data with `geeglm`.
+- Standard GEE needs **MCAR**; under MAR dropout use a likelihood method or **IPW-GEE**.
+
+::: {.notes}
+Recap the five messages and link forward to Module 8, where the same CLEAR data are analysed with a logistic mixed model and the coefficients come out larger in magnitude: not a contradiction, but a different estimand.
+:::

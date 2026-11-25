@@ -1,0 +1,391 @@
+---
+title: "Module 10. Missing data and dropout"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+walk_b <- load_walk("baseline")
+walk_c <- load_walk("complete")
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+pct <- function(x) paste0(round(100 * x), "%")
+# Results saved by the Module 10 scripts (same specifications and seeds as
+# the notes). Each script is run only if its outputs are missing.
+tb <- function(x) here("outputs", "tables", paste0(x, ".csv"))
+if (!file.exists(tb("m10_tipping_point")))
+  source(here("scripts", "10a_missing_data.R"), local = new.env())
+if (!file.exists(tb("m10_sim_mechanisms")) || !file.exists(tb("m10_sim_visit_timing")))
+  source(here("scripts", "10b_missing_data_simulations.R"), local = new.env())
+rd <- function(x) read_csv(tb(x), show_col_types = FALSE)
+comp <- rd("m10_analysis_comparison"); sim1 <- rd("m10_sim_mechanisms")
+sim2 <- rd("m10_sim_visit_timing"); tip <- rd("m10_tipping_point")
+mi_wide <- rd("m10_mi_wide_mar"); mi_long <- rd("m10_mi_long")
+k_tab <- rd("m10_kidney_window_means"); gaps <- rd("m10_kidney_gaps")
+drop_or <- rd("m10_dropout_model")
+```
+
+## What this module covers
+
+- Kinds of missing data and how to describe them
+- MCAR, MAR, MNAR, and what data can and cannot show
+- When the mixed model of all observed data is valid
+- Why LOCF and complete cases fail
+- Multiple imputation for longitudinal data, Rubin's rules
+- Delta adjustment and tipping points
+- Informative visit timing
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.notes}
+Learning outcomes 10.1 to 10.7. Key message to plant early: missing data threaten bias, not only precision, and the choice of analysis is an assumption about the missing values. Because WALK is simulated we have the complete data, which lets us show what each method does.
+:::
+
+# Describing missing data
+
+## Three kinds of missing data
+
+- **Intermittent:** a missed visit, then return
+- **Dropout (monotone):** leave and never return
+- **Missing covariates:** a baseline or time-varying covariate not recorded
+
+Death or a terminal event is different: the outcome no longer exists.
+
+::: {.notes}
+Ask participants for examples from their own studies. Dropout is usually the worrying kind because reasons for leaving relate to how the person is doing. Mention that after death SBP is not "missing"; the estimand must say what we mean (ICH E9(R1)).
+:::
+
+## The WALK pattern
+
+```{r}
+#| echo: false
+#| fig-height: 4.6
+plot_missing_map(walk_c, id, month_sched, observed,
+                 order_by = as.numeric(observed) * visit) +
+  facet_wrap(~ arm, scales = "free_y", labeller = as_labeller(walk_arm_labels))
+```
+
+::: {.notes}
+Rows are participants sorted by last visit; dropout shows as a staircase, intermittent gaps as isolated light cells. `r sum(walk_b$dropout)` of 360 participants (`r pct(mean(walk_b$dropout))`) did not attend month 12. Dropout is similar across arms in number; the question is whether it is related to outcome.
+:::
+
+## Dropout is related to observed SBP
+
+```{r}
+#| echo: false
+drop_or |> mutate(across(where(is.numeric), ~ round(., 3))) |> knitr::kable()
+```
+
+Odds of dropout × `r f2(drop_or$estimate[2])` per 10 mmHg higher last observed SBP: **not MCAR**.
+
+::: {.notes}
+Discrete-time dropout model: among participants still in the study, did they leave before the next visit? Point out the odds ratio and that the CI excludes 1. This rules out MCAR. Ask: does it show MAR? No; next slides.
+:::
+
+# Mechanisms
+
+## MCAR, MAR, MNAR
+
+| Mechanism | Missingness depends on | WALK example |
+|---|---|---|
+| MCAR | nothing in the outcomes | broken BP monitor, job move |
+| MAR | observed data only | withdrawn after a **recorded** high SBP |
+| MNAR | unobserved values | stops coming because BP has risen **since** last visit |
+
+::: {.notes}
+Write the definitions in terms of P(r | y_obs, y_mis, X). Stress that MAR is not "random" in the everyday sense. MCAR given arm (more dropout in EP regardless of BP) is ignorable when arm is in the model.
+:::
+
+## Simulation: impose each mechanism on the complete data
+
+- 200 dropout patterns per mechanism, about a third drop out
+- Dropout driven by change in SBP since baseline:
+    - MAR: at the last **observed** visit
+    - MNAR: at the visit about to be **missed**
+- Bias measured against the complete-data estimate
+
+::: {.notes}
+Same story for MAR and MNAR: people whose BP rises get discouraged and leave. The only difference is whether the rise that drove the decision was measured. Bias is relative to the same model on complete data, so it isolates the effect of missingness. Script 10b.
+:::
+
+## Only the mixed model survives MAR; nothing survives MNAR
+
+```{r}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 4
+#| out-width: "100%"
+sim1 <- sim1 |>
+  mutate(mechanism = factor(mechanism, levels = c("MCAR", "MAR", "MNAR")),
+         method = factor(method, levels = c("Observed means", "LOCF", "Complete cases",
+                                            "Mixed model, all data")))
+ggplot(sim1, aes(bias, method, colour = arm)) +
+  geom_vline(xintercept = 0, colour = "grey50") +
+  geom_pointrange(aes(xmin = bias - 1.96 * mcse_bias, xmax = bias + 1.96 * mcse_bias),
+                  position = position_dodge(width = 0.5)) +
+  facet_wrap(~ mechanism) +
+  scale_colour_arm(name = NULL, labels = c(SP = "SP vs UC", EP = "EP vs UC")) +
+  labs(x = "Bias in difference in mean change at month 12 (mmHg)", y = NULL)
+```
+
+::: {.notes}
+```{r}
+#| echo: false
+#| results: asis
+gb <- function(mech, meth) sim1$bias[sim1$mechanism == mech & sim1$method == meth & sim1$arm == "EP"]
+cat("EP biases: MCAR LOCF ", f2(gb("MCAR", "LOCF")), "; MAR complete cases ", f2(gb("MAR", "Complete cases")),
+    ", MAR mixed model ", f2(gb("MAR", "Mixed model, all data")), "; MNAR mixed model ",
+    f2(gb("MNAR", "Mixed model, all data")), ".", sep = "")
+```
+
+Point at each panel. MCAR: everything fine except LOCF. MAR: the mixed model is unbiased, complete cases and observed means are not. MNAR: everything is biased, including the mixed model, which here is no better than the observed means. Positive bias means the effect is pulled towards zero.
+:::
+
+## The data cannot tell MAR from MNAR
+
+- Observed data can show **not MCAR**
+- Every MNAR model has an MAR counterpart that fits the observed data equally well
+- In the simulation, dropout is related to the last observed change under **both** MAR and MNAR
+
+MAR is an assumption, justified by study knowledge and checked by sensitivity analysis.
+
+::: {.notes}
+Molenberghs and Kenward. "Little's test showed MAR" is a misunderstanding. Ask: what would make MAR plausible in WALK? A protocol rule that withdraws participants after recorded high readings, recorded reasons for dropout.
+:::
+
+## Try it
+
+Workbook exercises 1 and 2: describe the pattern, classify scenarios, fit the dropout model.
+
+::: {.notes}
+Give time for the classification task; discuss scenario 4 (MCAR given arm).
+:::
+
+# The mixed model under MAR
+
+## Ignorability: the likelihood factorises
+
+$$
+f(\mathbf{y}_i^{o}, \mathbf{r}_i \mid \boldsymbol\theta, \boldsymbol\psi) = f(\mathbf{y}_i^{o} \mid \boldsymbol\theta) \times P(\mathbf{r}_i \mid \mathbf{y}_i^{o}, \boldsymbol\psi)
+$$
+
+Valid if:
+
+1. MAR
+2. $\boldsymbol\theta$ and $\boldsymbol\psi$ separable (1 + 2 = ignorable)
+3. Mean **and covariance** of the repeated outcomes correctly specified
+4. Variables that drive dropout are in the model
+
+::: {.notes}
+theta: outcome model parameters (beta, G, sigma); psi: missingness model. The first factor is what lmer maximises. Emphasise condition 3: under MAR the covariance model predicts the missing values, so it matters for the mean too (unlike GEE with complete data). Condition 4: in WALK dropout depends on previous SBP, which is the outcome, and arm, in the model. Rubin 1976; Little and Rubin 2019.
+:::
+
+## In WALK the analyses agree, but only one rests on MAR
+
+```{r}
+#| echo: false
+comp |> mutate(across(where(is.numeric), ~ round(., 2))) |>
+  select(analysis, contrast, estimate, SE, lower.CL, upper.CL) |> knitr::kable()
+```
+
+Truth: −4.6 (SP), −8.1 (EP).
+
+::: {.notes}
+One data set shows sampling error as well as bias, and WALK dropout is moderate and depends on SBP level. The complete-data estimates themselves differ from truth by sampling error. The mixed model of all observed data is the primary analysis: weakest assumption, all data. LOCF's SE is too small because imputed values are treated as observed.
+:::
+
+## LOCF is biased even under MCAR
+
+- Carries an early value to month 12
+- Programme effects build up over months: early values understate them
+- Direction of bias depends on trajectories and dropout timing: not "conservative"
+- Treats imputed values as data: SEs too small
+
+::: {.notes}
+Refer back to the MCAR panel of the simulation plot. Ask participants to imagine a progressive disease in which the control arm deteriorates and its participants drop out early: LOCF would flatter the control arm. Workbook exercise 4 runs a small simulation.
+:::
+
+## Try it
+
+Workbook exercises 3 and 4: mixed model vs completers vs LOCF; LOCF simulation.
+
+::: {.notes}
+Exercise 4 uses sim_two_arm() with MCAR dropout; LOCF bias should appear clearly.
+:::
+
+# Multiple imputation
+
+## Multiple imputation: impute, analyse, pool
+
+1. Draw each missing value from its predictive distribution, $m$ times
+2. Analyse each completed data set
+3. Combine with Rubin's rules
+
+$$
+T = \bar U + \left(1 + \tfrac{1}{m}\right)B
+$$
+
+::: {.notes}
+U-bar: average within-imputation variance; B: between-imputation variance. Useful when the analysis model cannot handle missingness, when auxiliary post-baseline variables predict dropout, and as the basis for delta adjustment.
+:::
+
+## Wide format: impute each visit from the others, within arm
+
+```{r}
+#| eval: false
+imp_wide <- lapply(levels(walk_w$arm), function(a) {
+  d  <- walk_w |> filter(arm == a) |> select(id, all_of(imp_vars))
+  pm <- make.predictorMatrix(d); pm[, "id"] <- 0
+  mice(d, m = 50, method = "norm", predictorMatrix = pm, maxit = 10, seed = 2026)
+})
+# analyse each: lm(I(sbp_m12 - sbp_m0) ~ arm); pool with mice::pool.scalar()
+```
+
+```{r}
+#| echo: false
+mi_wide |> select(term, estimate, within, between, se, fmi, lower, upper) |>
+  mutate(across(where(is.numeric), ~ round(., 2))) |> knitr::kable()
+```
+
+::: {.notes}
+Imputing within arm makes the imputation model as rich as the analysis model (arm-by-visit). Imputing without arm would bias towards the null. fmi is roughly the proportion without a month-12 value. Results close to the mixed model, as expected under MAR.
+:::
+
+## Long format: multilevel imputation with `2l.norm`
+
+```{r}
+#| eval: false
+meth["sbp"] <- "2l.norm"
+pred["sbp", ] <- 1                      # fixed effects (visit x arm columns)
+pred["sbp", "idn"] <- -2                # cluster
+pred["sbp", c("cons", "month")] <- 2    # random intercept and slope
+imp_long <- mice(ld, m = 20, method = meth, predictorMatrix = pred, maxit = 1)
+```
+
+```{r}
+#| echo: false
+mi_long |> select(term, estimate, se, fmi, lower, upper) |>
+  mutate(across(where(is.numeric), ~ round(., 2))) |> knitr::kable()
+```
+
+::: {.notes}
+Needed for irregular times or many occasions. 2l.norm runs with mice alone. 2l.lmer worked with a random intercept only; with a random slope it failed in mice 3.19.0 because some participants have a single observation. The more restrictive imputation model explains the small difference from wide MI.
+:::
+
+## Try it
+
+Workbook exercise 5: wide-format MI and Rubin's rules by hand.
+
+::: {.notes}
+Ask participants to compute T by hand and compare with pool.scalar().
+:::
+
+# Sensitivity analysis
+
+## Delta adjustment: what if dropouts did worse than MAR predicts?
+
+- Impute under MAR
+- Add δ mmHg to imputed post-dropout month-12 SBP in **programme** arms
+- Re-analyse and pool for δ = 0, 2, ..., 30
+- **Tipping point:** smallest δ at which the conclusion changes
+
+::: {.notes}
+Pattern-mixture idea: people who leave the programme may stop walking and lose the benefit. Usual-care dropouts stay at MAR: there is nothing to stop. Choose the δ grid and plausible range in the analysis plan (NRC 2010, ICH E9(R1), Carpenter and Kenward 2013).
+:::
+
+## Tipping-point display
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+ggplot(tip, aes(delta, estimate, colour = term, fill = term)) +
+  geom_hline(yintercept = 0, colour = "grey40") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, colour = NA) +
+  geom_line(linewidth = 0.8) + geom_point() +
+  scale_colour_arm(name = NULL, labels = c(SP = "SP vs UC", EP = "EP vs UC")) +
+  scale_fill_arm(name = NULL, labels = c(SP = "SP vs UC", EP = "EP vs UC")) +
+  labs(x = "δ (mmHg)", y = "Difference in mean change (mmHg)")
+tp <- function(tm) { x <- filter(tip, term == tm); if (any(x$upper >= 0)) min(x$delta[x$upper >= 0]) else NA }
+```
+
+::: {.notes}
+SP CI first includes zero at δ = `r tp("SP")` mmHg; EP at `r ifelse(is.na(tp("EP")), "more than 30", tp("EP"))` mmHg. Each unit of δ moves an effect by about the proportion of dropouts in that arm. Ask: is a `r tp("SP")` mmHg excess plausible for people whose last observed SBP is already accounted for? Most would say no, so the conclusion holds under plausible departures from MAR.
+:::
+
+## Try it
+
+Workbook exercise 6: delta adjustment and tipping point.
+
+::: {.notes}
+Exercise 10 (independent) shifts all arms: the effect barely moves, which shows that only arm-differential departures threaten the comparison.
+:::
+
+# Informative visit timing
+
+## KIDNEY: low eGFR brings the next visit forward
+
+```{r}
+#| echo: false
+gaps |> mutate(mean_gap_months = round(12 * mean_gap_years, 1)) |>
+  select(last_low, n_gaps, mean_gap_months) |> knitr::kable()
+```
+
+- Window means over-represent sick patients (pulled down)
+- Kidney failure removes the sickest (pushed up)
+- A mixed model treats the **patient**, not the measurement, as the unit
+
+::: {.notes}
+Pullenayegum and Lim 2016. If timing depends only on observed past eGFR, the visit process is MAR-like and a likelihood-based mixed model is protected, if correctly specified. Timing driven by unmeasured current health is not covered.
+:::
+
+## Simulation: naive means are biased, the mixed model much less
+
+```{r}
+#| echo: false
+#| fig-width: 10
+#| fig-height: 4.6
+#| out-width: "92%"
+ggplot(sim2, aes(year, bias, colour = method)) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_pointrange(aes(ymin = bias - 1.96 * mcse, ymax = bias + 1.96 * mcse),
+                  position = position_dodge(width = 0.3)) +
+  geom_line(position = position_dodge(width = 0.3)) +
+  facet_grid(follow_up ~ visits) +
+  scale_colour_manual(values = c("Naive window mean" = "#D55E00", "Mixed model" = "#0072B2"),
+                      name = NULL) +
+  labs(x = "Years since entry", y = "Bias in mean eGFR")
+```
+
+::: {.notes}
+100 cohorts per scenario from the KIDNEY generating model. Informative visits alone: naive means too low, growing with time. Kidney failure alone: too high. Both (as in KIDNEY): they partly cancel, which is luck. The mixed model's bias stays small but is not exactly zero. Be honest: it is less affected, not immune. Joint models in Module 13.
+:::
+
+## In the KIDNEY data themselves
+
+```{r}
+#| echo: false
+k_tab |> mutate(across(c(naive, lmm, truth), ~ round(., 2))) |> knitr::kable()
+```
+
+::: {.notes}
+In a single data set the two naive biases partly offset and chance adds noise, so the naive means are not uniformly worse here. That is exactly why we use simulation to study bias. Truth is the mean of true trajectories had everyone been followed, known only because the data are simulated.
+:::
+
+## Summary
+
+- Describe the pattern; test against MCAR, never "for MAR"
+- Primary analysis: likelihood-based mixed model of all observed data (valid under MAR)
+- No LOCF; no completers-only primary analysis
+- MI: impute by arm or with a multilevel model; pool with Rubin's rules
+- Sensitivity: delta adjustment and tipping point, with a pre-specified plausible δ
+- Outcome-driven visits: avoid window means; model the patient
+
+::: {.notes}
+Point to the practical assessment pa10, which brings these steps together on a new dropout scenario.
+:::

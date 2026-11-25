@@ -1,0 +1,266 @@
+---
+title: "Final project: instructor model solution"
+subtitle: "One defensible analysis of the MOOD study (for instructors only)"
+bibliography: ../references/references.bib
+format:
+  html:
+    number-sections: true
+---
+
+::: {.callout-warning title="Simulated data and a model solution, not the only solution"}
+The MOOD study is simulated. This document shows one defensible route through the final project, with real executed output. Other choices can earn full marks if they are justified. Because the data are simulated, we can compare the estimates with the true values at the end. Students cannot do this.
+:::
+
+```{r}
+#| label: setup
+source(here::here("R", "setup.R"))
+mood <- read_csv(here("data", "mood_long.csv"), show_col_types = FALSE) |>
+  mutate(arm = factor(arm, levels = c("Waitlist", "Programme")),
+         sex = factor(sex, levels = c("Male", "Female")),
+         site = factor(site),
+         visit_f = factor(week_sched, levels = c(0, 2, 4, 8, 12, 24)),
+         age10 = (age - 38) / 10)
+```
+
+## Analysis plan (summary)
+
+**Estimand (primary).** The population is adults eligible for the trial. The variable is the depressive symptom score at week 12. Discontinuation of follow-up is handled under a hypothetical strategy: we target the outcome that would have been observed had participants remained in follow-up. The summary measure is the difference in mean change from baseline to week 12, programme minus waitlist.
+
+**Primary model.** A linear mixed model with these components:
+
+* scheduled visit as a factor, interacted with arm, giving an unstructured mean over time;
+* adjustment for age, sex and site (stratification-type covariates);
+* a random intercept and a random slope on actual week;
+* exponential serial correlation in actual time, to allow for the closer correlation of adjacent assessments.
+
+The model is fitted by REML with `nlme::lme`. The missing-data assumption is MAR given the observed history. The sensitivity analysis is delta adjustment after dropout, applied to the programme arm, with a tipping point. Week 24 is the key secondary time point and gets no multiplicity adjustment, because it is interpreted descriptively and only if the primary result is clear.
+
+## Exploratory analysis
+
+```{r}
+#| label: flow
+mood |>
+  count(arm, week_sched) |>
+  pivot_wider(names_from = week_sched, values_from = n,
+              names_prefix = "wk")
+```
+
+```{r}
+#| label: baseline
+mood |>
+  filter(visit == 1) |>
+  group_by(arm) |>
+  summarise(n = n(), age = mean(age), female = mean(sex == "Female"),
+            score0 = mean(score), sd_score0 = sd(score), sleep0 = mean(sleep))
+```
+
+```{r}
+#| label: fig-profiles
+#| fig-cap: "Individual trajectories (40 randomly chosen participants) and observed means with 95% CIs by arm. Observed means after dropout describe the people still in the study, not the randomised population."
+p1 <- plot_spaghetti(mood, week, score, id, group = arm, n_show = 40) +
+  labs(x = "Week (actual)", y = "Symptom score")
+p2 <- plot_observed_means(mood, week_sched, score, arm) +
+  labs(x = "Scheduled week", y = "Mean score (observed)")
+p1 / p2
+```
+
+```{r}
+#| label: corr
+round(visit_correlation(mood, id, week_sched, score), 2)
+```
+
+The correlations fall as the gap between assessments widens, from about 0.8 for adjacent early visits to lower values over longer gaps. This pattern is typical of a random slope plus serial correlation, and it argues against compound symmetry. Actual assessment times spread more around later visits, so actual time is used for the random slope and the serial correlation.
+
+```{r}
+#| label: dropout
+last_seen <- mood |> group_by(id, arm) |> summarise(last = max(week_sched))
+table(last_seen$arm, last_seen$last)
+```
+
+## Model choice
+
+We fix the fixed effects and compare covariance structures by REML.
+
+```{r}
+#| label: cov-compare
+ff <- score ~ visit_f * arm + age10 + sex + site
+m_ri   <- lme(ff, random = ~ 1 | id, data = mood, method = "REML")
+m_rs   <- lme(ff, random = ~ week | id, data = mood, method = "REML",
+              control = lmeControl(opt = "optim"))
+m_rsex <- update(m_rs, correlation = corExp(form = ~ week | id))
+anova(m_ri, m_rs, m_rsex)
+```
+
+```{r}
+#| label: chosen
+#| include: false
+aic <- AIC(m_ri, m_rs, m_rsex)
+best <- rownames(aic)[which.min(aic$AIC)]
+```
+
+By AIC the preferred structure is `r best`. The random slope improves greatly on the random intercept alone, and adding exponential serial correlation improves the fit further (likelihood-ratio statistic `r round(anova(m_rs, m_rsex)$L.Ratio[2], 1)` on 1 df). These models have the same fixed effects, so comparing their REML likelihoods is valid. The treatment contrast barely changes between the candidate models (below), which reassures us that the primary conclusion does not hinge on this choice. Following the SAP, we keep the prespecified model with serial correlation as the primary analysis.
+
+```{r}
+#| label: contrast
+diff_change <- function(m, data = mood) {
+  e <- emmeans(m, ~ arm * visit_f, mode = "satterthwaite", data = data)
+  # difference in mean change from baseline, programme - waitlist
+  cc <- contrast(e, interaction = c(arm = "revpairwise", visit_f = "trt.vs.ctrl"))
+  summary(cc, infer = TRUE) |> as.data.frame()
+}
+dc <- lapply(list(RI = m_ri, RS = m_rs, RS_exp = m_rsex), diff_change)
+bind_rows(dc, .id = "model") |>
+  filter(visit_f_trt.vs.ctrl %in% c("12 - 0", "24 - 0")) |>
+  select(model, visit_f_trt.vs.ctrl, estimate, SE, lower.CL, upper.CL)
+```
+
+```{r}
+#| label: primary-numbers
+#| include: false
+prim <- dc$RS_exp
+p12 <- prim[prim$visit_f_trt.vs.ctrl == "12 - 0", ]
+p24 <- prim[prim$visit_f_trt.vs.ctrl == "24 - 0", ]
+```
+
+**Primary result.** The difference in mean change from baseline to week 12 (programme minus waitlist) is `r fmt_ci(p12$estimate, p12$lower.CL, p12$upper.CL)` points. At week 24 it is `r fmt_ci(p24$estimate, p24$lower.CL, p24$upper.CL)` points.
+
+## Diagnostics
+
+```{r}
+#| label: fig-diag
+#| fig-cap: "Conditional residuals against fitted values and normal Q-Q plot for the primary model. The lower-left boundary pattern reflects the floor of the score at 0."
+d_res <- tibble(fit = fitted(m_rsex), res = resid(m_rsex, type = "normalized"))
+q1 <- ggplot(d_res, aes(fit, res)) + geom_point(alpha = 0.3, size = 0.8) +
+  geom_smooth(se = FALSE, method = "loess", formula = y ~ x, colour = "#D55E00") +
+  labs(x = "Fitted score", y = "Normalised residual")
+q2 <- ggplot(d_res, aes(sample = res)) + stat_qq(size = 0.6, alpha = 0.4) +
+  stat_qq_line(colour = "#D55E00") + labs(x = "Normal quantile", y = "Residual")
+q1 + q2
+```
+
+The residuals are roughly symmetric. At low fitted values a diagonal edge appears, because scores cannot go below 0. Floor effects are modest here (a small percentage of zero scores at later visits). They mainly affect the most improved participants, so we note them as a limitation and do not change the model.
+
+```{r}
+#| label: influence
+# leave-one-site-out: does any single site drive the result?
+# Refits use lmer() with the random-slope model (no serial correlation):
+# the nlme fit with corExp failed to converge on one of the reduced datasets,
+# and the treatment contrast is almost identical between the two models.
+loso <- sapply(levels(mood$site), function(s) {
+  dsub <- droplevels(filter(mood, site != s))
+  m <- lmer(score ~ visit_f * arm + age10 + sex + site + (week | id),
+            data = dsub, control = lmer_ctrl)
+  d <- diff_change(m, data = dsub)
+  d$estimate[d$visit_f_trt.vs.ctrl == "12 - 0"]
+})
+round(loso, 2)
+```
+
+No single site changes the week-12 estimate materially.
+
+## Sensitivity analysis: delta adjustment
+
+We impute missing scores in wide format with `mice`, conditioning on arm, covariates and the other visits, separately by arm. After imputation, we make programme-arm values imputed **after dropout** worse by δ points (δ = 0 reproduces MAR). Each completed dataset is then analysed with an ANCOVA of the week-12 score on arm, baseline score and covariates, and the results are pooled with Rubin's rules [@carpenter2013; @vanbuuren2018].
+
+```{r}
+#| label: delta
+wide <- mood |>
+  select(id, arm, age10, sex, site, week_sched, score) |>
+  pivot_wider(names_from = week_sched, values_from = score,
+              names_prefix = "s") |>
+  arrange(id)
+last_obs <- mood |> group_by(id) |> summarise(last = max(week_sched))
+wide <- left_join(wide, last_obs, by = "id")
+after_drop <- function(w) wide$last < w  # TRUE if the visit is after dropout
+
+run_delta <- function(delta, m = 20) {
+  pooled <- lapply(levels(wide$arm), function(a) {
+    w <- filter(wide, arm == a)
+    imp <- mice(select(w, age10, sex, site, s0, s2, s4, s8, s12, s24),
+                m = m, method = "norm", printFlag = FALSE, seed = 2026)
+    lapply(seq_len(m), function(k) {
+      cw <- bind_cols(select(w, id, arm, last), mice::complete(imp, k))
+      if (a == "Programme") {
+        cw$s12 <- cw$s12 + delta * (cw$last < 12)
+      }
+      cw
+    })
+  })
+  fits <- lapply(seq_len(m), function(k) {
+    dk <- bind_rows(pooled[[1]][[k]], pooled[[2]][[k]])
+    lm(s12 ~ arm + s0 + age10 + sex + site, data = dk)
+  })
+  pr <- summary(pool(as.mira(fits)), conf.int = TRUE)
+  pr[pr$term == "armProgramme", c("estimate", "2.5 %", "97.5 %", "p.value")]
+}
+deltas <- c(0, 1, 2, 3, 4, 5)
+sens <- bind_rows(lapply(deltas, run_delta)) |> mutate(delta = deltas, .before = 1)
+rownames(sens) <- NULL
+sens
+```
+
+```{r}
+#| label: sens-numbers
+#| include: false
+tip <- sens$delta[which(sens$`97.5 %` >= 0)[1]]
+```
+
+Under MAR (δ = 0) the multiple-imputation estimate agrees closely with the mixed-model estimate. The programme effect shrinks as δ grows. `r if (is.na(tip)) "Within the range examined (δ up to 5 points), the confidence interval continues to exclude zero." else paste0("The confidence interval first includes zero at δ = ", tip, " points.")` For context, δ is a systematic worsening, in symptom-score points, of every programme participant who dropped out, relative to similar participants who stayed. Clinical judgement must decide whether a worsening of that size is plausible.
+
+## Secondary analyses
+
+### Binary response (population-average)
+
+The question "what proportion respond in each arm?" is population-averaged, so we use GEE with an exchangeable working correlation and robust SEs. With 240 clusters, the sandwich estimator performs well.
+
+```{r}
+#| label: gee
+# geeglm needs the cluster identifier as a factor or integer (a character id
+# is silently coerced to NA and breaks the clustering), and rows sorted
+# within cluster
+mood_s <- arrange(mood, id, week) |> mutate(id_f = factor(id))
+g <- geeglm(response ~ visit_f * arm + age10 + sex + site, id = id_f,
+            data = mood_s, family = binomial, corstr = "exchangeable")
+emm <- emmeans(g, ~ arm | visit_f, type = "response")
+summary(emm) |> as.data.frame() |> filter(visit_f %in% c("12", "24"))
+```
+
+Standard GEE assumes the missingness does not depend on the outcome (MCAR given covariates). This assumption is stronger than the MAR assumption behind the primary mixed model, so we interpret these results as secondary and descriptive.
+
+### Within-person association with sleep
+
+```{r}
+#| label: sleep
+mood <- mood |>
+  group_by(id) |>
+  mutate(sleep_pm = mean(sleep), sleep_w = sleep - sleep_pm) |>
+  ungroup() |>
+  mutate(sleep_pm_c = sleep_pm - mean(sleep_pm))
+m_sleep <- lmer(score ~ visit_f * arm + age10 + sex + site + sleep_w + sleep_pm_c +
+                  (week | id), data = mood, control = lmer_ctrl)
+fixef_table(m_sleep) |> filter(term %in% c("sleep_w", "sleep_pm_c"))
+```
+
+```{r}
+#| label: sleep-num
+#| include: false
+st <- fixef_table(m_sleep)
+sw <- st[st$term == "sleep_w", ]; sb <- st[st$term == "sleep_pm_c", ]
+```
+
+Within a participant, a week with one hour more sleep than that person's average is associated with a score `r fmt_ci(sw$estimate, sw$lower, sw$upper, 2)` points different. The between-person coefficient is `r fmt_ci(sb$estimate, sb$lower, sb$upper, 2)`. These associations are not causal effects. Low mood can disturb sleep (reverse causation). Other time-varying factors could affect both. And because the programme improved sleep, sleep is partly a mediator, so it should not be added to the primary treatment model [@curran2011].
+
+## Comparison with the truth (possible only because the data are simulated)
+
+```{r}
+#| label: truth
+truth <- readRDS(here("data", "mood_truth.rds"))
+tc <- truth$true_change
+true12 <- with(tc, change[arm == "Programme" & week == 12] - change[arm == "Waitlist" & week == 12])
+true24 <- with(tc, change[arm == "Programme" & week == 24] - change[arm == "Waitlist" & week == 24])
+tibble(time = c("week 12", "week 24"),
+       true = c(true12, true24),
+       estimate_MAR = c(p12$estimate, p24$estimate))
+```
+
+The true difference in mean change is `r round(true12, 2)` at week 12 and `r round(true24, 2)` at week 24. They are defined on the latent unrounded scale, which differs slightly from the 0–27 scored scale because of rounding and the floor. Dropout in the simulation depended partly on the unobserved current score, so the MAR analysis is not guaranteed to be unbiased. The sensitivity analysis shows how far the answer moves under plausible departures from MAR. True within- and between-person sleep coefficients were −0.6 and −1.2 points per hour.

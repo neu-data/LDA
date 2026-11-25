@@ -1,0 +1,244 @@
+---
+title: "Module 6. Interpretation, contrasts and prediction"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Complete, executed solutions to the Module 6 workbook, with model answers and marking notes.
+
+```{r}
+#| label: primary
+sched <- c(0, 1, 3, 6, 9, 12)
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+## Guided exercises
+
+### Exercise 1. Coefficients, interactions and centring (LO 6.1)
+
+```{r}
+#| label: ex1
+walk$month6 <- walk$month - 6
+m_lin  <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_lin6 <- lmer(sbp ~ month6 * arm + (1 + month6 | id), data = walk, control = lmer_ctrl)
+cbind(uncentred = fixef(m_lin), centred_at_6 = fixef(m_lin6))
+predicted_armSP <- fixef(m_lin)["armSP"] + 6 * fixef(m_lin)["month:armSP"]
+predicted_armSP
+fixef(m_prim)["visit_f6:armEP"]
+```
+
+**Model answers.**
+
+(b) Predicted `armSP` = $\hat\beta_2 + 6\hat\beta_4$ = `r round(predicted_armSP, 2)`, which matches the fitted value `r round(fixef(m_lin6)["armSP"], 2)`.
+
+(c) `visit_f6:armEP` = `r round(fixef(m_prim)["visit_f6:armEP"], 2)` mmHg is the EP − UC difference in mean change from baseline to month 6.
+
+(i) In `m_lin6`, `armSP` is the estimated difference in mean SBP between SP and UC at month 6, under the linear-time model. (ii) The slope (`month`) and the slope differences (`month:armSP`, `month:armEP`) are unchanged, as is the log-likelihood. (iii) `visit_f6` = `r round(fixef(m_prim)["visit_f6"], 2)` is the change from baseline to month 6 in usual care only.
+
+*Marking notes.* A common error is to centre time in the fixed part but leave `(1 + month | id)` in the random part; the fit is then a different model. Accept either if the student notes it.
+
+### Exercise 2. Estimated marginal means (LO 6.2)
+
+```{r}
+#| label: ex2
+emm <- emmeans(m_prim, ~ visit_f * arm)
+emm_tab <- as.data.frame(summary(emm))
+cmp <- walk |> group_by(arm, visit_f) |> summarise(observed = mean(sbp), n = n()) |>
+  left_join(emm_tab |> select(arm, visit_f, emmean), by = c("arm", "visit_f")) |>
+  mutate(difference = observed - emmean)
+cmp |> filter(visit_f %in% c("0", "12"))
+```
+
+**Model answers.** (i) At baseline (differences `r paste(round(cmp$difference[cmp$visit_f == "0"], 3), collapse = ", ")`), because every participant is measured, so the model has no missing values to account for. (ii) At month 12 the observed means are lower than the EMMs in every arm (differences `r paste(round(cmp$difference[cmp$visit_f == "12"], 2), collapse = ", ")` mmHg). Dropout in WALK depended on the last observed SBP: participants with high SBP were more likely to leave, so the attenders are a lower-pressure group. The mixed model uses their earlier measurements and is valid under MAR.
+
+### Exercise 3. Planned contrasts (LO 6.2)
+
+```{r}
+#| label: ex3
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg6   <- function(a) cell_w(a, "6") - cell_w(a, "0")
+L6 <- list("SP - UC" = chg6("SP") - chg6("UC"),
+           "EP - UC" = chg6("EP") - chg6("UC"))
+sapply(L6, sum)
+d6 <- summary(contrast(emm, L6), infer = TRUE)
+d6
+ic <- summary(contrast(emm, interaction = c(visit_f = "trt.vs.ctrl1", arm = "trt.vs.ctrl1")),
+              infer = TRUE)
+ic[ic$visit_f_trt.vs.ctrl1 == "6 - 0", ]
+```
+
+**Model answers.** (i) "From baseline to month 6, SBP fell by `r round(-d6$estimate[1], 1)` mmHg more in the standard programme than in usual care (95% CI `r round(-d6$upper.CL[1], 1)` to `r round(-d6$lower.CL[1], 1)`, `r fmt_p(d6$p.value[1])`)." "It fell by `r sprintf("%.1f", -d6$estimate[2])` mmHg more in the enhanced programme than in usual care (95% CI `r round(-d6$upper.CL[2], 1)` to `r round(-d6$lower.CL[2], 1)`, `r fmt_p(d6$p.value[2])`)." (ii) The baseline and month-6 means of one arm come from the same participants and are strongly positively correlated, so $\operatorname{Var}(\hat\mu_6 - \hat\mu_0) = \operatorname{Var}(\hat\mu_6) + \operatorname{Var}(\hat\mu_0) - 2\operatorname{Cov}$ is much smaller than either variance: between-person differences in level cancel.
+
+*Marking notes.* Check that the student's vector has +1/−1 in the correct cells. Writing differences in change as "reductions" is fine as long as the sign convention is explicit.
+
+### Exercise 4. Population-average and subject-specific predictions (LO 6.4)
+
+```{r}
+#| label: ex4
+walk$pred_pa <- predict(m_prim, re.form = NA)
+walk$pred_ss <- predict(m_prim)
+grid <- walk |> distinct(id, arm) |>
+  tidyr::crossing(visit_f = factor(sched, levels = sched)) |>
+  mutate(month = as.numeric(as.character(visit_f)))
+grid$pred_ss <- predict(m_prim, newdata = grid)
+grid$pred_pa <- predict(m_prim, newdata = grid, re.form = NA)
+g <- grid |> group_by(arm, visit_f) |> summarise(diff = mean(pred_ss) - mean(pred_pa))
+max(abs(g$diff))
+o12 <- walk |> filter(visit_f == "12") |> group_by(arm) |>
+  summarise(observed = mean(sbp), ss = mean(pred_ss), pa = mean(pred_pa))
+o12
+```
+
+**Model answers.** (i) With an identity link, $E(\mathbf{x}^\top\boldsymbol\beta + \mathbf{z}^\top\mathbf{b}_i) = \mathbf{x}^\top\boldsymbol\beta$, and the BLUPs average almost exactly zero over all participants in an arm; the largest difference is `r signif(max(abs(g$diff)), 2)` mmHg. (ii) On the observed month-12 rows, the participants who remain have on average negative BLUPs (lower SBP), so subject-specific predictions track the observed means (e.g. UC `r round(o12$ss[1], 1)` vs observed `r round(o12$observed[1], 1)`) while the population-average prediction is `r round(o12$pa[1], 1)`. (iii) The population-average prediction (EMMs), which describes everyone randomised.
+
+### Exercise 5. Confidence and prediction intervals (LO 6.5)
+
+```{r}
+#| label: ex5
+G  <- as.matrix(VarCorr(m_prim)$id)
+s2 <- sigma(m_prim)^2
+pi_sp <- as.data.frame(summary(emm)) |>
+  filter(arm == "SP") |>
+  mutate(month = as.numeric(as.character(visit_f)),
+         var_between = G[1, 1] + 2 * G[1, 2] * month + G[2, 2] * month^2,
+         se_new = sqrt(SE^2 + var_between + s2),
+         pi_lower = emmean - 1.96 * se_new, pi_upper = emmean + 1.96 * se_new)
+pi_sp |> select(month, emmean, lower.CL, upper.CL, pi_lower, pi_upper)
+
+set.seed(65)
+beta <- MASS::mvrnorm(20000, fixef(m_prim), as.matrix(vcov(m_prim)))
+b    <- MASS::mvrnorm(20000, c(0, 0), G)
+x    <- as.numeric(names(fixef(m_prim)) %in% c("(Intercept)", "visit_f12", "armSP", "visit_f12:armSP"))
+y    <- as.vector(beta %*% x) + b[, 1] + 12 * b[, 2] + rnorm(20000, 0, sigma(m_prim))
+quantile(y, c(0.025, 0.975))
+```
+
+```{r}
+#| label: ex5c
+#| fig-cap: "Standard programme: 95% CI for the mean (dark) and 95% prediction interval for a new participant (light)."
+ggplot(pi_sp, aes(month, emmean)) +
+  geom_ribbon(aes(ymin = pi_lower, ymax = pi_upper), fill = "#0072B2", alpha = 0.12) +
+  geom_ribbon(aes(ymin = lower.CL, ymax = upper.CL), fill = "#0072B2", alpha = 0.35) +
+  geom_line(colour = "#0072B2") + scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "Systolic blood pressure (mmHg)")
+```
+
+```{r}
+#| label: ex5-values
+#| include: false
+sp12 <- filter(pi_sp, month == 12)
+```
+
+**Model answers.** (i) At month 12 the CI is `r round(sp12$upper.CL - sp12$lower.CL, 1)` mmHg wide and the PI `r round(sp12$pi_upper - sp12$pi_lower, 1)` mmHg, about `r round((sp12$pi_upper - sp12$pi_lower) / (sp12$upper.CL - sp12$lower.CL))` times wider; the simulation interval (`r round(quantile(y, 0.025), 1)` to `r round(quantile(y, 0.975), 1)`) agrees with the analytic one (`r round(sp12$pi_lower, 1)` to `r round(sp12$pi_upper, 1)`). (ii) The between-participant variance $\mathbf{z}^\top G\mathbf{z}$ = `r round(sp12$var_between, 1)` mmHg², against a residual variance of `r round(s2, 1)` and a squared SE of `r round(sp12$SE^2, 2)`. (iii) The prediction interval, and for a patient already observed, the participant-specific version using their BLUPs.
+
+## Independent exercises
+
+### Exercise 6. Report the month-6 results (LO 6.2, 6.6)
+
+```{r}
+#| label: ex6
+cw6 <- summary(contrast(emm, list(UC = chg6("UC"), SP = chg6("SP"), EP = chg6("EP"))), infer = TRUE)
+tab6 <- data.frame(Arm = walk_arm_labels,
+  `Mean change to month 6 (95% CI)` = fmt_ci(cw6$estimate, cw6$lower.CL, cw6$upper.CL),
+  `Difference vs usual care (95% CI)` = c("Reference", fmt_ci(d6$estimate, d6$lower.CL, d6$upper.CL)),
+  p = c("", fmt_p(d6$p.value)), check.names = FALSE, row.names = NULL)
+knitr::kable(tab6, align = "lccc")
+```
+
+**Model answer.** "By month 6, mean SBP had fallen by `r round(-cw6$estimate[1], 1)` mmHg in usual care, `r round(-cw6$estimate[2], 1)` mmHg in the standard programme and `r round(-cw6$estimate[3], 1)` mmHg in the enhanced programme. The differences in mean change compared with usual care were `r fmt_ci(d6$estimate[1], d6$lower.CL[1], d6$upper.CL[1])` mmHg (SP) and `r fmt_ci(d6$estimate[2], d6$lower.CL[2], d6$upper.CL[2])` mmHg (EP)." Marking: estimates with intervals, units, direction stated, month-6 labelled as secondary if the primary is month 12.
+
+### Exercise 7. Compare multiplicity strategies (LO 6.3)
+
+```{r}
+#| label: ex7
+chg12 <- function(a) cell_w(a, "12") - cell_w(a, "0")
+L12 <- list("SP - UC" = chg12("SP") - chg12("UC"),
+            "EP - UC" = chg12("EP") - chg12("UC"),
+            "EP - SP" = chg12("EP") - chg12("SP"))
+p_none <- summary(contrast(emm, L12))$p.value
+p_holm <- summary(contrast(emm, L12, adjust = "holm"))$p.value
+ch12 <- contrast(emm, list(UC = chg12("UC"), SP = chg12("SP"), EP = chg12("EP")))
+tuk  <- summary(pairs(ch12, reverse = TRUE, adjust = "tukey"))
+tuk
+mult <- data.frame(contrast = names(L12), none = p_none, holm = p_holm,
+                   tukey = tuk$p.value[match(c("SP - UC", "EP - UC", "EP - SP"), tuk$contrast)])
+# fixed sequence: EP - UC, then SP - UC, then EP - SP, each at 0.05, stop at first failure
+ord <- c("EP - UC", "SP - UC", "EP - SP")
+pass <- cumprod(p_none[match(ord, names(L12))] < 0.05) == 1
+mult$fixed_sequence_rejected <- pass[match(mult$contrast, ord)]
+knitr::kable(mult, digits = 4)
+```
+
+**Model answer.** All three comparisons are significant at 5% under every strategy here (largest adjusted p-value `r formatC(max(mult[, c("none","holm","tukey")]), format = "f", digits = 4)`, for EP − SP). A good prespecified plan: the two comparisons with usual care form the primary family (Dunnett or Holm), and EP − SP is a secondary comparison, or the three are placed in a fixed sequence (EP − UC, SP − UC, EP − SP), which spends no α if the ordering reflects the expected effect sizes. Tukey across all three treats the programme comparison as part of the confirmatory family, which costs power without a clear reason. *Marking notes.* Credit any coherent, prespecified strategy; penalise choosing the strategy that gives the smallest p-values after seeing them. Note that `pairs()` on the changes must be reversed or relabelled so that signs match "EP − UC".
+
+### Exercise 8. Predictions for individual participants (LO 6.4, 6.5)
+
+```{r}
+#| label: ex8
+re <- ranef(m_prim, condVar = TRUE)
+pv <- attr(re$id, "postVar"); ids <- rownames(re$id)
+nv <- count(walk, id, arm)
+last <- walk |> group_by(id) |> summarise(last = max(month_sched))
+pick <- c(filter(nv, arm == "UC", n == 6)$id[1],
+          (nv |> left_join(last, by = "id") |> filter(arm == "UC", last == 3))$id[1])
+uc12 <- as.data.frame(summary(emm)) |> filter(arm == "UC", visit_f == "12")
+s2 <- sigma(m_prim)^2
+pi_ind <- bind_rows(lapply(pick, function(p) {
+  k <- match(p, ids); z <- c(1, 12)
+  fit <- uc12$emmean + sum(z * unlist(re$id[k, ]))
+  se <- sqrt(uc12$SE^2 + as.numeric(t(z) %*% pv[, , k] %*% z) + s2)
+  data.frame(id = p, visits = nv$n[nv$id == p], prediction = fit,
+             lower = fit - 1.96 * se, upper = fit + 1.96 * se)
+}))
+pi_ind
+```
+
+```{r}
+#| label: ex8-plot
+#| fig-cap: "Two usual-care participants: observed SBP (points), subject-specific predicted trajectory (blue) and population-average trajectory (grey)."
+g2 <- walk |> filter(id %in% pick) |> distinct(id, arm) |>
+  tidyr::crossing(visit_f = factor(sched, levels = sched)) |>
+  mutate(month = as.numeric(as.character(visit_f)))
+g2$ss <- predict(m_prim, newdata = g2); g2$pa <- predict(m_prim, newdata = g2, re.form = NA)
+ggplot(g2, aes(month)) +
+  geom_line(aes(y = pa), colour = "#6B6B6B", linewidth = 1.2) +
+  geom_line(aes(y = ss), colour = "#0072B2") +
+  geom_point(data = filter(walk, id %in% pick), aes(month, sbp)) +
+  facet_wrap(~ id) + scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "Systolic blood pressure (mmHg)")
+```
+
+**Model answer.** The participant with all six visits (`r pi_ind$id[1]`) has a 95% PI of width `r round(pi_ind$upper[1] - pi_ind$lower[1], 1)` mmHg at month 12; the participant last seen at month 3 (`r pi_ind$id[2]`) has width `r round(pi_ind$upper[2] - pi_ind$lower[2], 1)` mmHg. With fewer measurements, and none after month 3, the random slope in particular is poorly determined, so the conditional variance of the BLUPs is larger and the month-12 prediction is an extrapolation. Both intervals are much narrower than the new-participant interval because the participant's level is already partly known.
+
+### Exercise 9. Repair a misleading figure (LO 6.6)
+
+**Problems** (any four): visits are plotted as equally spaced categories although the gaps are 1 to 3 months; the means are raw observed means, biased at later visits by outcome-dependent dropout; error bars are ±1 SE without a label (roughly 68% intervals), which overstates precision; the y-axis is cropped tightly, exaggerating differences; there are no axis labels or units; arms are distinguished only by line type without labels for the course colours; there is no indication of what the bars represent.
+
+```{r}
+#| label: ex9
+#| fig-cap: "Model-estimated mean SBP with 95% confidence intervals (lines and bands) and observed means (circles), by arm."
+emm_tab$month <- as.numeric(as.character(emm_tab$visit_f))
+obs <- walk |> group_by(arm, month_sched) |> summarise(mean = mean(sbp))
+ggplot(emm_tab, aes(month, emmean, colour = arm, fill = arm)) +
+  geom_ribbon(aes(ymin = lower.CL, ymax = upper.CL), alpha = 0.15, colour = NA) +
+  geom_line(linewidth = 0.8) +
+  geom_point(data = obs, aes(month_sched, mean), shape = 1, size = 2) +
+  scale_colour_arm(labels = walk_arm_labels, name = NULL) +
+  scale_fill_arm(labels = walk_arm_labels, name = NULL) +
+  scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "Systolic blood pressure (mmHg)")
+```
+
+*Marking notes.* Full marks for at least four correctly identified problems and a figure that shows model estimates with labelled 95% intervals on a real time axis. Accept a difference-in-change figure as the improved version if it is well labelled.

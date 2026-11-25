@@ -1,0 +1,3 @@
+Model,Resid. df,-2logLik,Test,   Df,LR stat.,Pr(Chi)
+week + arm + week_act |  | ,1037,2333.644586401287,,NA,NA,NA
+arm |  | week + week_act,1033,2328.4307804779514,1 vs 2,4,5.213805923335713,0.2660546705620802

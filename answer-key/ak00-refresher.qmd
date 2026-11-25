@@ -1,0 +1,361 @@
+---
+title: "Module 0. Foundations refresher: R and regression"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk_base <- load_walk("baseline")
+```
+
+This answer key works through every exercise in `workbook/wb00-refresher.qmd` with complete, executed code and model answers. Numbers in the written answers are produced by inline R, so they match the output exactly. Marking notes after each exercise describe acceptable alternatives and common errors.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Project, data and first summaries (LO 0.1)
+
+**a.**
+
+```{r}
+here::here("data", "walk_baseline.csv")
+```
+
+`here()` returns the full path to the file, built from the project root. The same code works on any computer and from any subfolder (scripts, notes, workbook), because it does not depend on the current working directory or on where the project folder sits. A typed absolute path works only on the computer and in the folder where it was written.
+
+**b.**
+
+```{r}
+walk_base <- walk_base |>
+  mutate(
+    age10  = (age - 60) / 10,
+    bmi_c  = bmi - 29,
+    hyp150 = as.integer(sbp0 >= 150)
+  )
+
+by_sex <- walk_base |>
+  group_by(sex) |>
+  summarise(n = n(), mean_sbp0 = mean(sbp0), sd_sbp0 = sd(sbp0),
+            pct_150 = 100 * mean(hyp150))
+by_sex
+```
+
+There are `r by_sex$n[1]` men and `r by_sex$n[2]` women. Mean baseline SBP is `r round(by_sex$mean_sbp0[1], 1)` mmHg in men and `r round(by_sex$mean_sbp0[2], 1)` mmHg in women; `r round(by_sex$pct_150[1])`% of men and `r round(by_sex$pct_150[2])`% of women have SBP of at least 150 mmHg.
+
+**c.**
+
+```{r}
+walk_base |>
+  filter(arm == "EP") |>
+  select(id, age, sex, bmi, sbp0) |>
+  arrange(desc(sbp0)) |>
+  head(5)
+```
+
+**d.**
+
+```{r}
+#| label: fig-ak-hist
+#| fig-cap: "Baseline SBP by arm."
+ggplot(walk_base, aes(sbp0)) +
+  geom_histogram(binwidth = 5, fill = "#9A9A9A", colour = "white") +
+  facet_wrap(~ arm, labeller = as_labeller(walk_arm_labels)) +
+  labs(x = "Baseline SBP (mmHg)", y = "Participants")
+```
+
+The three distributions have similar centre, spread and shape. This is expected because arm was randomised: at baseline, before any intervention, the arms differ only by chance.
+
+*Marking notes.* Accept `read_csv(here(...))` followed by manual factor conversion instead of `load_walk()`. A common error is `filter(arm = "EP")` (single equals sign), which gives an error; the comparison needs `==`. Accept any sensible bin width.
+
+### Exercise 2. Linear regression and categorical predictors (LO 0.2)
+
+**a.**
+
+```{r}
+m_lin <- lm(sbp0 ~ age10 + sex + bmi_c, data = walk_base)
+summary(m_lin)
+ci <- confint(m_lin)
+ci
+```
+
+```{r}
+#| include: false
+co <- coef(m_lin); pv <- coef(summary(m_lin))[, 4]
+```
+
+**b.**
+
+- *Intercept.* The estimated mean baseline SBP for a 60-year-old man with BMI 29 kg/m² is `r fmt_ci(co[1], ci[1, 1], ci[1, 2])` mmHg.
+- *age10.* Among participants of the same sex and BMI, those 10 years older have mean SBP `r round(co[2], 1)` mmHg higher (95% CI `r round(ci[2, 1], 1)` to `r round(ci[2, 2], 1)`).
+- *sexFemale.* Women have mean SBP `r abs(round(co[3], 1))` mmHg lower than men of the same age and BMI (95% CI `r round(ci[3, 1], 1)` to `r round(ci[3, 2], 1)`).
+- *bmi_c.* Each 1 kg/m² higher BMI is associated with `r round(co[4], 2)` mmHg higher mean SBP among participants of the same age and sex (95% CI `r round(ci[4, 1], 2)` to `r round(ci[4, 2], 2)`).
+
+**c.** The p-value for `age10` is `r round(pv[2], 3)`. It says that an age coefficient at least this far from zero would occur in about `r round(100 * pv[2])`% of studies if there were truly no association between age and SBP (given the other predictors). It does not say that there is no association: the confidence interval includes values up to `r round(ci[2, 2], 1)` mmHg per decade. Nor does it give the probability that the null hypothesis is true.
+
+**d.** $R^2$ = `r round(summary(m_lin)$r.squared, 3)`: the three predictors explain about `r round(100 * summary(m_lin)$r.squared)`% of the variance in baseline SBP. This does not make the BMI coefficient unreliable. Its precision depends on its standard error (here `r round(coef(summary(m_lin))[4, 2], 3)`), which is small enough to give a fairly narrow interval. Low $R^2$ says only that most of the variation between people has other causes.
+
+**e.**
+
+```{r}
+m_clin <- lm(sbp0 ~ clinic, data = walk_base)
+round(coef(m_clin), 2)
+m_clin5 <- lm(sbp0 ~ relevel(clinic, ref = "5"), data = walk_base)
+round(coef(m_clin5), 2)
+# fitted clinic means agree
+all.equal(fitted(m_clin), fitted(m_clin5))
+```
+
+Clinic 1 is the reference (the first factor level). The intercept, `r round(coef(m_clin)[1], 1)` mmHg, is the mean baseline SBP in clinic 1, and the `clinic8` coefficient, `r round(coef(m_clin)["clinic8"], 1)` mmHg, is the difference in mean baseline SBP between clinic 8 and clinic 1. With clinic 5 as reference, the coefficients change because they now compare each clinic with clinic 5, but the fitted values (the clinic means) are identical.
+
+*Marking notes.* Full credit for interpretations that give units, the interval and the adjustment set. Deduct for "age has no effect" in part c. In part e, accept `factor(clinic, levels = c(5, 1:4, 6:8))`.
+
+### Exercise 3. A continuous-by-categorical interaction (LO 0.3)
+
+**a.**
+
+```{r}
+m_bmi_sex <- lm(sbp0 ~ bmi_c * sex + age10, data = walk_base)
+summary(m_bmi_sex)
+ci3 <- confint(m_bmi_sex)
+```
+
+```{r}
+#| include: false
+c3 <- coef(m_bmi_sex); p3 <- coef(summary(m_bmi_sex))[, 4]
+```
+
+**b.** With $F_i$ the female indicator, the fitted mean is
+$\hat y = `r round(c3[1], 2)` + `r round(c3["bmi_c"], 3)`\,\text{bmi\_c} `r round(c3["sexFemale"], 2)`\,F + `r round(c3["age10"], 2)`\,\text{age10} `r round(c3["bmi_c:sexFemale"], 3)`\,\text{bmi\_c}\,F$.
+
+- Men ($F = 0$): mean $= `r round(c3[1], 2)` + `r round(c3["bmi_c"], 3)`\,\text{bmi\_c} + `r round(c3["age10"], 2)`\,\text{age10}$. BMI slope `r round(c3["bmi_c"], 3)` mmHg per kg/m².
+- Women ($F = 1$): mean $= `r round(c3[1] + c3["sexFemale"], 2)` + `r round(c3["bmi_c"] + c3["bmi_c:sexFemale"], 3)`\,\text{bmi\_c} + `r round(c3["age10"], 2)`\,\text{age10}$. BMI slope `r round(c3["bmi_c"] + c3["bmi_c:sexFemale"], 3)` mmHg per kg/m².
+
+**c.** `sexFemale` = `r round(c3["sexFemale"], 2)` mmHg is the difference in mean SBP between women and men **at a BMI of 29 kg/m²** (where `bmi_c` = 0) and the same age. At other BMIs the sex difference is different, because the slopes differ.
+
+**d.** The interaction coefficient, `r fmt_ci(c3["bmi_c:sexFemale"], ci3["bmi_c:sexFemale", 1], ci3["bmi_c:sexFemale", 2], 2)` mmHg per kg/m², is the women's BMI slope minus the men's. The interval includes zero and `r fmt_p(p3["bmi_c:sexFemale"])`, so there is no clear evidence that the BMI slope differs between men and women. The interval is wide, so moderate differences cannot be ruled out either.
+
+**e.**
+
+```{r}
+m_bmi_sex_raw <- lm(sbp0 ~ bmi * sex + age10, data = walk_base)
+round(cbind(centred = coef(m_bmi_sex), uncentred = coef(m_bmi_sex_raw)), 3)
+```
+
+The BMI slope (in men), the age coefficient and the interaction are identical. The intercept and the `sexFemale` coefficient change: they now refer to BMI = 0, so `sexFemale` (`r round(coef(m_bmi_sex_raw)["sexFemale"], 1)` mmHg) is the sex difference at an impossible BMI of zero. The fitted values are the same; only the meaning of the coefficients that are evaluated at "BMI = 0" moves.
+
+**f.**
+
+```{r}
+emtrends(m_bmi_sex, ~ sex, var = "bmi_c")
+```
+
+*Marking notes.* The key point is part c: "at BMI 29". Deduct if the interaction is described as "the BMI slope in women". Accept `bmi_c + sex + bmi_c:sex` in place of `*`.
+
+### Exercise 4. Residual checks (LO 0.4)
+
+**a.**
+
+```{r}
+#| label: fig-ak-resid
+#| fig-cap: "Residual-versus-fitted plot (left) and normal Q–Q plot (right) for the baseline SBP model."
+#| fig-width: 9
+#| fig-height: 4
+diag_df <- data.frame(fitted = fitted(m_lin), resid = resid(m_lin),
+                      std_resid = rstandard(m_lin))
+p1 <- ggplot(diag_df, aes(fitted, resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = "#0072B2") +
+  labs(x = "Fitted SBP (mmHg)", y = "Residual (mmHg)")
+p2 <- ggplot(diag_df, aes(sample = std_resid)) +
+  stat_qq(alpha = 0.5) + stat_qq_line(colour = "#0072B2") +
+  labs(x = "Theoretical normal quantile", y = "Standardised residual")
+p1 + p2
+```
+
+**b.** The residual-versus-fitted plot checks the mean structure (a curve would mean a missing nonlinear term or interaction) and constant variance (a funnel would mean the variance changes with the mean). Here the residuals form an even band around zero; the smooth curve turns up only at the far left, where there are very few points. The Q–Q plot checks normality of the residuals. The points follow the line closely, with a mild departure at the lower end (the most negative residuals are a little less extreme than normal), which is unimportant with `r nrow(walk_base)` participants.
+
+**c.** Independence of the residuals. It is judged from the study design: here each participant contributes one row and participants were recruited separately, so independence is reasonable. (Clustering by clinic is a possible exception, which Module 13 considers.)
+
+**d.**
+
+```{r}
+#| label: fig-ak-het
+#| fig-cap: "Residual-versus-fitted plot for a simulated outcome whose variance increases with BMI."
+set.seed(1)
+y_het <- 100 + 2 * walk_base$bmi_c + rnorm(360, 0, 0.5 * (walk_base$bmi - 18))
+m_het <- lm(y_het ~ bmi_c, data = walk_base)
+ggplot(data.frame(fitted = fitted(m_het), resid = resid(m_het)),
+       aes(fitted, resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(alpha = 0.5) +
+  labs(x = "Fitted value", y = "Residual")
+```
+
+The residuals fan out as the fitted value increases (a funnel shape). This violates the constant-variance assumption. The coefficient estimate is still unbiased, but the usual standard errors are not quite right.
+
+*Marking notes.* Accept base R `plot(m_lin, which = 1:2)`. A common error is to say the Q–Q plot checks "normality of the outcome": it checks the residuals.
+
+### Exercise 5. Logistic regression for dropout (LO 0.2)
+
+**a.**
+
+```{r}
+walk_base <- walk_base |> mutate(sbp0_10 = (sbp0 - 150) / 10)
+m_drop <- glm(dropout ~ sbp0_10 + arm, family = binomial, data = walk_base)
+summary(m_drop)
+or_drop <- exp(cbind(OR = coef(m_drop), confint(m_drop)))
+round(or_drop, 3)
+```
+
+```{r}
+#| include: false
+p5 <- coef(summary(m_drop))[, 4]
+```
+
+**b.** Each 10 mmHg higher baseline SBP is associated with `r round(or_drop["sbp0_10", 1], 2)` times the odds of dropping out (95% CI `r round(or_drop["sbp0_10", 2], 2)` to `r round(or_drop["sbp0_10", 3], 2)`, `r fmt_p(p5["sbp0_10"])`), within the same arm: about `r round(100 * (or_drop["sbp0_10", 1] - 1))`% higher odds per 10 mmHg.
+
+**c.** Compared with usual care, the odds of dropout were `r fmt_ci(or_drop["armSP", 1], or_drop["armSP", 2], or_drop["armSP", 3], 2)` in SP and `r fmt_ci(or_drop["armEP", 1], or_drop["armEP", 2], or_drop["armEP", 3], 2)` in EP, for participants with the same baseline SBP. Both intervals are wide and include 1, so the data do not show a clear difference in dropout between arms.
+
+**d.**
+
+```{r}
+nd5 <- data.frame(sbp0_10 = c(-2, 2), arm = factor("UC", levels = c("UC", "SP", "EP")))
+lp5 <- predict(m_drop, nd5, type = "link", se.fit = TRUE)
+pr5 <- data.frame(sbp0 = c(130, 170), prob = plogis(lp5$fit),
+                  lower = plogis(lp5$fit - 1.96 * lp5$se.fit),
+                  upper = plogis(lp5$fit + 1.96 * lp5$se.fit))
+round(pr5, 3)
+```
+
+For a usual-care participant with baseline SBP 130 mmHg, the estimated probability of dropout is `r round(pr5$prob[1], 2)` (95% CI `r round(pr5$lower[1], 2)` to `r round(pr5$upper[1], 2)`); with 170 mmHg it is `r round(pr5$prob[2], 2)` (`r round(pr5$lower[2], 2)` to `r round(pr5$upper[2], 2)`).
+
+**e.** If people with higher SBP are more likely to leave, the people still observed at month 12 have lower SBP on average than the full randomised group would have had. A simple average of the observed month-12 values would then be biased downwards. Methods that use all the earlier measurements, such as mixed models under a missing-at-random assumption, can correct for this (Modules 2 and 10).
+
+*Marking notes.* Accept Wald intervals (`confint.default`). Common errors: interpreting the coefficient per 1 mmHg after rescaling; building the probability interval as prob ± 1.96 × SE.
+
+### Exercise 6. Confidence and prediction intervals (LO 0.5)
+
+**a.**
+
+```{r}
+new_women <- data.frame(age10 = 1, bmi_c = c(0, 6),
+                        sex = factor("Female", levels = c("Male", "Female")))
+ci6 <- predict(m_lin, new_women, interval = "confidence")
+pi6 <- predict(m_lin, new_women, interval = "prediction")
+round(cbind(bmi = c(29, 35), ci6, pi6[, -1]), 1)
+```
+
+**b.** For 70-year-old women with BMI 35 kg/m², the *average* SBP is estimated to be `r round(ci6[2, 1], 1)` mmHg, and we are 95% confident that the true average lies between `r round(ci6[2, 2], 1)` and `r round(ci6[2, 3], 1)` mmHg. An *individual* new woman of this kind could plausibly have SBP anywhere between about `r round(pi6[2, 2])` and `r round(pi6[2, 3])` mmHg, because individuals vary a great deal around the average.
+
+**c.** The confidence interval would shrink, roughly by a factor of $\sqrt{10} \approx 3.2$, because it reflects only uncertainty about the coefficients. The prediction interval would barely change: it is dominated by the residual SD ($\hat\sigma$ = `r round(sigma(m_lin), 1)` mmHg), which is a property of the population, not of the sample size.
+
+**d.**
+
+```{r}
+#| label: fig-ak-cipi
+#| fig-cap: "Confidence (dark) and prediction (light) bands for 70-year-old women."
+grid6 <- data.frame(age10 = 1, sex = factor("Female", levels = c("Male", "Female")),
+                    bmi_c = seq(19, 40, by = 0.5) - 29)
+b6 <- cbind(grid6, as.data.frame(predict(m_lin, grid6, interval = "confidence")),
+            setNames(as.data.frame(predict(m_lin, grid6, interval = "prediction"))[, 2:3],
+                     c("plo", "phi"))) |>
+  mutate(bmi = bmi_c + 29)
+ggplot(b6, aes(bmi)) +
+  geom_ribbon(aes(ymin = plo, ymax = phi), fill = "#D55E00", alpha = 0.12) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), fill = "#D55E00", alpha = 0.35) +
+  geom_line(aes(y = fit), colour = "#D55E00") +
+  labs(x = "BMI (kg/m²)", y = "SBP (mmHg)")
+```
+
+*Marking notes.* `age10 = 1` corresponds to age 70. A common error is `age10 = 70`. The key conceptual point in part c is that the prediction interval does not shrink to zero.
+
+## Independent exercises
+
+### Exercise 7. Daily steps and blood pressure (LO 0.2, 0.4)
+
+```{r}
+walk_base <- walk_base |> mutate(steps_c = steps0 - 6)
+m_steps <- lm(sbp0 ~ steps_c + age10 + sex + bmi_c, data = walk_base)
+summary(m_steps)
+ci7 <- confint(m_steps)
+```
+
+```{r}
+#| label: fig-ak-steps-resid
+#| fig-cap: "Residual checks for the steps model."
+#| fig-width: 9
+#| fig-height: 4
+d7 <- data.frame(fitted = fitted(m_steps), resid = resid(m_steps),
+                 std_resid = rstandard(m_steps))
+(ggplot(d7, aes(fitted, resid)) + geom_hline(yintercept = 0, linetype = "dashed") +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = "#0072B2") +
+    labs(x = "Fitted SBP (mmHg)", y = "Residual (mmHg)")) +
+  (ggplot(d7, aes(sample = std_resid)) + stat_qq(alpha = 0.5) +
+     stat_qq_line(colour = "#0072B2") +
+     labs(x = "Theoretical normal quantile", y = "Standardised residual"))
+```
+
+```{r}
+#| include: false
+c7 <- coef(m_steps); p7 <- coef(summary(m_steps))[, 4]
+```
+
+**Model answer.** We regressed baseline SBP on baseline daily steps (centred at 6,000/day), age (per 10 years, centred at 60), sex and BMI (centred at 29 kg/m²). Each additional 1,000 steps per day was associated with `r fmt_ci(c7["steps_c"], ci7["steps_c", 1], ci7["steps_c", 2], 2)` mmHg difference in mean SBP (`r fmt_p(p7["steps_c"])`), among participants of the same age, sex and BMI. The model explained `r round(100 * summary(m_steps)$r.squared, 1)`% of the variance (residual SD `r round(sigma(m_steps), 1)` mmHg). Residual plots showed no important departures from linearity, constant variance or normality. The true between-person association of −1.5 mmHg per 1,000 steps/day, known only because the data are simulated, lies `r ifelse(-1.5 >= ci7["steps_c", 1] & -1.5 <= ci7["steps_c", 2], "inside", "outside")` the 95% confidence interval.
+
+*Marking notes.* Students should note that this is a between-person, observational association and could be confounded by unmeasured factors. Accept uncentred steps if the intercept is not interpreted.
+
+### Exercise 8. Does the steps association differ by sex? (LO 0.3)
+
+```{r}
+m_steps_sex <- lm(sbp0 ~ steps_c * sex + age10 + bmi_c, data = walk_base)
+summary(m_steps_sex)
+ci8 <- confint(m_steps_sex)
+emtrends(m_steps_sex, ~ sex, var = "steps_c")
+```
+
+```{r}
+#| include: false
+c8 <- coef(m_steps_sex); p8 <- coef(summary(m_steps_sex))[, 4]
+```
+
+**Model answer.** The intercept (`r round(c8[1], 1)` mmHg) is the mean SBP for a 60-year-old man with BMI 29 who walks 6,000 steps per day. The `steps_c` main effect (`r round(c8["steps_c"], 2)` mmHg per 1,000 steps/day) is now the steps slope **in men**. The `sexFemale` coefficient (`r round(c8["sexFemale"], 2)` mmHg) is the sex difference at 6,000 steps per day. The interaction, `r fmt_ci(c8["steps_c:sexFemale"], ci8["steps_c:sexFemale", 1], ci8["steps_c:sexFemale", 2], 2)` mmHg per 1,000 steps/day (`r fmt_p(p8["steps_c:sexFemale"])`), is the difference between the women's and men's steps slopes; the women's slope is `r round(c8["steps_c"] + c8["steps_c:sexFemale"], 2)`. The interval includes zero, so there is no clear evidence that the association differs by sex. Age and BMI keep their usual interpretations.
+
+### Exercise 9. Steps and the odds of SBP ≥ 150 (LO 0.2, 0.5)
+
+```{r}
+m_hyp_steps <- glm(hyp150 ~ steps_c + age10 + sex + bmi_c, family = binomial,
+                   data = walk_base)
+or9 <- exp(cbind(OR = coef(m_hyp_steps), confint(m_hyp_steps)))
+round(or9, 3)
+
+nd9 <- data.frame(steps_c = c(-2, 4), age10 = 0, bmi_c = 0,
+                  sex = factor("Female", levels = c("Male", "Female")))
+lp9 <- predict(m_hyp_steps, nd9, type = "link", se.fit = TRUE)
+pr9 <- data.frame(steps = c(4000, 10000), prob = plogis(lp9$fit),
+                  lower = plogis(lp9$fit - 1.96 * lp9$se.fit),
+                  upper = plogis(lp9$fit + 1.96 * lp9$se.fit))
+round(pr9, 3)
+```
+
+**Model answer.** Each additional 1,000 steps per day was associated with an odds ratio of `r fmt_ci(or9["steps_c", 1], or9["steps_c", 2], or9["steps_c", 3], 3)` for baseline SBP ≥ 150 mmHg, adjusted for age, sex and BMI. For a 60-year-old woman with BMI 29, the estimated probability is `r round(pr9$prob[1], 2)` (95% CI `r round(pr9$lower[1], 2)` to `r round(pr9$upper[1], 2)`) at 4,000 steps/day and `r round(pr9$prob[2], 2)` (`r round(pr9$lower[2], 2)` to `r round(pr9$upper[2], 2)`) at 10,000 steps/day. These are estimated proportions among women with those characteristics. They do not say what would happen to an individual woman if she increased her walking: the association is between people and could reflect confounding. The interval at 10,000 steps is wider because few participants walk that much.
+
+### Exercise 10. A first look at repeated measurements
+
+```{r}
+walk <- load_walk()
+s_once <- coef(summary(lm(sbp0 ~ sex, data = walk_base)))["sexFemale", 1:2]
+s_all  <- coef(summary(lm(sbp ~ sex, data = walk)))["sexFemale", 1:2]
+rbind(baseline_only = s_once, all_visits = s_all) |> round(3)
+```
+
+**Model answer.** The baseline-only model estimates a sex difference of `r round(s_once[1], 2)` mmHg with SE `r round(s_once[2], 2)`; the all-visits model gives `r round(s_all[1], 2)` mmHg with SE `r round(s_all[2], 2)`. (The estimates differ partly because the follow-up visits include the effects of the programmes and the effects of dropout.) The all-visits SE is much smaller because `lm()` treats the `r nrow(walk)` rows as independent observations. But sex is a between-person characteristic: there are still only `r nrow(walk_base)` people to compare, and repeated SBP measurements on the same person are strongly correlated. The all-visits standard error is therefore too small, and its confidence interval too narrow. Module 1 shows by simulation that this direction of error is general for between-person comparisons.
+
+*Marking notes.* Full credit requires the direction (too small) and the reason (correlated measurements within person; information comes from the number of people).

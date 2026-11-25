@@ -1,0 +1,468 @@
+---
+title: "Module 1. Foundations of longitudinal data"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+kidney <- load_kidney()
+cor_walk <- visit_correlation(walk, id, month_sched, sbp)
+m_ri <- lmer(sbp ~ visit_f * arm + (1 | id), data = walk, control = lmer_ctrl)
+vc_ri <- as.data.frame(VarCorr(m_ri))
+icc1 <- icc_lmer(m_ri)
+# Simulation results come from scripts/01b_independence_simulation.R, which
+# uses the same code and seeds as the notes. Run it if its outputs are missing.
+sim_file <- here("outputs", "models", "m01_sim_replicates.rds")
+if (!file.exists(sim_file)) source(here("scripts", "01b_independence_simulation.R"))
+sim_summary <- read_csv(here("outputs", "tables", "m01_sim_summary.csv"),
+                        show_col_types = FALSE)
+sim_reps <- readRDS(sim_file)
+s <- sim_summary
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+pc <- function(x) formatC(100 * x, format = "f", digits = 1)
+```
+
+## Longitudinal data follow the same people over time
+
+- Show **change**, **differences in change** and **individual trajectories**
+- Measurements on one person resemble each other: not independent
+- Timing and number of measurements vary between people
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.notes}
+Open with the two sides of longitudinal data: their power (change within people) and their difficulty (dependence, irregular timing, missing data). This module is conceptual: vocabulary, pictures and one simulation. Mixed models appear informally; Module 4 develops them. Ask the group for examples of longitudinal data from their own work, and keep a couple to return to when classifying designs.
+:::
+
+## Learning outcomes
+
+1. **1.1** Classify a design as longitudinal, repeated-measures, clustered or cross-sectional.
+2. **1.2** Identify subject, observation, visit and measurement occasion.
+3. **1.3** Distinguish and estimate within- and between-subject variation in WALK.
+4. **1.4** Describe balanced/unbalanced designs, irregular visits and unequal follow-up.
+5. **1.5** State research questions about change with their estimands.
+6. **1.6** Show by simulation how ignoring correlation changes SEs, and in which direction.
+
+::: {.notes}
+Outcomes are abbreviated; the notes have the full wording. Highlight 1.6: the direction of the error is the part most people get wrong. Many believe ignoring correlation always makes SEs too small.
+:::
+
+# Kinds of design
+
+## Four data structures
+
+```{r}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 3.4
+schematic <- bind_rows(
+  expand.grid(unit = 1:6, time = 1) |> mutate(design = "Cross-sectional"),
+  expand.grid(unit = 1:6, time = 1:5) |> mutate(design = "Longitudinal (balanced)"),
+  data.frame(unit = rep(1:6, c(5, 3, 5, 2, 4, 5)),
+             time = c(1:5, 1:3, 1:5, 1:2, c(1, 2, 4, 5), 1:5)) |>
+    mutate(design = "Longitudinal (unbalanced)"),
+  expand.grid(unit = 1:6, time = 1:3) |> mutate(design = "Clustered (no time order)")) |>
+  mutate(design = factor(design, levels = c("Cross-sectional", "Longitudinal (balanced)",
+                                            "Longitudinal (unbalanced)", "Clustered (no time order)")))
+ggplot(schematic, aes(time, factor(unit))) +
+  geom_tile(fill = "#0072B2", colour = "white", linewidth = 1, alpha = 0.8) +
+  facet_wrap(~ design, nrow = 1) + scale_x_continuous(breaks = 1:5) +
+  labs(x = "Measurement occasion (or member of cluster)", y = "Unit") +
+  theme(panel.grid = element_blank())
+```
+
+::: {.notes}
+Walk across the panels. Cross-sectional: one measurement per unit. Longitudinal: the same units over ordered occasions; balanced if everyone has the same occasions. Clustered: members within groups with no time order (patients within clinics). Repeated measures is the umbrella term for any design with more than one measurement per unit, including those with no time axis, such as left and right arm readings at one visit.
+:::
+
+## A longitudinal study is clustered data with a time order
+
+- **Cross-sectional:** each unit once (WALK baseline file)
+- **Repeated measures:** more than one measurement per unit (time not necessarily of interest)
+- **Longitudinal:** repeated over time, and change is the question (WALK, KIDNEY)
+- **Clustered:** units within groups (WALK participants within 8 clinics)
+- The independent unit in WALK is the **participant**, not the measurement
+
+::: {.notes}
+Stress that the same models serve clustered and longitudinal data; the time axis adds questions about change and correlation that depends on the time gap. Activity: give the group three short design descriptions (for example, blood pressure in both arms at one visit; pupils in 20 schools; HbA1c every 3 months for 2 years) and ask them to classify and justify. Answers: repeated measures without a time axis; clustered; longitudinal.
+:::
+
+## Try it
+
+Workbook **Exercise 1**: classify six study designs and justify each classification.
+
+::: {.notes}
+Encourage participants to name the independent unit for each design. That is the most useful single question.
+:::
+
+# Anatomy of a longitudinal dataset
+
+## Subject, observation, visit, measurement occasion
+
+```{r}
+walk |> filter(id %in% c("W001", "W002")) |>
+  select(id, arm, visit, month_sched, month, sbp)
+```
+
+::: {.notes}
+Point to each element. Subject (participant): W001, indexed i. Observation: one row, y_ij. Visit: the protocol's scheduled contact, month_sched. Measurement occasion: when it actually happened, month (t_ij). W002 was seen twice and then dropped out, so n_i = 2. Long format: one row per observation; arm is repeated on every row because it does not change.
+:::
+
+## Actual times scatter around the schedule, more so later
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+ggplot(walk, aes(month, visit_f)) +
+  geom_jitter(height = 0.15, width = 0, alpha = 0.25, size = 0.8) +
+  geom_point(data = distinct(walk, month_sched, visit_f), aes(month_sched, visit_f),
+             shape = 124, size = 8, colour = "#D55E00") +
+  scale_x_continuous(breaks = c(0, 1, 3, 6, 9, 12)) +
+  labs(x = "Actual time (months since randomisation)", y = "Scheduled visit (month)")
+```
+
+::: {.notes}
+The month-12 visit happened anywhere between about month 10.8 and 13.3. The scheduled visit defines the estimand ("mean at month 12"); actual time is the clock where the model needs continuous time, for example the random slope in the primary model. Ask: when would ignoring the difference matter? When the outcome changes fast relative to the timing deviations.
+:::
+
+## WALK is balanced by design, unbalanced in practice
+
+```{r}
+walk |> count(id, name = "n_obs") |> count(n_obs, name = "participants")
+```
+
+- Missed visits (intermittent), dropout (depends on SBP), irregular timing
+- Complete-case analysis would discard about a third of participants
+
+::: {.notes}
+238 of 360 participants have all six measurements. Dropout depends on the last observed SBP, so the completers are a selected group. Classical methods (repeated-measures ANOVA) need complete, balanced data; mixed models use all the observed data and are valid under missing at random (Module 10).
+:::
+
+## KIDNEY: irregular visits and unequal follow-up
+
+```{r}
+#| echo: false
+#| fig-width: 10
+#| fig-height: 4
+set.seed(4)
+ids_w <- sample(unique(walk$id), 15); ids_k <- sample(unique(kidney$id), 15)
+timing_df <- bind_rows(
+  walk |> filter(id %in% ids_w) |> transmute(study = "WALK (scheduled visits)", id, t = month / 12),
+  kidney |> filter(id %in% ids_k) |> transmute(study = "KIDNEY (routine clinic visits)", id, t = years)) |>
+  mutate(study = factor(study, levels = c("WALK (scheduled visits)", "KIDNEY (routine clinic visits)")))
+ggplot(timing_df, aes(t, reorder(id, t, max))) +
+  geom_line(aes(group = id), colour = "#D9D9D9") + geom_point(size = 1.4) +
+  facet_wrap(~ study, scales = "free") +
+  labs(x = "Years since entry", y = "Participant") +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+```
+
+::: {.notes}
+KIDNEY has no visit schedule: participants have 1 to 24 visits and follow-up from almost zero to 5 years. There is no "visit 3". Time must be modelled as continuous, with actual times.
+:::
+
+## In KIDNEY, visit timing depends on the outcome
+
+```{r}
+kidney |> arrange(id, years) |> group_by(id) |>
+  mutate(gap_months = 12 * (years - lag(years)), prev_egfr = lag(egfr)) |>
+  ungroup() |> filter(!is.na(gap_months)) |>
+  group_by(previous_egfr_below_30 = prev_egfr < 30) |>
+  summarise(n_gaps = n(), mean_gap_months = mean(gap_months))
+```
+
+::: {.notes}
+After a low eGFR, the next visit comes about twice as soon. Sicker patients therefore contribute more measurements, so a simple average over all measurements over-represents low eGFR. This is informative visit timing (Module 10). Ask: does WALK have this problem? Not by design: its visits are scheduled, though dropout depends on SBP.
+:::
+
+## Try it
+
+Workbook **Exercise 2**: identify the subject, observation, visit and measurement occasion in WALK, CLEAR, DIARY and KIDNEY, and summarise balance and follow-up.
+
+::: {.notes}
+Participants should use check_long() and count(). In DIARY the "occasion" is a 28-day period; in CLEAR it is a scheduled week with no separate actual time.
+:::
+
+# Between and within
+
+## Most of the variation in SBP is between people
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+set.seed(21)
+ids_b <- sample(unique(walk$id[walk$visit == 6]), 25)
+spread_df <- walk |> filter(id %in% ids_b) |> group_by(id) |>
+  mutate(person_mean = mean(sbp)) |> ungroup()
+ggplot(spread_df, aes(reorder(id, person_mean), sbp)) +
+  geom_hline(yintercept = mean(walk$sbp), linetype = "dashed") +
+  geom_point(alpha = 0.5, size = 1.4) +
+  geom_point(aes(y = person_mean), shape = 95, size = 8, colour = "#D55E00") +
+  labs(x = "Participant (ordered by own mean SBP)", y = "SBP (mmHg)") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
+
+::: {.notes}
+Each column is one participant's six measurements; the orange bar is their own mean. The bars span about 45 mmHg; the points around each bar spread much less. People with high blood pressure keep it. Knowing one measurement tells you a lot about the others: that is within-subject dependence.
+:::
+
+## Measurements are strongly correlated, more so when close in time
+
+```{r}
+#| echo: false
+#| fig-height: 4.5
+#| out-width: "62%"
+cor_long <- as.data.frame(as.table(cor_walk)) |> setNames(c("row", "col", "r")) |>
+  mutate(row = factor(row, levels = rev(colnames(cor_walk))))
+ggplot(cor_long, aes(col, row, fill = r)) + geom_tile(colour = "white") +
+  geom_text(aes(label = sprintf("%.2f", r)), size = 4) +
+  scale_fill_gradient(low = "#F2F2F2", high = "#0072B2", limits = c(0.5, 1), name = "r") +
+  labs(x = "Scheduled month", y = "Scheduled month") + theme(panel.grid = element_blank())
+```
+
+::: {.notes}
+Produced by visit_correlation(walk, id, month_sched, sbp). All correlations are high. Adjacent visits are most correlated (0.87 baseline to month 1); visits a year apart least (0.69). The correlation does not fade to zero: a persistent personal level plus a component that decays with the time gap. Module 5 models this pattern.
+:::
+
+## A random intercept splits the variance in two
+
+$$
+y_{ij} = \mathbf{x}_{ij}^\top\boldsymbol\beta + b_{0i} + \varepsilon_{ij},\quad b_{0i}\sim N(0,\tau_0^2),\ \varepsilon_{ij}\sim N(0,\sigma^2)
+$$
+
+- $b_{0i}$: participant $i$'s own level, shared by all their measurements
+- $\tau_0^2$ between-subject, $\sigma^2$ within-subject variance
+- ICC $\rho_I = \tau_0^2/(\tau_0^2+\sigma^2)$ = correlation of two measurements on one person
+
+::: {.notes}
+Introduce the mixed model informally: fixed effects for the mean (here visit by arm), plus a random intercept for each person. Because two measurements on one person share b_0i, their correlation is the ICC. Note the assumption: the same correlation for every pair of visits (compound symmetry).
+:::
+
+## WALK: between-person SD about twice the within-person SD
+
+```{r}
+m_ri <- lmer(sbp ~ visit_f * arm + (1 | id), data = walk, control = lmer_ctrl)
+VarCorr(m_ri)
+icc_lmer(m_ri)
+```
+
+::: {.notes}
+Between-participant SD about 12 mmHg; within-participant SD about 6 mmHg; ICC about 0.79. So 79% of the variance, after accounting for visit and arm means, lies between people. Because the data are simulated, the true values are known: intercept SD 11 plus clinic SD 3 (about 11.4 combined) and a within-person SD of about 6.4. Without the visit-by-arm means, the residual SD is larger because changes over time are then counted as within-person noise.
+:::
+
+## The constant ICC is an approximation
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+#| out-width: "70%"
+lag_df <- as.data.frame(as.table(cor_walk)) |> setNames(c("t1", "t2", "r")) |>
+  mutate(t1 = as.numeric(as.character(t1)), t2 = as.numeric(as.character(t2))) |>
+  filter(t1 < t2) |> mutate(gap = t2 - t1)
+ggplot(lag_df, aes(gap, r)) +
+  geom_hline(yintercept = icc1, linetype = "dashed", colour = "#0072B2") +
+  geom_point(size = 2) + scale_y_continuous(limits = c(0.6, 0.9)) +
+  labs(x = "Months between visits", y = "Observed correlation")
+```
+
+::: {.notes}
+Dashed line: the single correlation implied by the random-intercept model. Close visits are more correlated than that, distant ones less. The model captures the main feature and misses the decay. Random slopes and serial correlation (Modules 4 and 5) fix this. This is how we check a covariance model: compare implied with observed.
+:::
+
+## Try it
+
+Workbook **Exercise 3**: compute the correlation matrix within each arm, fit the random-intercept model and report the variance components.
+
+::: {.notes}
+Ask participants to interpret both SDs in mmHg and to explain why the ICC changes when the visit-by-arm fixed effects are removed.
+:::
+
+# Research questions and estimands
+
+## Three kinds of question, three estimands
+
+| Question | WALK / KIDNEY example | Estimand |
+|---|---|---|
+| Change | Mean change in EP | $\mu_{\text{EP}}(12) - \mu_{\text{EP}}(0)$ |
+| Group difference in change | EP vs UC | $[\mu_{\text{EP}}(12) - \mu_{\text{EP}}(0)] - [\mu_{\text{UC}}(12) - \mu_{\text{UC}}(0)]$ |
+| Individual trajectories | Variation in eGFR decline | $\tau_1^2$; a person's slope $\beta_1 + b_{1i}$ |
+
+::: {.notes}
+An estimand is the precise target: what is compared, in whom, at which times, on what scale. Write it before choosing a model. Change within an arm is not a treatment effect: usual care also changes (true value -2.1 mmHg). The difference in mean change is the WALK primary estimand; true values -4.6 (SP) and -8.1 (EP), known because the data are simulated.
+:::
+
+## Observed means are a first look, not the estimand
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+plot_observed_means(walk, month_sched, sbp, arm) +
+  scale_x_continuous(breaks = c(0, 1, 3, 6, 9, 12)) +
+  labs(x = "Scheduled month", y = "Observed mean SBP (mmHg)")
+```
+
+::: {.notes}
+SBP falls most in EP, less in SP, least in usual care. But these are means of whoever attended, and dropout depends on SBP, so late means describe a selected group (Module 2). The estimand refers to everyone randomised.
+:::
+
+## Preview: the primary model targets the estimand directly
+
+```{r}
+m_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+                  control = lmer_ctrl)
+fixef_table(m_primary) |>
+  filter(term %in% c("visit_f12:armSP", "visit_f12:armEP")) |>
+  select(term, estimate, lower, upper)
+```
+
+::: {.notes}
+With visit as a factor interacted with arm, the visit_f12:armEP coefficient is exactly the difference in mean change from baseline to month 12, EP minus UC. Estimates are about -5.4 (SP) and -9.0 (EP); both true values are inside their intervals. Do not explain the model yet; the point is estimand first, model second.
+:::
+
+## Try it
+
+Workbook **Exercise 4**: write the estimand for four research questions, including one about individual trajectories in KIDNEY.
+
+::: {.notes}
+Check that estimands name the population, the times and the contrast. A common error is to write a model coefficient instead of a population quantity.
+:::
+
+# Ignoring the dependence
+
+## Two kinds of comparison, two directions of error
+
+- **Between-subject** (arm, sex): information comes from people
+  - OLS counts each row as new evidence: **SE too small**
+  - Design effect $\approx 1 + (m-1)\rho_I$
+- **Within-subject** (change over time): each person is their own control
+  - OLS treats between-person variance as noise: **SE too large**
+  - Variance inflated by $\approx 1/(1-\rho_I)$
+
+::: {.notes}
+This is the key intuition of the module. Five correlated measurements on one person are not five independent people. But for change within a person, the large differences in level cancel, and only within-person noise matters; OLS does not know that. Ask the room to predict the direction for a difference in slopes between arms before showing the simulation.
+:::
+
+## The simulation: 1,000 trials, two analyses each
+
+```{r}
+#| eval: false
+d <- sim_two_arm(n_per_arm = 50, times = c(0, 3, 6, 9, 12), b0 = 150,
+                 b_time = -0.5, delta = 0, sd_int = 11, sd_slope = 0,
+                 cor_int_slope = 0, sd_resid = 6)
+lm(y ~ time + trt, data = d)                          # naive OLS
+lmer(y ~ time + trt + (1 | id), data = d,
+     control = lmer_ctrl)                             # mixed model
+```
+
+- Truth: no arm difference; slope −0.5; ICC = `r round(121/157, 2)`
+- Benchmark: the SD of the estimates across replicates
+
+::: {.notes}
+Scenario A, random intercept only. Each simulated trial is analysed twice. The standard deviation of the 1,000 estimates is the true sampling SD; a good method reports SEs equal to it on average. Scenario B (in the notes) adds random slopes and targets the arm-by-time interaction with 500 replicates. Code and seeds are in scripts/01b_independence_simulation.R.
+:::
+
+## OLS SEs: too small between, too large within
+
+```{r}
+#| echo: false
+s |>
+  transmute(Estimand = estimand, `True SD` = f3(empirical_sd),
+            `OLS SE` = f3(mean_se_ols), `Mixed SE` = f3(mean_se_lmm),
+            `OLS coverage %` = pc(coverage_ols), `Mixed coverage %` = pc(coverage_lmm)) |>
+  knitr::kable(align = "lrrrrr")
+```
+
+Monte Carlo SE of the true SD: `r f3(s$mcse_sd[1])`, `r f3(s$mcse_sd[2])`, `r f3(s$mcse_sd[3])`; of coverage at most `r pc(max(s$mcse_coverage_ols, s$mcse_coverage_lmm))` points
+
+::: {.notes}
+Arm difference: OLS SE about half the truth, 95% intervals cover in only about two thirds of trials, so false positives are far more common than 5%. Time slope: OLS SE about twice the truth; coverage near 100% sounds safe but means real change is much harder to detect. Interaction in scenario B: OLS too large here too, because intercept variance dominates slope variance. Mixed models: SEs match, coverage near 95%. Always report Monte Carlo error with simulation results.
+:::
+
+## The picture behind the table
+
+```{r}
+#| echo: false
+#| fig-width: 10
+#| fig-height: 4
+res_a <- sim_reps$scenario_a
+plot_df <- rbind(
+  data.frame(estimand = "Arm difference (between)", est = res_a$arm_est, truth = 0,
+             se_ols = mean(res_a$arm_se_ols), se_lmm = mean(res_a$arm_se_lmm)),
+  data.frame(estimand = "Time slope (within)", est = res_a$time_est, truth = -0.5,
+             se_ols = mean(res_a$time_se_ols), se_lmm = mean(res_a$time_se_lmm)))
+curves <- plot_df |> group_by(estimand) |>
+  summarise(truth = first(truth), se_ols = first(se_ols), se_lmm = first(se_lmm)) |>
+  rowwise() |>
+  reframe(estimand = estimand,
+          x = seq(truth - 4.5 * max(se_ols, se_lmm), truth + 4.5 * max(se_ols, se_lmm), length.out = 200),
+          `Naive OLS SE` = dnorm(x, truth, se_ols), `Mixed-model SE` = dnorm(x, truth, se_lmm)) |>
+  pivot_longer(c(`Naive OLS SE`, `Mixed-model SE`), names_to = "curve", values_to = "density")
+ggplot(plot_df, aes(est)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40, fill = "#D9D9D9", colour = "white") +
+  geom_line(data = curves, aes(x, density, colour = curve), linewidth = 0.9) +
+  facet_wrap(~ estimand, scales = "free") +
+  scale_colour_manual(values = c(`Naive OLS SE` = "#D55E00", `Mixed-model SE` = "#0072B2"), name = NULL) +
+  labs(x = "Estimate across 1,000 simulated trials", y = "Density")
+```
+
+::: {.notes}
+Grey histograms: the actual spread of estimates. Blue curves (mixed-model SE) fit them. Orange curves (OLS SE) are too narrow on the left (overconfident about the arm difference) and too wide on the right (underconfident about change).
+:::
+
+## The same pattern in WALK
+
+```{r}
+#| echo: false
+m_ols <- lm(sbp ~ month * arm, data = walk)
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+data.frame(term = names(coef(m_ols)), se_ols = coef(summary(m_ols))[, 2],
+           se_lmm = coef(summary(m_lin))[, 2], row.names = NULL) |>
+  mutate(ratio = se_ols / se_lmm) |> knitr::kable(digits = 3)
+```
+
+::: {.notes}
+Linear-time model versus OLS on WALK. Arm terms (between people at month 0): OLS SE about two thirds of the mixed-model SE. Month and arm-by-month terms (within-person change): OLS SE about 1.6 times larger. The arm-by-month interaction is the treatment comparison, so OLS would understate the evidence for a programme effect.
+:::
+
+## Try it
+
+Workbook **Exercise 5**: run a smaller version of the simulation and compute Monte Carlo errors.
+
+::: {.notes}
+Use 200 replicates to keep it fast. Independent Exercise 9 asks what happens to the interaction SE when individual slopes vary much more.
+:::
+
+## Summary
+
+- Longitudinal = clustered data with a time order; the independent unit is the subject
+- Keep subject, observation, visit and measurement occasion distinct; scheduled vs actual time
+- WALK: most variation is between people (ICC about `r round(icc1, 2)`); correlation decays slowly with the gap
+- Estimands for change, difference in change, individual trajectories
+- Ignoring correlation: between-subject SEs too small, within-subject SEs (usually) too large
+
+::: {.notes}
+Close by connecting to Module 2 (preparing and exploring data) and Module 4 (mixed models). Point to the knowledge check.
+:::
+
+## Further reading
+
+- @fitzmaurice2011, chapters 1–2
+- @diggle2002, chapter 1
+- @singer2003, chapters 1–2
+- @morris2019: simulation studies and Monte Carlo error
+
+::: {.notes}
+Fitzmaurice, Laird and Ware is the main companion text for the core modules. Morris and colleagues is the reference for reporting simulations, used again in Module 12.
+:::
+
+## References {.smaller}
+
+::: {#refs}
+:::

@@ -1,0 +1,136 @@
+---
+title: "Module 1. Foundations of longitudinal data"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+These exercises build the vocabulary and intuition of Module 1: classifying designs, taking a dataset apart, separating between- from within-person variation, writing estimands and seeing by simulation what goes wrong when repeated measurements are treated as independent. Guided exercises have partly completed code with blanks (`___`) and questions to answer in words. Independent exercises give a task with no scaffolding. Simulations are kept small so that they run in a minute or two; say how many replicates you used whenever you report a simulation result.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Classifying designs (LO 1.1)
+
+Classify each design as cross-sectional, repeated measures without a time axis, longitudinal, clustered, or a combination. For each, name the independent unit and justify your answer in one or two sentences.
+
+a. A national survey measures blood pressure once in 5,000 randomly selected adults.
+b. In one session, each of 40 volunteers has blood pressure measured in three postures (lying, sitting, standing), in random order.
+c. A trial randomises 30 general practices to a new or usual care pathway and measures HbA1c once in 20 patients per practice.
+d. 300 adults with chronic kidney disease have eGFR measured at routine clinic visits for up to 5 years (KIDNEY).
+e. 200 participants in the CLEAR trial rate their itch at weeks 0, 2, 4, 6, 8 and 12.
+f. The WALK trial: 360 participants at 8 clinics, SBP at months 0, 1, 3, 6, 9 and 12.
+
+### Exercise 2. Anatomy of a dataset (LO 1.2, 1.4)
+
+a. For WALK, name the variable that identifies the subject, the variable that identifies the visit, and the variable that holds the measurement occasion. What is one observation?
+b. Run `check_long()` on WALK and count observations per participant.
+
+```{r}
+#| eval: false
+check_long(walk, ___, month_sched, "sbp")
+walk |> count(___, name = "n_obs") |> count(n_obs)
+```
+
+c. Summarise how far actual visit times deviate from the schedule at each visit. At which visit are deviations largest?
+
+```{r}
+#| eval: false
+walk |>
+  mutate(deviation = ___ - ___) |>
+  group_by(month_sched) |>
+  summarise(sd_dev = sd(deviation), max_abs_dev = max(abs(deviation)))
+```
+
+d. Load CLEAR, DIARY and KIDNEY (`load_clear()`, `load_diary()`, `load_kidney()`). For each, identify the subject, the time variable, and whether there is a distinction between scheduled and actual time. In DIARY, what is a "measurement occasion"?
+e. Which of the four datasets is closest to balanced? Which has the most unequal follow-up?
+
+### Exercise 3. Between- and within-person variation (LO 1.3)
+
+a. Compute the observed correlation matrix of SBP across scheduled visits, separately in each arm.
+
+```{r}
+#| eval: false
+for (a in levels(walk$arm)) {
+  print(a)
+  print(round(visit_correlation(filter(walk, arm == ___), id, month_sched, sbp), 2))
+}
+```
+
+Describe the pattern in words. Is it similar across arms?
+
+b. Fit the random-intercept model with visit-by-arm fixed effects and extract the variance components and the ICC.
+
+```{r}
+#| eval: false
+m_ri <- lmer(sbp ~ visit_f * arm + (1 | ___), data = walk, control = lmer_ctrl)
+VarCorr(m_ri)
+icc_lmer(___)
+```
+
+c. Interpret the between-participant SD, the residual SD and the ICC in words and in mmHg.
+d. Refit with no fixed effects except an intercept (`sbp ~ 1 + (1 | id)`). Which variance component changes most, and why?
+e. The ICC of the random-intercept model is a single number. Compare it with the observed correlations from part a. What does the model get right and what does it miss?
+
+### Exercise 4. Research questions and estimands (LO 1.5)
+
+For each question, say whether it is about change, a group difference in change or individual trajectories, and write the estimand using the notation of the notes ($\mu_{\text{arm}}(t)$ for the mean SBP in an arm at month $t$, $b_{1i}$ for an individual slope deviation).
+
+a. By how much does mean SBP fall between baseline and month 6 in the standard programme?
+b. Is the reduction in SBP from baseline to month 12 larger in the enhanced programme than in the standard programme?
+c. How much do WALK participants differ in their rate of change in SBP over the year?
+d. In KIDNEY, do people with diabetes lose kidney function faster than people without diabetes?
+e. A colleague writes: "SBP fell significantly in EP (p < 0.001) but not in usual care (p = 0.2), so the programme works." What estimand should they have used, and why is their argument flawed?
+
+### Exercise 5. A small simulation (LO 1.6)
+
+Run a reduced version of the scenario A simulation from the notes with 200 replicates.
+
+```{r}
+#| eval: false
+sim_once <- function() {
+  d <- sim_two_arm(n_per_arm = 50, times = c(0, 3, 6, 9, 12), b0 = 150,
+                   b_time = -0.5, delta = 0, sd_int = 11, sd_slope = 0,
+                   cor_int_slope = 0, sd_resid = 6)
+  ols <- coef(summary(lm(y ~ time + trt, data = d)))
+  lmm <- coef(summary(lmer(y ~ time + trt + (1 | id), data = d, control = lmer_ctrl)))
+  c(arm_est = ols["trt", 1], arm_se_ols = ols["trt", 2], arm_se_lmm = lmm["trt", 2],
+    time_est = ols["time", 1], time_se_ols = ols["time", 2], time_se_lmm = lmm["time", 2])
+}
+set.seed(___)
+res <- as.data.frame(t(replicate(___, sim_once())))
+c(sd_arm = sd(res$arm_est), ols = mean(res$arm_se_ols), lmm = mean(res$arm_se_lmm))
+c(sd_time = sd(res$time_est), ols = mean(res$time_se_ols), lmm = mean(res$time_se_lmm))
+```
+
+a. Compare the average OLS and mixed-model SEs with the empirical SD of the estimates, for the arm difference and for the time slope. In which direction is each OLS SE wrong?
+b. Compute the Monte Carlo SE of each empirical SD ($\text{SD}/\sqrt{2(R-1)}$). Are your conclusions secure given this error?
+c. Compute the coverage of nominal 95% OLS intervals for the arm difference (true value 0). What does this imply about the false-positive rate of a naive test?
+d. Explain in plain words why the two OLS errors go in opposite directions.
+
+## Independent exercises
+
+### Exercise 6. Balance and follow-up in CLEAR and DIARY (LO 1.2, 1.4)
+
+Describe the structure of CLEAR and DIARY: number of subjects and observations, distribution of observations per subject, and whether the occasions are fixed. In DIARY, the exposure (`days` with a completed diary) varies between periods: explain why this is a form of imbalance even when every period is present, and what a model would need to do about it.
+
+### Exercise 7. Variance components in KIDNEY (LO 1.3)
+
+Fit a random-intercept model for eGFR in KIDNEY with fixed effects for `years` and `diabetes`. Report the between- and within-person SDs and the ICC, and interpret them. Give one reason why the random-intercept model is probably too simple for these data, and one reason why an ICC from these data should be interpreted with care given how visits were scheduled.
+
+### Exercise 8. Naive and mixed-model SEs in WALK (LO 1.6)
+
+Fit `lm(sbp ~ month + sex)` and `lmer(sbp ~ month + sex + (1 | id))` to WALK. Compare the standard errors for `month` and `sexFemale`. Explain the direction of each difference using the ideas of between- and within-subject comparisons.
+
+### Exercise 9. When individual slopes vary a lot (LO 1.6)
+
+Modify `sim_once_rs()` from the notes so that you can vary `sd_slope`. With 200 replicates each, run scenario B with `sd_slope` equal to 0.4, 1.5 and 3. For each, compare the OLS and mixed-model SEs of the arm-by-time interaction with the empirical SD. Describe how the direction of the OLS error depends on how much individual slopes vary, and explain why.

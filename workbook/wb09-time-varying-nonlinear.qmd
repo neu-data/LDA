@@ -1,0 +1,217 @@
+---
+title: "Module 9. Time-varying predictors and nonlinear change"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+kidney <- load_kidney()
+```
+
+These exercises practise the tools of Module 9 on the WALK trial and the KIDNEY cohort: person-mean centring of a time-varying covariate, the consequences of adjusting a treatment effect for a mediator, choosing the time scale, and describing curved trajectories with polynomials, piecewise lines, splines and generalized additive mixed models. Work through the guided exercises in order; the independent exercises can be done in any order. Fill in the blanks (`___`) and answer the questions in words. Solutions are in the answer key.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Within-person and between-person associations of steps with SBP
+
+*Learning outcomes 9.1, 9.2.*
+
+(a) Which WALK variables are time-invariant and which are time-varying? Check by counting, for each variable, how many participants have more than one distinct value.
+
+```{r}
+#| eval: false
+walk |>
+  group_by(id) |>
+  summarise(across(c(arm, age, sex, bmi, steps, sbp, month), n_distinct)) |>
+  summarise(across(-id, ~ mean(. > ___)))
+```
+
+(b) Create the person mean of steps, the within-person deviation and the centred person mean.
+
+```{r}
+#| eval: false
+walk <- walk |>
+  group_by(___) |>
+  mutate(steps_pm = mean(___)) |>
+  ungroup() |>
+  mutate(steps_wc = steps - ___,
+         steps_gm = steps_pm - mean(steps_pm[!duplicated(id)]),
+         age10 = (age - 60) / 10, bmi_c = bmi - 29)
+```
+
+(c) Fit the naive model (a single `steps` coefficient), the person-mean centred model, and the centred model adjusted for age, sex and BMI. All use the primary mean structure and random part.
+
+```{r}
+#| eval: false
+m_naive <- lmer(sbp ~ ___ + visit_f * arm + (1 + month | id),
+                data = walk, control = lmer_ctrl)
+m_wb    <- lmer(sbp ~ ___ + ___ + visit_f * arm + (1 + month | id),
+                data = walk, control = lmer_ctrl)
+m_adj   <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + ___ + ___ + ___ +
+                  (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+(d) Extract the steps coefficients with `fixef_table()`. Questions:
+
+1. Where does the naive coefficient lie relative to the within and between estimates? Why?
+2. Which coefficient changes when age, sex and BMI are added, and why does the other not?
+3. Write one sentence interpreting the within-person coefficient and one for the between-person coefficient.
+
+(e) Refit the adjusted model with `steps` instead of `steps_wc`. What is the coefficient of `steps_gm` now called, and what is its value? Check that it equals the between minus the within estimate.
+
+### Exercise 2. What happens to the treatment effect when steps is in the model?
+
+*Learning outcomes 9.1, 9.6.*
+
+(a) Fit the primary model and the same model with `steps_wc` added. Compute the difference in mean change from baseline to month 12 versus usual care for each.
+
+```{r}
+#| eval: false
+m_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+                  control = lmer_ctrl)
+m_steps   <- lmer(sbp ~ ___ + visit_f * arm + (1 + month | id), data = walk,
+                  control = lmer_ctrl)
+diff_change <- function(m) {
+  e  <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "___")))
+  ch <- contrast(e, list(change = c(-1, 1)), by = "arm")
+  summary(contrast(ch, "trt.vs.ctrl", by = NULL), infer = TRUE, adjust = "none")
+}
+diff_change(m_primary); diff_change(m_steps)
+```
+
+(b) Questions:
+
+1. In which direction do the estimates move when steps is added? By how much?
+2. Which estimate answers the question the trial was designed to answer? What does the other estimate?
+3. Give one reason why the steps-adjusted estimate could be biased even though arm was randomised.
+
+### Exercise 3. Choosing the time scale
+
+*Learning outcome 9.3.*
+
+(a) Summarise the deviation of actual from scheduled time at each scheduled visit.
+
+```{r}
+#| eval: false
+walk |>
+  mutate(dev = ___ - ___) |>
+  group_by(month_sched) |>
+  summarise(mean_dev = mean(dev), sd_dev = sd(dev))
+```
+
+(b) Fit the linear-time model three times: with actual `month`, with `month_sched` and with `visit - 1` (in both the fixed and random parts). Compare the EP-by-time interaction.
+
+```{r}
+#| eval: false
+m_actual <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_sched  <- lmer(sbp ~ ___ * arm + (1 + ___ | id), data = walk, control = lmer_ctrl)
+m_visit  <- lmer(sbp ~ I(visit - 1) * arm + (1 + I(visit - 1) | id), data = walk,
+                 control = lmer_ctrl)
+```
+
+(c) In KIDNEY, number each participant's visits (0, 1, 2, ...) and compare the slope of eGFR per year with the slope per visit.
+
+```{r}
+#| eval: false
+kidney <- kidney |>
+  group_by(id) |> arrange(years, .by_group = TRUE) |>
+  mutate(visit_no = ___) |> ungroup()
+```
+
+Questions:
+
+1. Why do actual and scheduled time give almost the same answer in WALK? Describe a situation in which they would not.
+2. Why can the per-visit slope not be converted into a rate per month (WALK) or per year (KIDNEY)?
+
+### Exercise 4. Curved trajectories
+
+*Learning outcome 9.4.*
+
+(a) Create the piecewise term $(t - 3)_+$ and fit the linear, quadratic, piecewise and natural spline models by ML.
+
+```{r}
+#| eval: false
+walk <- walk |> mutate(month_p3 = pmax(month - ___, 0))
+fit_ml <- function(f) lmer(f, data = walk, control = lmer_ctrl, REML = ___)
+m_lin  <- fit_ml(sbp ~ month * arm + (1 + month | id))
+m_quad <- fit_ml(sbp ~ (month + I(month^2)) * arm + (1 + month | id))
+m_pw   <- fit_ml(sbp ~ (month + ___) * arm + (1 + month | id))
+m_ns   <- fit_ml(sbp ~ splines::ns(month, df = ___) * arm + (1 + month | id))
+AIC(m_lin, m_quad, m_pw, m_ns); BIC(m_lin, m_quad, m_pw, m_ns)
+```
+
+(b) From the piecewise model, compute the slope of SBP in the standard programme before and after month 3.
+
+(c) Plot the fitted mean trajectories of the four models (use `predict(..., re.form = NA)` on a grid of months).
+
+Questions:
+
+1. Which model does AIC prefer, and which does BIC prefer?
+2. Describe the shape artefact of the quadratic model.
+3. Why should the knot be chosen before looking at the data?
+
+### Exercise 5. A generalized additive mixed model
+
+*Learning outcome 9.5.*
+
+(a) Fit a GAMM with a separate smooth of `month` for each arm and a correlated random intercept and slope.
+
+```{r}
+#| eval: false
+g_walk <- gamm(sbp ~ arm + s(month, by = ___, k = 5),
+               random = list(id = ~ 1 + ___), data = walk, method = "REML")
+summary(g_walk$gam)
+```
+
+(b) Compute the difference in mean change at month 12 for EP versus usual care from the linear predictor matrix.
+
+```{r}
+#| eval: false
+ndg <- expand.grid(month = c(0, 12),
+                   arm = factor(c("UC", "SP", "EP"), levels = c("UC", "SP", "EP")))
+Xp  <- predict(g_walk$gam, newdata = ndg, type = "___")
+L   <- (Xp[6, ] - Xp[5, ]) - (Xp[2, ] - Xp[1, ])
+est <- sum(L * coef(g_walk$gam))
+se  <- sqrt(drop(t(L) %*% vcov(g_walk$gam) %*% L))
+c(est = est, lower = est - 1.96 * se, upper = est + 1.96 * se)
+```
+
+Questions:
+
+1. What do the edf values tell you about each arm's trajectory?
+2. Why is the `armEP` coefficient not the baseline difference between EP and usual care?
+3. Run `gam.check(g_walk$gam)`. Is `k = 5` large enough?
+
+## Independent exercises
+
+### Exercise 6. Nonlinear eGFR decline in KIDNEY
+
+*Learning outcomes 9.3, 9.4, 9.5.*
+
+Using actual time (`years`) and adjusting for age, compare four descriptions of the mean eGFR trajectory, each allowing a different trajectory for participants with and without diabetes: linear, quadratic, piecewise linear with a knot at 2 years, and a GAMM. Compare the parametric models by AIC, plot the fitted mean trajectories at age 60, and report the estimated mean loss of eGFR over 5 years for each diabetes group from your preferred model.
+
+### Exercise 7. Lagged steps and reverse causation
+
+*Learning outcomes 9.2, 9.6.*
+
+Create the within-person steps deviation at the previous visit (`lag(steps_wc)` within participant) and fit the adjusted within/between model with both the current and the lagged deviation. Interpret both coefficients. Then explain, with a concrete story about WALK, why a lagged covariate does not by itself solve the problem of reverse causation.
+
+### Exercise 8. Does the within-person association differ by arm?
+
+*Learning outcome 9.2.*
+
+Add an interaction between `steps_wc` and `arm` to the adjusted within/between model. Test the interaction with a likelihood-ratio test (fit both models with ML) and interpret the result. What does a random slope for `steps_wc` add, and what does the singular-fit message tell you?
+
+### Exercise 9. Reporting
+
+*Learning outcomes 9.2, 9.6.*
+
+Write a short results paragraph (about 120 words) for a paper reporting the within-person and between-person associations of daily steps with SBP in WALK. Use your estimates from Exercise 1, state the model, and phrase the conclusions so that they do not claim more than the analysis supports.

@@ -1,0 +1,192 @@
+---
+title: "Module 6. Interpretation, contrasts and prediction"
+subtitle: "Practical assessment"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Task brief
+
+You are the trial statistician for WALK. The statistical analysis plan (SAP) prespecifies the following.
+
+- **Model.** The covariate-adjusted primary model: a linear mixed model with scheduled visit (`visit_f`) by arm, adjusted for age, sex and BMI, centred as `age10 = (age - 60)/10` and `bmi_c = bmi - 29`, with a random intercept and random slope on actual time (`month`) for each participant, fitted by REML with `control = lmer_ctrl`.
+- **Primary estimands.** The difference in mean change in SBP from baseline to month 12 for SP versus UC and for EP versus UC. These two comparisons form the primary family, with Dunnett adjustment for multiplicity.
+- **Secondary estimands.** The EP versus SP difference in mean change to month 12, and the differences versus UC at month 6, reported with unadjusted 95% confidence intervals.
+
+Your report should allow a reader to understand the results without seeing your code.
+
+## Data
+
+`load_walk()` (the analysis dataset `data/walk_long.csv`, one row per attended visit). Create `age10` and `bmi_c` yourself. Do not exclude any participants.
+
+## Deliverables
+
+1. **Model and interpretation.** Fit the prespecified model. In two or three sentences, state what the intercept, `armEP` and `visit_f12:armEP` estimate in this model.
+2. **Estimated marginal means and contrasts.** Compute the EMMs for every arm and visit, the within-arm mean changes to month 12, and the primary and secondary contrasts, using explicit coefficient vectors. Show that your vectors are correct.
+3. **Multiplicity.** Report the primary comparisons with Dunnett-adjusted p-values and simultaneous confidence intervals. Explain in two or three sentences why the secondary comparisons are not adjusted.
+4. **Results table.** One table with, for each arm: number of participants at baseline and month 12, mean change to month 12 (95% CI), and difference versus usual care (95% CI) with adjusted p-value. Add the secondary EP − SP comparison as a footnote or extra row.
+5. **Figure.** One figure of model-estimated mean trajectories by arm with 95% confidence bands and observed means overlaid, following the presentation principles of Module 6. Give it a caption that states what the bands are.
+6. **Prediction.** (a) For a new 70-year-old woman with BMI 32 starting the enhanced programme, give her expected SBP at month 12 with a 95% confidence interval for the mean and a 95% prediction interval for a single measurement. (b) For participant W010, compare the population-average and subject-specific predictions at month 12, and explain the difference.
+7. **Results paragraph.** No more than 200 words, suitable for a journal article, using your numbers.
+
+Submit a rendered Quarto document (HTML) with code folded or shown.
+
+## Marking guide
+
+| Criterion | Points |
+|---|---|
+| **1. Model and interpretation**: correct model and centring (4); correct interpretation of intercept (2), `armEP` (2), `visit_f12:armEP` (2) | 10 |
+| **2. EMMs and contrasts**: EMMs (3); within-arm changes (3); correct coefficient vectors shown to sum to zero and placed in the right cells (6); primary and secondary estimates with CIs (6) | 18 |
+| **3. Multiplicity**: Dunnett adjustment applied only to the primary family (6); simultaneous CIs (2); clear justification for not adjusting secondary comparisons (4) | 12 |
+| **4. Results table**: complete content (6); clear labels, units and model footnote (3); estimates before p-values, sensible rounding (3) | 12 |
+| **5. Figure**: model-estimated means with 95% bands (5); observed means overlaid (3); real time axis with scheduled visits (3); labelled axes with units and a caption naming the interval (3); arm colours and honest y-axis (2) | 16 |
+| **6. Prediction**: correct covariate values in the prediction (3); CI for the mean (3); PI including between-participant and residual variance (6); population-average vs subject-specific comparison for W010 with a correct explanation (6) | 18 |
+| **7. Results paragraph**: correct numbers and directions (5); estimand, uncertainty and adjustment described (3); no over-interpretation, concise (2) | 10 |
+| **Reproducibility**: document renders; code runs from the project root with `here()` | 4 |
+| **Total** | **100** |
+
+Common deductions: reporting `armEP` as the treatment effect (−4 under criterion 1); computing contrasts on observed means (−6 under criterion 2); adjusting every comparison or none (−4 under criterion 3); unlabelled bands or equally spaced visits on the x-axis (−3 each under criterion 5); using the residual SD only for the prediction interval (−4 under criterion 6).
+
+## Model solution (for instructors)
+
+### 1. Model and interpretation
+
+```{r}
+#| label: sol-model
+walk <- walk |> mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+m_adj <- lmer(sbp ~ visit_f * arm + age10 + sex + bmi_c + (1 + month | id),
+              data = walk, control = lmer_ctrl)
+fa <- fixef(m_adj)
+round(fa[c("(Intercept)", "armEP", "visit_f12:armEP", "age10", "sexFemale", "bmi_c")], 2)
+```
+
+The intercept (`r round(fa[["(Intercept)"]], 1)` mmHg) is the expected baseline SBP in usual care for a 60-year-old man with BMI 29. `armEP` (`r round(fa[["armEP"]], 2)` mmHg) is the EP − UC difference at baseline, which randomisation makes small; it is not the treatment effect. `visit_f12:armEP` (`r round(fa[["visit_f12:armEP"]], 2)` mmHg) is the EP − UC difference in mean change from baseline to month 12, the primary estimand for EP, because covariates do not interact with visit or arm.
+
+### 2. EMMs and contrasts
+
+```{r}
+#| label: sol-emm
+emm <- emmeans(m_adj, ~ visit_f * arm)
+emm_tab <- as.data.frame(summary(emm)) |> mutate(month = as.numeric(as.character(visit_f)))
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+stopifnot(all(paste(cells$visit_f, cells$arm) == paste(emm_tab$visit_f, emm_tab$arm)))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg    <- function(a, v = "12") cell_w(a, v) - cell_w(a, "0")
+L_primary   <- list("SP - UC" = chg("SP") - chg("UC"), "EP - UC" = chg("EP") - chg("UC"))
+L_secondary <- list("EP - SP, month 12" = chg("EP") - chg("SP"),
+                    "SP - UC, month 6" = chg("SP", "6") - chg("UC", "6"),
+                    "EP - UC, month 6" = chg("EP", "6") - chg("UC", "6"))
+sapply(c(L_primary, L_secondary), sum)
+cbind(cells, L_primary[["EP - UC"]])[L_primary[["EP - UC"]] != 0, ]
+within <- summary(contrast(emm, list(UC = chg("UC"), SP = chg("SP"), EP = chg("EP"))),
+                  infer = TRUE)
+within
+```
+
+### 3. Multiplicity
+
+```{r}
+#| label: sol-mult
+prim <- summary(contrast(emm, L_primary, adjust = "mvt"), infer = TRUE)
+prim
+sec <- summary(contrast(emm, L_secondary, adjust = "none"), infer = TRUE)
+sec
+```
+
+The primary claim (that a programme reduces SBP more than usual care) would be made if either comparison were significant, so the two comparisons form a family and the familywise error rate is controlled with Dunnett's method, which uses the correlation induced by the shared control arm. The secondary comparisons are prespecified as supportive estimates, are not used to declare success, and are reported with unadjusted intervals and labelled as secondary; adjusting them would reduce precision without protecting any confirmatory claim.
+
+### 4. Results table
+
+```{r}
+#| label: sol-table
+n_tab <- walk |> filter(visit_f %in% c("0", "12")) |> count(arm, visit_f) |>
+  tidyr::pivot_wider(names_from = visit_f, values_from = n, names_prefix = "n_")
+res <- data.frame(
+  Arm = walk_arm_labels,
+  `n (baseline / month 12)` = paste(n_tab$n_0, "/", n_tab$n_12),
+  `Mean change to month 12 (95% CI)` = fmt_ci(within$estimate, within$lower.CL, within$upper.CL),
+  `Difference vs usual care (95% CI)` = c("Reference",
+      fmt_ci(prim$estimate, prim$lower.CL, prim$upper.CL)),
+  `Adjusted p` = c("", fmt_p(prim$p.value)),
+  check.names = FALSE, row.names = NULL)
+knitr::kable(res, align = "lcccc",
+  caption = paste0("Change in SBP (mmHg). Linear mixed model with visit by arm, age, sex and BMI, ",
+                   "random intercept and slope; differences vs usual care with Dunnett-adjusted ",
+                   "simultaneous 95% CIs and p-values. Secondary: EP vs SP ",
+                   fmt_ci(sec$estimate[1], sec$lower.CL[1], sec$upper.CL[1]),
+                   " mmHg (unadjusted)."))
+```
+
+### 5. Figure
+
+```{r}
+#| label: fig-sol
+#| fig-cap: "Model-estimated mean SBP by arm (lines) with 95% confidence bands for the means, adjusted for age, sex and BMI, and observed means of attended visits (open circles)."
+sched <- c(0, 1, 3, 6, 9, 12)
+obs <- walk |> group_by(arm, month_sched) |> summarise(mean = mean(sbp))
+ggplot(emm_tab, aes(month, emmean, colour = arm, fill = arm)) +
+  geom_ribbon(aes(ymin = lower.CL, ymax = upper.CL), alpha = 0.15, colour = NA) +
+  geom_line(linewidth = 0.8) +
+  geom_point(data = obs, aes(month_sched, mean), shape = 1, size = 2) +
+  scale_colour_arm(labels = walk_arm_labels, name = NULL) +
+  scale_fill_arm(labels = walk_arm_labels, name = NULL) +
+  scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "Systolic blood pressure (mmHg)")
+```
+
+The model-based means are adjusted to the reference covariate values (the sample means of age and BMI, with men and women weighted equally), so they are slightly shifted relative to the observed means; the differences between arms are unaffected.
+
+### 6. Prediction
+
+```{r}
+#| label: sol-pred
+new_w <- emmeans(m_adj, ~ visit_f * arm,
+                 at = list(age10 = (70 - 60) / 10, sex = "Female", bmi_c = 32 - 29))
+nw <- as.data.frame(summary(new_w)) |> filter(arm == "EP", visit_f == "12")
+G  <- as.matrix(VarCorr(m_adj)$id); s2 <- sigma(m_adj)^2
+z  <- c(1, 12)
+se_new <- sqrt(nw$SE^2 + as.numeric(t(z) %*% G %*% z) + s2)
+pred_new <- data.frame(mean = nw$emmean, ci_lower = nw$lower.CL, ci_upper = nw$upper.CL,
+                       pi_lower = nw$emmean - 1.96 * se_new, pi_upper = nw$emmean + 1.96 * se_new)
+pred_new
+
+w010 <- walk |> filter(id == "W010")
+w010 |> select(id, arm, age, sex, bmi, month, sbp)
+nd <- w010[1, ] |> mutate(visit_f = factor("12", levels = levels(walk$visit_f)), month = 12)
+c(population_average = predict(m_adj, newdata = nd, re.form = NA),
+  subject_specific   = predict(m_adj, newdata = nd))
+ranef(m_adj)$id["W010", ]
+```
+
+```{r}
+#| label: sol-values
+#| include: false
+pa10 <- predict(m_adj, newdata = nd, re.form = NA); ss10 <- predict(m_adj, newdata = nd)
+re10 <- ranef(m_adj)$id["W010", ]
+```
+
+(a) For a new 70-year-old woman with BMI 32 in the enhanced programme, the expected SBP at month 12 is `r round(pred_new$mean, 1)` mmHg (95% CI for the mean `r round(pred_new$ci_lower, 1)` to `r round(pred_new$ci_upper, 1)`). A single month-12 measurement for such a woman would be expected to lie between `r round(pred_new$pi_lower)` and `r round(pred_new$pi_upper)` mmHg (95% prediction interval), because the between-participant variance at month 12 ($\mathbf{z}^\top\hat G\mathbf{z}$ = `r round(as.numeric(t(z) %*% G %*% z), 1)` mmHg²) and the residual variance (`r round(s2, 1)`) dominate the uncertainty about the mean.
+
+(b) For W010 (`r w010$arm[1]` arm), the population-average prediction at month 12, for someone with W010's covariates, is `r round(pa10, 1)` mmHg; the subject-specific prediction is `r round(ss10, 1)` mmHg. The difference (`r sprintf("%.1f", ss10 - pa10)` mmHg) is $\mathbf{z}^\top\hat{\mathbf{b}}_i$, from W010's predicted random intercept (`r round(re10[[1]], 1)`) and slope (`r round(re10[[2]], 2)` per month) times 12: W010's own measurements show a level `r ifelse(re10[[1]] > 0, "above", "below")` the average for comparable participants, shrunk towards the population mean.
+
+### 7. Results paragraph
+
+```{r}
+#| label: sol-para-values
+#| include: false
+gp <- function(k, col = "estimate") prim[prim$contrast == k, col]
+```
+
+> In the covariate-adjusted analysis, mean SBP fell from baseline to month 12 by `r round(-within$estimate[1], 1)` mmHg in usual care, `r round(-within$estimate[2], 1)` mmHg in the standard programme and `r round(-within$estimate[3], 1)` mmHg in the enhanced programme. Compared with usual care, the difference in mean change was `r fmt_ci(gp("SP - UC"), gp("SP - UC", "lower.CL"), gp("SP - UC", "upper.CL"))` mmHg for the standard programme and `r fmt_ci(gp("EP - UC"), gp("EP - UC", "lower.CL"), gp("EP - UC", "upper.CL"))` mmHg for the enhanced programme (Dunnett-adjusted 95% CIs; adjusted `r fmt_p(gp("SP - UC", "p.value"))` and `r fmt_p(gp("EP - UC", "p.value"))`). In secondary analyses, the enhanced programme reduced SBP by `r fmt_ci(-sec$estimate[1], -sec$upper.CL[1], -sec$lower.CL[1])` mmHg more than the standard programme, and differences from usual care were already present at month 6 (`r fmt_ci(sec$estimate[2], sec$lower.CL[2], sec$upper.CL[2])` mmHg for the standard and `r fmt_ci(sec$estimate[3], sec$lower.CL[3], sec$upper.CL[3])` mmHg for the enhanced programme). Individual responses varied widely: a single month-12 reading for a participant on the enhanced programme could plausibly lie anywhere in a range of about `r round(pred_new$pi_upper - pred_new$pi_lower)` mmHg.
+
+Because WALK is simulated, the estimates can be compared with the true differences (−4.6 and −8.1 mmHg); both lie within the confidence intervals. This comparison is not possible with real data.

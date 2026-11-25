@@ -1,0 +1,17 @@
+# Root Quarto project. Formats and options for each kind of material are set
+# in the _metadata.yml file inside each folder (notes/, slides/, ...).
+project:
+  type: default
+  render:
+    - index.qmd
+    - syllabus/*.qmd
+    - notes/*.qmd
+    - slides/*.qmd
+    - workbook/*.qmd
+    - answer-key/*.qmd
+    - assessments/*.qmd
+    - cheatsheets/*.qmd
+    - glossary/*.qmd
+    - final-project/*.qmd
+    - diagrams/*.qmd
+    - references/*.qmd

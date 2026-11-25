@@ -1,0 +1,124 @@
+---
+title: "Final project: a complete longitudinal analysis"
+subtitle: "Brief, deliverables and marking rubric"
+format:
+  html:
+    number-sections: true
+---
+
+::: {.callout-warning title="Simulated data"}
+The MOOD study is fictional and its data are simulated. Your conclusions are about the data, not about depression treatment.
+:::
+
+## Purpose
+
+The final project asks you to carry out a longitudinal analysis from beginning to end, as you would in practice. You will:
+
+1. plan the analysis before looking at the outcomes by arm;
+2. explore the data;
+3. choose and justify a model;
+4. check it;
+5. address missing data;
+6. report the results clearly and reproducibly.
+
+The project assesses the learning outcomes of Modules 1–12 together. No single "correct model" exists. Marks are given for sound reasoning, transparent decisions and accurate interpretation. Agreement with any particular number earns no marks in itself.
+
+## The study
+
+The MOOD study (simulated) is a two-arm randomised trial in 240 adults with depressive symptoms, recruited at 4 sites. It compares a guided digital self-help programme with a waiting-list control. A depressive symptom score (0–27, higher is worse) was to be recorded at weeks 0, 2, 4, 8, 12 and 24. Actual assessment times vary around the schedule. Participants also reported their average nightly sleep. Some assessments were missed and some participants left the study early. The data are in `data/mood_long.csv` and are described in `data/dictionaries/data_dictionary.md`.
+
+The trial team states the following.
+
+* **Primary question.** Does the programme reduce depressive symptoms at 12 weeks, compared with the waiting list?
+* **Secondary questions.**
+  1. Is any benefit maintained at 24 weeks?
+  2. How does the proportion of participants with a score below 10 ("response") change over time in each arm?
+  3. Is week-to-week variation in sleep associated with symptoms within participants?
+
+## Deliverables
+
+Submit one reproducible R project (a zipped folder or a repository) that contains the four items below.
+
+### 1. Statistical analysis plan (written before Part 2)
+
+Use `final-project/sap_template.md`. Write no more than about 1,500 words. Your SAP must state:
+
+* the estimand for the primary question, with its population, variable, intercurrent events and summary measure;
+* the primary model, including the mean structure, the time specification, the random effects and/or residual covariance, and the covariates, with reasons;
+* how you will handle missing data, and the assumption this relies on;
+* your sensitivity analyses;
+* your secondary analyses;
+* how you will deal with multiplicity;
+* the diagnostics you plan.
+
+Write the SAP using only the study description and the data structure (variable names, visit counts). Do not look at outcome summaries by arm before you finish it. Date the SAP. Any later change must be listed as a deviation, with a reason.
+
+### 2. Exploratory analysis
+
+Your exploratory analysis must include:
+
+* a participant-flow table;
+* baseline characteristics by arm;
+* a description of the missing data and their pattern;
+* spaghetti plots and observed mean profiles;
+* a plot of actual against scheduled assessment times;
+* the observed correlation between visits.
+
+Comment on anything that affects your modelling choices, for example floor effects, the spread of visit times or the correlation pattern.
+
+### 3. Analysis
+
+The analysis has five parts:
+
+* **Primary analysis.** Fit the model as specified in your SAP.
+* **Model justification.** Compare plausible alternatives for the covariance structure and the time specification, using the principles of Module 5. Explain your final choice, including any departures from the SAP.
+* **Diagnostics.** Check residuals, random effects and influential participants, as covered in Module 11. Explain what you checked and what you concluded.
+* **Missing data.** Carry out at least one sensitivity analysis for departures from MAR, such as delta adjustment with a tipping point (Module 10).
+* **Secondary analyses.** Analyse the binary response outcome with an appropriate GEE or GLMM, and state whether your target is population-average or subject-specific. Then analyse the within-person association with sleep, using person-mean centring, and discuss its causal interpretation.
+
+### 4. Written report (no more than about 4,000 words, excluding tables, figures and code)
+
+Write the report in the structure of a statistical results paper:
+
+* Methods
+* Results
+* Sensitivity analyses
+* Limitations
+* Conclusions
+
+Report estimates with 95% confidence intervals in the units of the outcome. Include a fitted-trajectory figure and a results table. State clearly which findings are confirmatory and which are exploratory. Attach the analysis log (`admin/templates/analysis_log_template.md`) recording every decision you made.
+
+### Reproducibility requirements
+
+Your project must meet these requirements:
+
+* It runs from a clean R session in the order given in your README, using relative paths only (`here`).
+* The scripts are numbered.
+* All figures and tables are produced by code.
+* It includes a record of the package versions (`sessionInfo()` output or an `renv.lock`).
+* Every number in the report comes from code, through inline R or a saved table.
+
+## Marking rubric (100 points)
+
+| Criterion | Points | Excellent (full marks) | Adequate (about half) | Weak (few or none) |
+|---|---|---|---|---|
+| **A. Analysis plan** | 15 | Clear estimand; prespecified model with reasons; missing-data assumption and sensitivity analysis stated; multiplicity addressed; written before outcome comparisons | Most elements present but justification thin or estimand vague | Plan missing, post hoc or incoherent |
+| **B. Data preparation and exploration** | 15 | Flow, baseline, missingness and trajectory displays all correct and clear; observations linked to modelling decisions | Displays present but some unclear or not used | Missing key displays; misreads the data |
+| **C. Model choice and justification** | 20 | Time, random effects and covariance chosen for substantive and empirical reasons; correct use of ML/REML in comparisons; parsimony discussed; deviations documented | Reasonable model but limited justification or a minor technical error | Model inappropriate for the data, or comparisons invalid (for example REML across fixed effects) |
+| **D. Diagnostics** | 10 | Appropriate residual, random-effects and influence checks; conclusions sensible; no fishing | Some checks, with limited interpretation | Absent, or used to search for significance |
+| **E. Missing data and sensitivity** | 15 | MAR assumption explained in context; valid primary approach; well-designed MNAR sensitivity analysis interpreted honestly | Sensitivity analysis present but poorly designed or interpreted | LOCF or complete cases without justification; no sensitivity analysis |
+| **F. Interpretation and secondary analyses** | 15 | Correct interpretation of contrasts, differences in mean change and CIs; correct marginal vs conditional interpretation for the binary outcome; careful causal language for sleep | Mostly correct, with some imprecise statements | Misinterprets coefficients (for example main effects under an interaction) or claims causation |
+| **G. Reporting and reproducibility** | 10 | Report complete and concise; figures and tables clear; project runs end to end; versions recorded | Minor gaps; runs with small fixes | Does not run; numbers typed by hand; key reporting items missing |
+
+**Penalties.** Any undisclosed change to the primary analysis after seeing the results loses up to 10 points.
+
+## Guidance for instructors
+
+The true generating values are saved in `data/mood_truth.rds`. Do not share them before marking. Four features of the data are designed to reward careful analysis:
+
+1. **Nonlinear change with partial waning in the programme arm.** Categorical time, splines or a piecewise model are appropriate. A single linear slope is not.
+2. **Serial correlation between adjacent visits, on top of a random intercept and slope.** This rewards thoughtful covariance modelling. It is not visible from a random-intercept model alone.
+3. **Dropout that depends partly on the unobserved current score.** MAR analyses are therefore somewhat optimistic in the programme arm, which is why sensitivity analyses matter. A well-reasoned delta-adjustment analysis should show how the conclusion changes as δ increases.
+4. **Floor effects at low scores, plus between- and within-person associations with sleep that differ** (true between −1.2, within −0.6 points per hour). Part of the programme's effect on symptoms acts through improved sleep, so adjusting for sleep changes the estimand.
+
+True mean change from baseline (latent, unrounded scale) at week 12 is −2.6 in the waitlist arm and −6.8 in the programme arm, a difference of −4.2. At week 24 the difference is −3.7. Expect students' estimates to vary around these values because of sampling variation. Their estimates also depend on the missing-data assumptions they adopt. Mark the reasoning, not closeness to the truth.

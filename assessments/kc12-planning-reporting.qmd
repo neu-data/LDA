@@ -1,0 +1,146 @@
+---
+title: "Module 12. Study planning, reporting and reproducibility"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+s_tt <- function(times) sum((times - mean(times))^2)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This knowledge check has 12 questions, each mapped to a Module 12 learning outcome. Answer all questions before looking at the final section, which is for instructors.
+
+# Questions
+
+## Question 1 (LO 12.1)
+
+A treatment is expected to reduce pain within two weeks, with little further change. The primary estimand is the difference in mean change from baseline to week 26. With five visits available, which schedule (in weeks) is most sensible, and why?
+
+a. 0, 6, 13, 19, 26
+b. 0, 1, 2, 4, 26
+c. 0, 24, 25, 26, 26.5
+d. 0, 13, 26, plus two visits at week 52
+
+## Question 2 (LO 12.2)
+
+Compute $S_{tt}$ for visits at 0, 6 and 12 months and for visits at 0 and 12 months. What does the comparison tell you about adding a midpoint visit when the estimand is a linear slope?
+
+## Question 3 (LO 12.2)
+
+Using $\text{Var}(\hat\beta_3) = 2(\tau_1^2 + \sigma^2/S_{tt})/n$ with $\tau_1 = 0.4$, $\sigma = 6$, visits at 0, 3, 6, 9, 12 and $n = 50$ per arm, compute the SE of the difference in mean slopes.
+
+```{r}
+#| label: q3
+se_q3 <- sqrt(2 * (0.4^2 + 6^2 / s_tt(c(0, 3, 6, 9, 12))) / 50)
+```
+
+## Question 4 (LO 12.2)
+
+True or false, with a justification: "Doubling the number of visits always halves the variance of the estimated difference in slopes."
+
+## Question 5 (LO 12.2)
+
+The correlation between baseline and 12-month SBP in WALK is shown below. Rank the three analyses (follow-up only, change score, ANCOVA) by precision and give the relative variances.
+
+```{r}
+#| label: q5
+wide <- load_walk("wide")
+rho <- cor(wide$sbp_m0, wide$sbp_m12, use = "complete.obs")
+rho
+```
+
+## Question 6 (LO 12.3)
+
+A simulation of 200 trials gives power 0.795. What is the Monte Carlo SE, and how many simulated trials would be needed for an MCSE of 0.01?
+
+## Question 7 (LO 12.3)
+
+Here are simulated power values (200 trials each) for a two-arm design with five visits:
+
+```{r}
+#| label: q7
+pg <- readRDS(here("outputs", "models", "m12_power_grid.rds"))
+pg |> filter(n_per_arm == 50) |> select(dropout, power, mcse)
+```
+
+Interpret the effect of dropout, and say whether the difference between dropout 0 and 0.1 is larger than Monte Carlo error.
+
+## Question 8 (LO 12.3)
+
+Why should a power simulation also be run with the true effect set to zero?
+
+## Question 9 (LO 12.4)
+
+Which of the following is an **intercurrent event** rather than missing data?
+
+a. A participant misses the month-6 visit because of a holiday.
+b. A participant stops attending the walking programme after month 3 but attends all visits.
+c. A blood-pressure reading is lost because of a device failure.
+d. A participant moves away and is lost to follow-up.
+
+## Question 10 (LO 12.4)
+
+List the five attributes of an estimand in ICH E9(R1), and give the WALK primary estimand's value for "population-level summary".
+
+## Question 11 (LO 12.5)
+
+Rewrite this sentence so that it meets the reporting checklist: "A mixed model showed that the enhanced programme significantly lowered blood pressure (p < 0.001)." Use the WALK result:
+
+```{r}
+#| label: q11
+m_pri <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+chg <- contrast(emmeans(m_pri, ~ visit_f | arm), list(change12 = c(-1, 0, 0, 0, 0, 1)))
+d <- summary(contrast(chg, method = "trt.vs.ctrl", by = NULL, adjust = "none"),
+             infer = TRUE)
+d
+```
+
+## Question 12 (LO 12.6)
+
+Match each tool to its role: (1) `here::here()`; (2) `sessionInfo()`; (3) `renv::snapshot()`; (4) `renv::restore()`; (5) a Git tag. Roles: (A) records the package versions used, without restoring them; (B) installs the package versions listed in the lockfile; (C) builds file paths from the project root; (D) marks the exact code version that produced reported results; (E) updates the lockfile to match the project library.
+
+# Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+mc6 <- sqrt(0.795 * 0.205 / 200)
+n6 <- ceiling(0.795 * 0.205 / 0.01^2)
+p50 <- pg |> filter(n_per_arm == 50)
+diff01 <- p50$power[p50$dropout == 0] - p50$power[p50$dropout == 0.1]
+se_diff <- sqrt(p50$mcse[p50$dropout == 0]^2 + p50$mcse[p50$dropout == 0.1]^2)
+```
+
+**Q1.** b. Front-load visits where change is expected (weeks 1, 2, 4) and keep the week-26 visit that defines the estimand. (a) misses the early change; (c) has no early visits; (d) spends visits beyond the estimand's time point.
+
+**Q2.** $S_{tt} =$ `r s_tt(c(0, 6, 12))` for both. A midpoint at the mean time contributes nothing to $S_{tt}$, so it adds no precision for a linear slope, although it allows non-linearity to be detected.
+
+**Q3.** $S_{tt} = 90$, so $\text{Var} = 2(0.16 + 36/90)/50 = 0.0224$ and SE = `r f3(se_q3)` mmHg/month.
+
+**Q4.** False. More visits reduce only $\sigma^2/S_{tt}$; the $\tau_1^2$ term is unaffected, so once it dominates, extra visits give diminishing returns. Only more participants reduce $\tau_1^2/n$.
+
+**Q5.** With $\rho =$ `r f2(rho)`: ANCOVA (relative variance $1-\rho^2 =$ `r f2(1 - rho^2)`) is most precise, then change score ($2(1-\rho) =$ `r f2(2 * (1 - rho))`), then follow-up only (1).
+
+**Q6.** MCSE $= \sqrt{0.795 \times 0.205/200} =$ `r f3(mc6)`. For MCSE 0.01: $0.795 \times 0.205 / 0.01^2 \approx$ `r n6` trials.
+
+**Q7.** Power falls as dropout increases (`r paste(f3(p50$power), collapse = ", ")` for dropout 0, 0.1, 0.2). The difference between dropout 0 and 0.1 is `r f3(diff01)` with an approximate SE of `r f3(se_diff)` (the two simulations are independent), so it is about `r round(diff01 / se_diff, 1)` SEs. A difference of more than two SEs is unlikely to be Monte Carlo error alone, but its size is imprecise with 200 trials each; the formula and the larger drop at dropout 0.2 support a real decline.
+
+**Q8.** To check the type I error of the planned analysis in the simulated setting. If the test rejects too often under the null, the "power" is inflated and the sample size will be too small for a valid test.
+
+**Q9.** b. Stopping the programme is an event after randomisation that affects interpretation of the outcome, and the outcome is still observed. (a), (c) and (d) are missing data.
+
+**Q10.** Treatment conditions; population; variable (endpoint); intercurrent events and the strategy for each; population-level summary. For WALK: the difference in mean change in SBP from baseline to month 12, programme minus usual care (mmHg).
+
+**Q11.** Model answer: "In a linear mixed-effects model with scheduled visit, arm and their interaction as fixed effects and a random intercept and slope on actual time (REML, all `r nrow(walk)` observed measurements from `r dplyr::n_distinct(walk$id)` participants, assuming data missing at random), the difference in mean change in SBP from baseline to month 12, enhanced programme minus usual care, was `r fmt_ci(d$estimate[2], d$lower.CL[2], d$upper.CL[2])` mmHg (`r fmt_p(d$p.value[2])`)."
+
+**Q12.** 1C, 2A, 3E, 4B, 5D.

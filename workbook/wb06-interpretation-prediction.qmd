@@ -1,0 +1,150 @@
+---
+title: "Module 6. Interpretation, contrasts and prediction"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+These exercises turn the primary WALK model into results: reading coefficients, computing estimated marginal means (EMMs) and planned contrasts, handling multiplicity, making predictions with the right kind of interval, and presenting it all clearly. Chunks with blanks (`___`) are set to `eval: false`; fill in the blanks and run them.
+
+```{r}
+#| label: primary
+sched <- c(0, 1, 3, 6, 9, 12)
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+## Guided exercises
+
+### Exercise 1. Coefficients, interactions and centring (LO 6.1)
+
+(a) Fit the linear-time model with time centred at month 6.
+
+```{r}
+#| eval: false
+walk$month6 <- walk$month - ___
+m_lin6 <- lmer(sbp ~ month6 * arm + (1 + ___ | id), data = walk, control = lmer_ctrl)
+fixef(m_lin6)
+```
+
+(b) Before looking at the output, use the uncentred estimates ($\hat\beta_2 = 0.31$ for `armSP`, $\hat\beta_4 = -0.49$ for `month:armSP`) to predict the new `armSP` coefficient. Then check.
+
+(c) In the primary model, find the coefficient that equals the difference in mean change from baseline to month 6 for EP versus UC.
+
+**Questions.** (i) What does `armSP` mean in `m_lin6`? (ii) Which coefficients are the same in the centred and uncentred models? (iii) What does `visit_f6` mean in the primary model?
+
+### Exercise 2. Estimated marginal means (LO 6.2)
+
+(a) Compute the EMMs for every arm and visit and convert them to a data frame.
+
+```{r}
+#| eval: false
+emm <- emmeans(m_prim, ~ ___ * ___)
+emm_tab <- as.data.frame(summary(emm))
+```
+
+(b) Compute the observed mean SBP of attended visits for every arm and visit, and join them to `emm_tab`.
+
+**Questions.** (i) At which visit do EMMs and observed means agree, and why? (ii) In which direction do they differ at month 12, and what feature of the WALK study explains it?
+
+### Exercise 3. Planned contrasts (LO 6.2)
+
+(a) Build coefficient vectors for the difference in mean change from baseline to month 6, SP versus UC and EP versus UC.
+
+```{r}
+#| eval: false
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg6   <- function(a) cell_w(a, "___") - cell_w(a, "0")
+L6 <- list("SP - UC" = chg6("SP") - chg6(___),
+           "EP - UC" = chg6(___) - chg6("UC"))
+sapply(L6, sum)                          # should be 0
+summary(contrast(emm, L6), infer = TRUE)
+```
+
+(b) Obtain the same estimates with the interaction-contrast approach.
+
+```{r}
+#| eval: false
+contrast(emm, interaction = c(visit_f = "___", arm = "___"))
+```
+
+**Questions.** (i) Report the two month-6 differences in a sentence each. (ii) Why is the SE of a within-arm change smaller than the SE of either EMM?
+
+### Exercise 4. Population-average and subject-specific predictions (LO 6.4)
+
+(a) Add both kinds of prediction to the data.
+
+```{r}
+#| eval: false
+walk$pred_pa <- predict(m_prim, re.form = ___)
+walk$pred_ss <- predict(m_prim)
+```
+
+(b) Build a complete grid (every participant at every scheduled month, with `month` equal to the scheduled month), predict both ways, and compare the averages by arm and visit.
+
+(c) Compare the averages over the **observed** rows at month 12.
+
+**Questions.** (i) Why do the averages agree on the complete grid? (ii) Why do they disagree on the observed rows? (iii) Which should be used to estimate a treatment effect?
+
+### Exercise 5. Confidence and prediction intervals (LO 6.5)
+
+(a) For the standard programme at every visit, compute the 95% prediction interval for a single measurement of a new participant.
+
+```{r}
+#| eval: false
+G  <- as.matrix(VarCorr(m_prim)$id)
+s2 <- sigma(m_prim)^2
+pi_sp <- as.data.frame(summary(emm)) |>
+  filter(arm == "SP") |>
+  mutate(month = as.numeric(as.character(visit_f)),
+         var_between = G[1, 1] + 2 * G[1, 2] * ___ + G[2, 2] * ___^2,
+         se_new = sqrt(SE^2 + var_between + ___),
+         pi_lower = emmean - 1.96 * se_new, pi_upper = emmean + 1.96 * se_new)
+```
+
+(b) Check the month-12 interval by simulation (draw $\boldsymbol\beta$, $\mathbf{b}$ and $\varepsilon$).
+
+(c) Plot the CI and PI for SP on the same axes.
+
+**Questions.** (i) How many times wider is the PI than the CI at month 12? (ii) Which variance component contributes most to the PI? (iii) Which interval would you give to a clinician asking about one patient?
+
+## Independent exercises
+
+### Exercise 6. Report the month-6 results (LO 6.2, 6.6)
+
+Produce a results table for the change from baseline to month 6 (within-arm changes, differences versus usual care with 95% CIs and p-values), and write a two-sentence results paragraph.
+
+### Exercise 7. Compare multiplicity strategies (LO 6.3)
+
+For the three month-12 comparisons (SP − UC, EP − UC, EP − SP), compare: no adjustment, Holm across all three, Tukey (`pairwise` contrasts of the month-12 changes), and a fixed sequence EP − UC, then SP − UC, then EP − SP. Which comparisons are significant under each, and which strategy would you prespecify? Justify in a short paragraph.
+
+### Exercise 8. Predictions for individual participants (LO 6.4, 6.5)
+
+Choose one usual-care participant with all six visits and one who dropped out after month 3. For each, compute the subject-specific prediction at month 12 with a 95% prediction interval (use `ranef(m_prim, condVar = TRUE)`), and plot their observed data with their predicted trajectory and the population-average trajectory. Explain why the two intervals differ in width.
+
+### Exercise 9. Repair a misleading figure (LO 6.6)
+
+The code below produces a misleading figure. List at least four problems and produce an improved version.
+
+```{r}
+#| label: bad-figure
+#| fig-cap: "A figure with several problems."
+walk |>
+  group_by(arm, visit_f) |>
+  summarise(m = mean(sbp), se = sd(sbp) / sqrt(n())) |>
+  ggplot(aes(visit_f, m, group = arm, linetype = arm)) +
+  geom_line() +
+  geom_errorbar(aes(ymin = m - se, ymax = m + se), width = 0.1) +
+  coord_cartesian(ylim = c(136, 148)) +
+  labs(x = NULL, y = NULL)
+```

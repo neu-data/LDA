@@ -1,0 +1,259 @@
+---
+title: "Module 7. Generalized estimating equations"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk  <- load_walk()  |> arrange(id, month)
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary() |> arrange(id, period)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+These exercises practise the skills of Module 7: fitting GEE with `geepack::geeglm()` to continuous, binary and count outcomes, choosing and comparing working correlations, distinguishing model-based from robust (sandwich) standard errors, recognising the small-sample problem of the sandwich, and correcting GEE for dropout with inverse-probability weights. Code chunks contain blanks (`___`) and are set to `eval: false` so that the workbook renders before you complete them. Change them to `eval: true`, or run them interactively, once the blanks are filled.
+
+Notice that the setup chunk sorts every dataset by participant and time. `geeglm()` treats consecutive rows with the same identifier as one cluster, so this matters. Pass identifiers as `factor(id)`: the course identifiers are character strings, which `geeglm()` cannot use directly.
+
+The next chunk defines a function that computes the sandwich variance by hand, with an optional Mancl–DeRouen small-sample correction. It is the function from the notes; run it before Exercises 3, 5 and 9.
+
+```{r}
+#| label: helper
+sandwich_gee <- function(fit, correction = c("none", "MD")) {
+  correction <- match.arg(correction)
+  X <- model.matrix(fit); y <- fit$y; mu <- fitted(fit)
+  fam <- family(fit); eta <- fit$linear.predictors
+  w <- fit$prior.weights; if (is.null(w)) w <- rep(1, length(y))
+  alpha <- fit$geese$alpha
+  cl <- split(seq_along(y), fit$id)
+  p <- ncol(X); B <- matrix(0, p, p); parts <- vector("list", length(cl))
+  for (k in seq_along(cl)) {
+    r <- cl[[k]]; n <- length(r); R <- diag(n)
+    if (fit$corstr == "exchangeable" && n > 1) { R[] <- alpha; diag(R) <- 1 }
+    if (fit$corstr == "ar1" && n > 1) R <- alpha^abs(outer(1:n, 1:n, "-"))
+    A <- diag(sqrt(fam$variance(mu[r]) / w[r]), n)
+    Vinv <- solve(A %*% R %*% A)
+    D <- fam$mu.eta(eta[r]) * X[r, , drop = FALSE]
+    B <- B + t(D) %*% Vinv %*% D
+    parts[[k]] <- list(D = D, Vinv = Vinv, e = y[r] - mu[r])
+  }
+  Binv <- solve(B); M <- matrix(0, p, p)
+  for (pk in parts) {
+    e <- pk$e
+    if (correction == "MD") {
+      H <- pk$D %*% Binv %*% t(pk$D) %*% pk$Vinv
+      e <- solve(diag(nrow(H)) - H, e)
+    }
+    u <- t(pk$D) %*% pk$Vinv %*% e
+    M <- M + u %*% t(u)
+  }
+  V <- Binv %*% M %*% Binv
+  dimnames(V) <- list(colnames(X), colnames(X)); V
+}
+```
+
+## Guided exercises
+
+### Exercise 1. A GEE for WALK (LO 7.1, 7.4)
+
+(a) Fit a Gaussian GEE to systolic blood pressure with a separate mean for each arm at each scheduled visit and an exchangeable working correlation.
+
+```{r}
+#| eval: false
+gee_walk <- geeglm(sbp ~ ___ * arm, id = ___, waves = visit,
+                   data = walk, family = gaussian, corstr = "___")
+summary(gee_walk)
+```
+
+(b) Find in the output the estimated working correlation, the scale parameter and the number of clusters. What does the scale parameter represent for a Gaussian GEE?
+
+(c) Use `emmeans` to estimate the difference in mean change from baseline to month 12 between each programme and usual care, with 95% confidence intervals.
+
+```{r}
+#| eval: false
+emm_walk <- emmeans(gee_walk, ~ visit_f | arm)
+chg <- contrast(emm_walk, list(change_m12 = c(___, 0, 0, 0, 0, ___)))
+confint(contrast(chg, "trt.vs.ctrl", by = NULL), adjust = "none")
+```
+
+(d) Which coefficients of the model equal these differences? Why?
+
+(e) In one or two sentences, interpret the EP result as a population-average effect.
+
+### Exercise 2. Working correlations and two kinds of standard error (LO 7.2, 7.3)
+
+(a) Refit the model of Exercise 1 with `"independence"` and `"ar1"` working correlations.
+
+```{r}
+#| eval: false
+cs <- c("independence", "exchangeable", "ar1")
+fits <- lapply(cs, function(s) geeglm(sbp ~ visit_f * arm, id = factor(id),
+                                      waves = ___, data = walk, corstr = s))
+names(fits) <- cs
+```
+
+(b) For `visit_f12:armEP`, tabulate the estimate, the robust SE (`vcov(fit)`) and the model-based SE (`fit$geese$vbeta.naiv`) for each structure.
+
+```{r}
+#| eval: false
+k <- "visit_f12:armEP"
+data.frame(corstr = cs,
+           estimate = sapply(fits, function(f) coef(f)[k]),
+           se_robust = sapply(fits, function(f) sqrt(diag(vcov(f)))[k]),
+           se_model = sapply(fits, function(f) sqrt(diag(f$geese$___))[18]))
+```
+
+(c) Why are the estimates under exchangeable and AR(1) so similar? Why is the robust SE larger under independence?
+
+(d) Under independence the model-based SE is much larger than the robust SE. Explain why in terms of what the independence model "believes" about the data.
+
+(e) Compute `QIC()` for the three fits. Does the structure with the smallest QIC seem sensible? What would you use to choose the working correlation instead?
+
+### Exercise 3. A binary outcome: CLEAR (LO 7.1, 7.3, 7.4)
+
+(a) Fit a logistic GEE for `itch` with `week * arm` and an exchangeable working correlation.
+
+```{r}
+#| eval: false
+gee_clear <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+                    data = clear, family = ___, corstr = "exchangeable")
+fixef_table(gee_clear, exponentiate = ___)
+```
+
+(b) Interpret `exp(week)` and `exp(week:armActive)`. What is the odds ratio comparing active with placebo at week 12, assuming equal odds at baseline?
+
+(c) Estimate the proportion with itch in each arm at weeks 0 and 12, and the risk difference at week 12.
+
+```{r}
+#| eval: false
+emmeans(gee_clear, ~ arm | week, at = list(week = c(0, 12)), type = "___")
+confint(contrast(regrid(emmeans(gee_clear, ~ arm | week, at = list(week = 12))),
+                 "___"))
+```
+
+(d) Compare the model-based, robust and Mancl–DeRouen standard errors (use `sandwich_gee(gee_clear, "MD")`). Are they close? What does that tell you about the working correlation?
+
+### Exercise 4. A count outcome with exposure: DIARY (LO 7.4)
+
+(a) Fit a Poisson GEE for `migraine_days` with `post * arm`, an exchangeable working correlation and an offset for the number of diary days.
+
+```{r}
+#| eval: false
+gee_diary <- geeglm(migraine_days ~ post * arm + ___,
+                    id = factor(id), waves = period + 1, data = diary,
+                    family = poisson, corstr = "exchangeable")
+```
+
+(b) Which coefficient is the treatment effect? Give it as a rate ratio with a 95% CI and interpret it.
+
+(c) Estimate the expected number of migraine days per 28 days in each arm before and after baseline.
+
+```{r}
+#| eval: false
+emmeans(gee_diary, ~ arm | post, offset = ___, type = "response")
+```
+
+(d) The estimated scale parameter is well above 1. Does this invalidate the analysis? Explain.
+
+### Exercise 5. How many clusters? (LO 7.5)
+
+(a) The function below simulates one dataset with `n_clusters` clusters (half active), fits an exchangeable GEE and returns the estimate of the time-by-arm interaction (true value −0.5) and its sandwich and Mancl–DeRouen SEs. Complete it.
+
+```{r}
+#| eval: false
+sim_one <- function(n_clusters) {
+  d <- expand.grid(time = 0:4, id = seq_len(n_clusters))
+  d$active <- as.integer(d$id > n_clusters / 2)
+  b0 <- rnorm(n_clusters, 0, 2); b1 <- rnorm(n_clusters, 0, 0.5)
+  d$y <- -0.5 * d$time - 0.5 * d$active * d$time +
+    b0[d$id] + b1[d$id] * d$time + rnorm(nrow(d), 0, 1.5)
+  fit <- geeglm(y ~ time * active, id = id, data = d, corstr = "___")
+  k <- "time:active"
+  c(est = unname(coef(fit)[k]), se_sw = sqrt(vcov(fit)[k, k]),
+    se_md = sqrt(sandwich_gee(fit, "___")[k, k]))
+}
+```
+
+(b) Run 200 replications for 10 and for 40 clusters. For each, compute the empirical SD of the estimates, the mean of each SE and the coverage of 95% Wald intervals.
+
+```{r}
+#| eval: false
+set.seed(1)
+res <- lapply(c(10, 40), function(N) data.frame(N = N, t(replicate(___, sim_one(N)))))
+res <- bind_rows(res)
+res |> group_by(N) |>
+  summarise(emp_sd = sd(est), se_sw = mean(se_sw), se_md = mean(se_md),
+            cover_sw = mean(abs(est + 0.5) <= 1.96 * se_sw),
+            cover_md = mean(abs(est + 0.5) <= 1.96 * se_md))
+```
+
+(c) Compute the Monte Carlo standard error of a coverage estimate with 200 replications. Which of your differences are larger than Monte Carlo error?
+
+(d) Summarise in two sentences what the simulation shows about the sandwich with few clusters.
+
+### Exercise 6. Weighted GEE for dropout in CLEAR (LO 7.6) <span class="advanced-tag">ADVANCED</span>
+
+(a) Build a "risk set" with one row for each participant and each visit from 2 up to and including the visit at which they dropped out. Record whether they stayed (`stay`) and their last observed severity before that visit (`prev_sev`).
+
+```{r}
+#| eval: false
+grid <- clear |> distinct(id, arm) |> crossing(visit = 1:6) |>
+  left_join(select(clear, id, visit, severity), by = c("id", "visit")) |>
+  group_by(id) |>
+  mutate(last_visit = max(visit[!is.na(severity)]), last_sev = severity) |>
+  tidyr::fill(last_sev, .direction = "___") |>
+  mutate(prev_sev = lag(last_sev)) |> ungroup()
+risk <- grid |> filter(visit >= 2, visit <= pmin(last_visit + 1, 6)) |>
+  mutate(stay = as.integer(visit <= ___))
+```
+
+(b) Fit a logistic model for `stay` on `prev_sev` and `arm`, then compute each participant's cumulative probability of remaining and the weights.
+
+```{r}
+#| eval: false
+drop_model <- glm(stay ~ prev_sev + arm, family = binomial, data = risk)
+risk <- risk |> mutate(p_stay = fitted(drop_model)) |>
+  group_by(id) |> mutate(cum_p = ___(p_stay)) |> ungroup()
+clear_w <- clear |> left_join(select(risk, id, visit, cum_p), by = c("id", "visit")) |>
+  mutate(cum_p = ifelse(visit == 1, 1, cum_p), ipw = 1 / cum_p)
+summary(clear_w$ipw)
+```
+
+(c) Fit unweighted and weighted logistic GEEs with an independence working correlation and compare the coefficients.
+
+```{r}
+#| eval: false
+gee_unw <- geeglm(itch ~ week * arm, id = factor(id), data = clear_w,
+                  family = binomial, corstr = "independence")
+gee_ipw <- geeglm(itch ~ week * arm, id = factor(id), data = clear_w,
+                  family = binomial, corstr = "independence", weights = ___)
+cbind(unweighted = coef(gee_unw), ipw = coef(gee_ipw))
+```
+
+(d) In which direction does weighting move the placebo week slope? Is that the direction you would expect, given how dropout was generated?
+
+(e) Why is an independence working correlation used? Why are the standard errors of the weighted fit only approximate?
+
+## Independent exercises
+
+### Exercise 7. The character-identifier trap (LO 7.3, 7.4)
+
+Fit the CLEAR model of Exercise 3 with `id = id` (the character identifier) instead of `id = factor(id)`. Read the warning, compare the standard errors with those of Exercise 3 and explain what has gone wrong. Then check how many clusters `geeglm` believes there are in each fit. Write a one-line rule for your own analyses.
+
+### Exercise 8. Categorical time in CLEAR (LO 7.4)
+
+Fit a logistic GEE for `itch` with `week_f * arm` (a separate proportion for each arm at each scheduled week) and an exchangeable working correlation. Estimate the risk difference between arms at week 12 with a 95% CI and compare it with the linear-in-week model of Exercise 3. Which model would you prespecify for a trial, and why?
+
+### Exercise 9. Clinics as clusters (LO 7.5)
+
+The 360 WALK participants were recruited at 8 clinics. Treat **clinic** as the cluster: sort the data by clinic, participant and month, and fit `sbp ~ visit_f * arm` with an independence working correlation and `id = clinic`. Compare the sandwich SE and the Mancl–DeRouen SE of `visit_f12:armEP` with those from Exercise 2 (participants as clusters, independence). What does the comparison tell you about inference with 8 clusters? Is clinic-level clustering the relevant source of correlation for the WALK treatment comparison?
+
+### Exercise 10. Overdispersion and the model-based SE in DIARY (LO 7.3)
+
+Fit the DIARY model of Exercise 4 with an independence working correlation. Compare the robust SE of `post:armActive` with (i) the model-based SE from `fit$geese$vbeta.naiv` and (ii) the SE from an ordinary `glm()` with `family = poisson` and the same offset. Explain the differences, referring to overdispersion and to the correlation within participants.

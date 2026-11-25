@@ -1,0 +1,435 @@
+---
+title: "Module 13. Advanced extensions"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+suppressPackageStartupMessages({
+  library(ordinal); library(survival); library(JMbayes2)
+})
+slice <- dplyr::slice; lme <- nlme::lme; coxph <- survival::coxph
+walk     <- load_walk()
+clear    <- load_clear() |> mutate(id = factor(id), age10 = (age - 45) / 10)
+kid_long <- load_kidney("long") |> mutate(age10 = (age - 60) / 10) |> as.data.frame()
+kid_ev   <- load_kidney("events") |> mutate(age10 = (age - 60) / 10) |> as.data.frame()
+```
+
+```{r}
+#| label: helpers
+#| include: false
+f0 <- function(x) formatC(x, format = "f", digits = 0)
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+pct <- function(x) paste0(formatC(100 * x, format = "f", digits = 0), "%")
+walk_truth   <- readRDS(here("data", "walk_truth.rds"))
+kidney_truth <- readRDS(here("data", "kidney_truth.rds"))
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This answer key follows the workbook exercise by exercise. All code is executed, so the numbers are the real output. Comparisons with true values are possible only because the data are simulated. Marking notes list acceptable alternatives and common errors.
+
+# Guided exercises
+
+## Exercise 1. A cumulative-logit mixed model for itch severity
+
+**(a)**
+
+```{r}
+#| label: ex1a
+m1 <- clmm(severity_f ~ week * arm + age10 + sex + (1 | id),
+           data = clear, nAGQ = 7)
+summary(m1)
+```
+
+**(b)**
+
+```{r}
+#| label: ex1b
+cf <- coef(summary(m1))
+tab1 <- data.frame(term = rownames(cf), estimate = cf[, 1],
+                   lower = cf[, 1] - 1.96 * cf[, 2],
+                   upper = cf[, 1] + 1.96 * cf[, 2],
+                   truth = c(-2.5, 0, 2.5, -0.06, 0, 0.2, 0.3, -0.16),
+                   row.names = NULL)
+tab1$covers <- with(tab1, truth >= lower & truth <= upper)
+knitr::kable(tab1, digits = 3)
+```
+
+All `r sum(tab1$covers)` of `r nrow(tab1)` intervals contain the true value. The random-intercept SD is `r f2(sqrt(as.numeric(VarCorr(m1)$id)))` (true 2.0). The female effect is estimated imprecisely (`r f2(cf["sexFemale", 1])`, true 0.3), which is typical for a baseline covariate in a trial of 200.
+
+**(c)** `clmm()` models $\operatorname{logit} P(Y \le k) = \theta_k - \eta$, so a positive coefficient shifts participants towards higher (more severe) categories. The `week:armActive` coefficient is `r f3(cf["week:armActive", 1])`, negative, so severity falls faster with active treatment than with placebo.
+
+**(d)**
+
+```{r}
+#| label: ex1d
+b  <- cf["week:armActive", 1]; se <- cf["week:armActive", 2]
+or12 <- exp(12 * c(est = b, lower = b - 1.96 * se, upper = b + 1.96 * se))
+round(or12, 2)
+```
+
+Over 12 weeks, for a given participant, the odds of being in a more rather than a less severe category are multiplied by `r f2(or12["est"])` (95% CI `r f2(or12["lower"])` to `r f2(or12["upper"])`) with active treatment compared with placebo, that is, about `r pct(1 - or12["est"])` lower. It is a subject-specific (conditional) quantity: it compares the same participant (the same random intercept) under the two treatments.
+
+**(e)**
+
+```{r}
+#| label: ex1e
+th <- m1$Theta
+eta_pl  <- 12 * m1$beta["week"]
+eta_act <- 12 * (m1$beta["week"] + m1$beta["week:armActive"]) +
+  m1$beta["armActive"]
+probs <- rbind(Placebo = diff(c(0, plogis(th - eta_pl), 1)),
+               Active  = diff(c(0, plogis(th - eta_act), 1)))
+colnames(probs) <- levels(clear$severity_f)
+round(probs, 3)
+```
+
+For a 45-year-old man with random intercept 0, the predicted probability of moderate or severe itch at week 12 is `r pct(sum(probs["Placebo", 3:4]))` on placebo and `r pct(sum(probs["Active", 3:4]))` on active treatment; the probability of no itch is `r pct(probs["Placebo", 1])` and `r pct(probs["Active", 1])`.
+
+**(f)** Involve a specialist when the categories are not ordered (a multinomial model is needed), when proportional odds fails for the treatment effect, when random slopes are needed, or when the ordinal outcome is a trial's primary endpoint whose analysis must be pre-specified in detail.
+
+::: {.callout-note title="Marking notes"}
+Accept the model without age and sex for (c) and (d); the treatment coefficients barely change. A common error in (e) is to add rather than subtract $\eta$, or to forget `armActive` for the active arm. Students who use `predict()` on a `clmm` object will find it is not available; the manual calculation is expected.
+:::
+
+## Exercise 2. Three levels: visits, participants, clinics
+
+**(a) and (b)**
+
+```{r}
+#| label: ex2ab
+m2 <- lmer(sbp ~ visit_f * arm + (1 | clinic) + (1 | id),
+           data = walk, control = lmer_ctrl)
+vc <- as.data.frame(VarCorr(m2))
+v  <- vc$vcov[match(c("clinic", "id", "Residual"), vc$grp)]
+names(v) <- c("clinic", "participant", "visit")
+round(rbind(variance = v, share = v / sum(v)), 3)
+icc_clinic      <- v[1] / sum(v)
+icc_participant <- (v[1] + v[2]) / sum(v)
+c(icc_clinic = icc_clinic, icc_participant = icc_participant)
+```
+
+Clinics account for `r pct(v[1] / sum(v))` of the variance, participants within clinic `r pct(v[2] / sum(v))` and visits `r pct(v[3] / sum(v))`. Two participants at the same clinic correlate `r f3(icc_clinic)`; two visits of the same participant correlate `r f2(icc_participant)`.
+
+**(c)**
+
+```{r}
+#| label: ex2c
+m_a <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+            control = lmer_ctrl)
+m_b <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 | clinic),
+            data = walk, control = lmer_ctrl)
+m_c <- lmer(sbp ~ visit_f * arm + clinic + (1 + month | id), data = walk,
+            control = lmer_ctrl)
+ep_m12 <- function(m) {
+  emm <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+  chg <- contrast(emm, list(change = c(-1, 1)), by = "arm")
+  s <- summary(contrast(chg, "trt.vs.ctrl", by = NULL, ref = 1), infer = TRUE)
+  s[grepl("EP", s$contrast), c("estimate", "SE", "lower.CL", "upper.CL")]
+}
+ex2 <- rbind(`No clinic` = ep_m12(m_a), `Clinic random` = ep_m12(m_b),
+             `Clinic fixed` = ep_m12(m_c))
+round(ex2, 2)
+```
+
+**(d)** The three estimates (`r paste(f2(ex2$estimate), collapse = ", ")` mmHg) and standard errors are almost identical because randomisation was stratified by clinic: every clinic has participants in every arm, so clinic effects cancel from the between-arm contrast. If whole clinics had been randomised, treatment would be constant within clinic and clinic variation would enter the treatment comparison directly. Ignoring clinic would then give standard errors that are far too small, clinic as a fixed effect would be completely confounded with treatment, and a random clinic effect with only 8 clinics would need small-sample degrees of freedom.
+
+**(e)** With 8 clinics the clinic variance is estimated from effectively 8 values, so its sampling uncertainty is very large: the notes give a profile-likelihood interval for the clinic SD of about 1.3 to 5.8 mmHg. A single estimate (here `r f1(sqrt(v[1]))` mmHg) hides this, and another sample of 8 clinics could easily give an estimate near zero.
+
+::: {.callout-note title="Marking notes"}
+Accept `(1 | clinic/id)` in (a), which is equivalent here. Students who obtain a different clinic SD in the random-slope model (about 3.1) than in the random-intercept model are correct; the two models partition the variance slightly differently. For (d) the key word is "within": treatment varies within clinics.
+:::
+
+## Exercise 3. An asymptotic exponential model for SBP
+
+**(a)**
+
+```{r}
+#| label: ex3a
+obs <- walk |> group_by(arm, month_sched) |> summarise(sbp = mean(sbp)) |>
+  ungroup()
+obs |> pivot_wider(names_from = month_sched, values_from = sbp)
+start_A <- obs |> group_by(arm) |>
+  summarise(A = sbp[month_sched == 0] - sbp[month_sched == 12]) |> pull(A)
+start_vals <- c(base = mean(walk$sbp[walk$visit == 1]), A = round(start_A, 1),
+                tau = 2)
+start_vals
+```
+
+**(b)**
+
+```{r}
+#| label: ex3b
+m3 <- nlme(sbp ~ base - A * (1 - exp(-month / tau)),
+           data   = as.data.frame(walk),
+           fixed  = list(base ~ 1, A ~ arm - 1, tau ~ 1),
+           random = list(id = pdDiag(base + A ~ 1)),
+           start  = start_vals)
+summary(m3)
+fe3 <- nlme::fixef(m3)
+```
+
+**(c)** `A.armEP` = `r f1(fe3["A.armEP"])`: in the enhanced programme, SBP falls on average by about `r f1(fe3["A.armEP"])` mmHg from its baseline level and then levels off. `tau` = `r f1(fe3["tau"])`: about two thirds (63%) of that fall has happened by `r f1(fe3["tau"])` months after randomisation, and 95% by about `r f0(3 * fe3["tau"])` months.
+
+**(d)**
+
+```{r}
+#| label: ex3d
+sv4 <- start_vals; sv4["tau"] <- 4
+m3b <- update(m3, start = sv4)
+round(rbind(start_tau_2 = fe3, start_tau_4 = nlme::fixef(m3b)), 3)
+```
+
+The estimates agree to within about 0.01; differences this small reflect the convergence tolerance, not a different solution, so the result does not depend on the start. If they differed, the likelihood would have several local maxima (or the fit would have stopped early), and we would need to compare the log-likelihoods, choose the highest, and investigate whether the model is identifiable from the data.
+
+**(e)** Compare with the total plateau falls (about 2.1, 6.7 and 10.2 mmHg). The model does not include steps, so it estimates the whole effect of each programme, including the part that acts through increased walking. The direct values (2, 6, 9) would be the comparison only for a model that removes the steps-mediated part (Exercise 8).
+
+::: {.callout-note title="Marking notes"}
+Accept any sensible starting values (for example base 150, A = 2, 6, 9, tau = 2). A frequent error is giving three starting values for `A ~ arm - 1` in the wrong order or giving one value for `A`. Accept `pdSymm` for the random effects (an extra correlation parameter).
+:::
+
+## Exercise 4. A joint model for eGFR and kidney failure
+
+**(a)**
+
+```{r}
+#| label: ex4a
+lme_egfr <- lme(egfr ~ ns(years, knots = 2.5, Boundary.knots = c(0, 5)) +
+                  diabetes + diabetes:years + age10,
+                random = ~ years | id, data = kid_long,
+                control = lmeControl(opt = "optim"))
+cox_fail <- coxph(Surv(time, failure) ~ diabetes, data = kid_ev)
+round(nlme::fixef(lme_egfr), 2)
+```
+
+**(b)**
+
+```{r}
+#| label: ex4b
+jm_file <- here("outputs", "models", "m13_jm.rds")
+if (!file.exists(jm_file)) source(here("scripts", "13d_joint_model.R"),
+                                  local = new.env())
+jm_fit <- readRDS(jm_file)
+summary(jm_fit)
+```
+
+**(c)**
+
+```{r}
+#| label: ex4c
+sv <- summary(jm_fit)$Survival
+a  <- unlist(sv["value(egfr)", c("Mean", "2.5%", "97.5%")])
+round(exp(-10 * a), 2)
+```
+
+Each 10 units lower current true eGFR multiplies the hazard of kidney failure by `r f1(exp(-10 * a[1]))` (95% credible interval `r f1(exp(-10 * a[3]))` to `r f1(exp(-10 * a[2]))`). On the log scale the interval for $\alpha$ is `r f3(a[2])` to `r f3(a[3])`, which contains the true value −0.13.
+
+**(d)**
+
+```{r}
+#| label: ex4d
+td <- tmerge(kid_ev |> select(id, diabetes, time, failure),
+             kid_ev |> select(id, time, failure), id = id,
+             fail = event(time, failure))
+td <- tmerge(td, kid_long |> select(id, years, egfr), id = id,
+             egfr = tdc(years, egfr))
+cox_naive <- coxph(Surv(tstart, tstop, fail) ~ egfr + diabetes, data = td)
+summary(cox_naive)$coefficients
+n_hat <- coef(cox_naive)["egfr"]
+```
+
+The naive estimate, `r f3(n_hat)`, is closer to zero than the joint model's `r f3(a[1])`. The last observed eGFR is a noisy measurement of true kidney function and becomes out of date between visits, and both effects dilute the association (regression dilution). The joint model relates the hazard to the error-free current value estimated from the whole trajectory.
+
+**(e)** Report the number of chains, iterations per chain, burn-in and thinning, the Rhat for each parameter, and trace plots (at least for $\alpha$). Here the Rhat values range from `r f2(min(c(sv$Rhat, summary(jm_fit)$Outcome1$Rhat)))` to `r f2(max(c(sv$Rhat, summary(jm_fit)$Outcome1$Rhat)))`. An Rhat of 1.2 means the chains have not converged to the same distribution: run longer chains, check the trace plots for a stuck chain, and consider reparameterising (for example centring covariates or using a spline instead of correlated polynomial terms).
+
+::: {.callout-note title="Marking notes"}
+Accept a quadratic in time for (a); students should note that its MCMC mixes more slowly. In (d) a common error is to merge eGFR with `tdc()` before defining the event with `event()`, or to use the baseline eGFR only; both are acceptable as additional comparisons if labelled correctly.
+:::
+
+## Exercise 5. Time-varying confounding and an MSM
+
+```{r}
+#| label: ex5-sim
+sim_tvc <- function(n, seed) {
+  set.seed(seed)
+  L0 <- rnorm(n); U <- rnorm(n)
+  A0 <- rbinom(n, 1, plogis(-0.3 + 0.8 * L0))
+  L1 <- 0.5 * L0 - 0.8 * A0 + 0.8 * U + rnorm(n, 0, 0.6)
+  A1 <- rbinom(n, 1, plogis(-0.5 + 1.0 * L1 + 1.0 * A0))
+  Y  <- 50 + 3 * L0 + 1.5 * L1 - 2 * A0 - 2 * A1 + 4 * U + rnorm(n, 0, 3)
+  data.frame(id = seq_len(n), L0, A0, L1, A1, Y)
+}
+dat <- sim_tvc(5000, seed = 99)
+```
+
+**(a)** Setting $A_0 = a_0$ and $A_1 = a_1$ for everyone, $L_1^{a_0} = 0.5 L_0 - 0.8 a_0 + 0.8 U + e$, so $E[Y^{a_0, a_1}] = 50 + 3E[L_0] + 1.5(-0.8 a_0 + \dots) - 2a_0 - 2a_1 + \dots$. The coefficient of $a_0$ is $-2 + 1.5 \times (-0.8) = -3.2$ (direct effect plus the effect through $L_1$) and that of $a_1$ is $-2$; the other terms have mean zero.
+
+**(b)**
+
+```{r}
+#| label: ex5b
+fit_adj <- lm(Y ~ A0 + A1 + L0 + L1, data = dat)
+round(coef(summary(fit_adj))[c("A0", "A1"), ], 3)
+```
+
+The `A1` coefficient (`r f2(coef(fit_adj)["A1"])`) is close to −2, but the `A0` coefficient (`r f2(coef(fit_adj)["A0"])`) is far from −3.2. Adjusting for $L_1$ blocks the path $A_0 \to L_1 \to Y$, removing the part of the effect of $A_0$ that acts through $L_1$, and because $L_1$ is a collider on $A_0 \to L_1 \leftarrow U \to Y$, conditioning on it creates a spurious association between $A_0$ and the unmeasured $U$: among participants with the same $L_1$, those treated at time 0 must have higher $U$, which raises $Y$.
+
+**(c)**
+
+```{r}
+#| label: ex5c
+p_received <- function(model, a) { p <- fitted(model); ifelse(a == 1, p, 1 - p) }
+den0 <- glm(A0 ~ L0,           family = binomial, data = dat)
+num0 <- glm(A0 ~ 1,            family = binomial, data = dat)
+den1 <- glm(A1 ~ A0 + L0 + L1, family = binomial, data = dat)
+num1 <- glm(A1 ~ A0,           family = binomial, data = dat)
+dat$sw <- p_received(num0, dat$A0) / p_received(den0, dat$A0) *
+          p_received(num1, dat$A1) / p_received(den1, dat$A1)
+summary(dat$sw)
+```
+
+**(d)**
+
+```{r}
+#| label: ex5d
+fit_msm <- geeglm(Y ~ A0 + A1, data = dat, id = id, weights = sw,
+                  corstr = "independence")
+s5 <- coef(summary(fit_msm))[c("A0", "A1"), 1:2]
+round(cbind(s5, lower = s5[, 1] - 1.96 * s5[, 2],
+            upper = s5[, 1] + 1.96 * s5[, 2], truth = c(-3.2, -2)), 3)
+```
+
+The MSM estimates (`r f2(s5["A0", 1])` and `r f2(s5["A1", 1])`) are close to the true −3.2 and −2; the 95% interval contains the truth for `r sum(abs(s5[, 1] - c(-3.2, -2)) <= 1.96 * s5[, 2])` of the 2 coefficients.
+
+**(e)** Sequential exchangeability (no unmeasured confounding of treatment at each time given the measured past), positivity (every participant has a non-zero chance of each treatment at each time) and consistency. Only positivity can be partly examined in the data, through the distribution of the estimated treatment probabilities and of the weights; exchangeability and consistency rest on subject-matter knowledge and study design.
+
+::: {.callout-note title="Marking notes"}
+Accept unstabilised weights in (c) if the student notes that they are more variable; the point estimates are similar here. Model-based standard errors from `lm(..., weights = sw)` are a common error in (d).
+:::
+
+# Independent exercises
+
+## Exercise 6. Is proportional odds plausible for age?
+
+```{r}
+#| label: ex6
+clear_df <- as.data.frame(clear)
+m6_po  <- clmm2(severity_f ~ week * arm + age10, random = id,
+                data = clear_df, Hess = TRUE, nAGQ = 7)
+m6_npo <- clmm2(severity_f ~ week * arm, nominal = ~ age10, random = id,
+                data = clear_df, Hess = TRUE, nAGQ = 7)
+lrt6 <- anova(m6_po, m6_npo)
+lrt6
+age_splits <- sapply(1:3, function(k) {
+  g <- glmer(I(severity >= k) ~ week * arm + age10 + (1 | id),
+             family = binomial, data = clear, nAGQ = 7)
+  coef(summary(g))["age10", 1:2]
+})
+colnames(age_splits) <- paste0("severity >= ", 1:3)
+round(age_splits, 3)
+```
+
+The likelihood-ratio statistic is `r f2(lrt6[2, "LR stat."])` on `r lrt6[2, 5]` df (`r fmt_p(lrt6[2, "Pr(Chi)"])`), so there is no evidence that the age effect differs between cut-points. The split-wise age coefficients (`r paste(f2(age_splits[1, ]), collapse = ", ")`) vary but within their standard errors. This agrees with the generating model, in which age had the same effect (0.2 per 10 years) at every cut-point.
+
+::: {.callout-note title="Marking notes"}
+Students may get a convergence warning from `clmm2()` about a small gradient; it can be noted. Age must appear in the nominal part only, not also in the location part, or one parameter is redundant.
+:::
+
+## Exercise 7. Population-average probabilities
+
+```{r}
+#| label: ex7
+m7 <- clmm(severity_f ~ week * arm + (1 | id), data = clear, nAGQ = 7)
+sd7 <- sqrt(as.numeric(VarCorr(m7)$id))
+eta <- c(Placebo = 12 * m7$beta[["week"]],
+         Active = 12 * (m7$beta[["week"]] + m7$beta[["week:armActive"]]) +
+           m7$beta[["armActive"]])
+# P(moderate or severe) = P(Y > mild) = 1 - P(Y <= mild) = 1 - plogis(theta_2 - eta - b)
+set.seed(7)
+b <- rnorm(1e5, 0, sd7)
+marg <- sapply(eta, function(e) mean(1 - plogis(m7$Theta[2] - e - b)))
+cond <- sapply(eta, function(e) 1 - plogis(m7$Theta[2] - e))
+round(rbind(marginal = marg, conditional_b0 = cond), 3)
+round(c(marginal_diff = diff(rev(marg)), conditional_diff = diff(rev(cond))), 3)
+```
+
+The marginal probabilities of moderate or severe itch at week 12 are `r pct(marg[1])` (placebo) and `r pct(marg[2])` (active), a risk difference of `r f1(100 * (marg[2] - marg[1]))` percentage points. For a participant with $b_{0i} = 0$ the probabilities are `r pct(cond[1])` and `r pct(cond[2])`, a difference of `r f1(100 * (cond[2] - cond[1]))` points. They differ because the logistic curve is nonlinear: averaging over participants with very different baseline risk (random-intercept SD about `r f1(sd7)`) flattens the curve, so the population-average contrast is (here slightly) smaller in magnitude than the contrast for a typical participant. On the odds-ratio scale the difference between conditional and marginal effects is much larger than on the risk-difference scale.
+
+::: {.callout-note title="Marking notes"}
+Quadrature and Monte Carlo answers should agree to about two decimals. A common error is to use $\theta_1$ (none|mild) rather than $\theta_2$ (mild|moderate) for "moderate or severe".
+:::
+
+## Exercise 8. A nonlinear model adjusted for walking
+
+```{r}
+#| label: ex8
+walk_s <- walk |> group_by(id) |> mutate(steps_w = steps - mean(steps)) |>
+  ungroup() |> as.data.frame()
+m8 <- nlme(sbp ~ base + beta_s * steps_w - A * (1 - exp(-month / tau)),
+           data   = walk_s,
+           fixed  = list(base ~ 1, beta_s ~ 1, A ~ arm - 1, tau ~ 1),
+           random = list(id = pdDiag(base + A ~ 1)),
+           start  = c(base = 147, beta_s = 0, A = c(1.4, 6.8, 10.2), tau = 2))
+fe8 <- nlme::fixef(m8)
+round(rbind(unadjusted = c(NA, fe3[2:5]), steps_adjusted = fe8[c(2:6)]), 2)
+```
+
+The within-person steps coefficient is `r f2(fe8["beta_s"])` mmHg per 1,000 steps/day (true −0.6). The plateau falls change to `r paste(f1(fe8[3:5]), collapse = ", ")` mmHg for UC, SP and EP. The SP and EP plateaus move from the totals (about 6.7 and 10.2) to values close to the direct values (6 and 9); UC changes little because usual care barely increases walking. The steps-adjusted plateau estimates the programme effect not explained by within-person changes in walking, a controlled rather than a total effect. Treat the close agreement with caution: `steps_w` is a deviation from each participant's own mean over follow-up, which mixes programme-induced and natural fluctuations in walking, and as Module 9 explains, adjusting a randomised comparison for a post-randomisation variable changes the estimand and can introduce bias.
+
+::: {.callout-note title="Marking notes"}
+Accept a deviation from baseline steps (`steps - steps0`) instead, with a correspondingly careful interpretation. The interpretation (a controlled, not total, effect) matters more than the exact numbers.
+:::
+
+## Exercise 9. Current slope as well as current value
+
+```{r}
+#| label: ex9
+t0 <- Sys.time()
+jm_slope <- jm(cox_fail, lme_egfr, time_var = "years",
+               functional_forms = ~ value(egfr) + slope(egfr),
+               n_chains = 3L, n_iter = 6000L, n_burnin = 2000L, seed = 2026L)
+run_time <- difftime(Sys.time(), t0, units = "mins")
+s9 <- summary(jm_slope)$Survival
+s9
+```
+
+The run took about `r f1(as.numeric(run_time))` minutes. The current-value association is `r f3(s9["value(egfr)", "Mean"])` and the slope association `r f3(s9["slope(egfr)", "Mean"])` (95% credible interval `r f3(s9["slope(egfr)", "2.5%"])` to `r f3(s9["slope(egfr)", "97.5%"])`). The slope interval includes zero, so given the current value the rate of decline adds little, which is consistent with the simulation (current value only). Check the Rhat values (`r paste(f2(s9$Rhat), collapse = ", ")`); with the shorter run they may exceed 1.05, in which case the chains should be run longer before drawing conclusions.
+
+::: {.callout-note title="Marking notes"}
+Credit students who compare the two models with the information criteria (DIC, WAIC, LPML) in `summary()`. With 46 events, precise separation of value and slope effects is not expected.
+:::
+
+## Exercise 10. When standard adjustment works again
+
+```{r}
+#| label: ex10
+sim_tvc0 <- function(n, seed) {
+  set.seed(seed)
+  L0 <- rnorm(n); U <- rnorm(n)
+  A0 <- rbinom(n, 1, plogis(-0.3 + 0.8 * L0))
+  L1 <- 0.5 * L0 + 0.8 * U + rnorm(n, 0, 0.6)          # A0 no longer affects L1
+  A1 <- rbinom(n, 1, plogis(-0.5 + 1.0 * L1 + 1.0 * A0))
+  Y  <- 50 + 3 * L0 + 1.5 * L1 - 2 * A0 - 2 * A1 + 4 * U + rnorm(n, 0, 3)
+  data.frame(L0, A0, L1, A1, Y)
+}
+est10 <- t(sapply(1:200, function(r) {
+  d <- sim_tvc0(1000, r)
+  coef(lm(Y ~ A0 + A1 + L0 + L1, d))[c("A0", "A1")]
+}))
+rbind(mean = colMeans(est10), truth = c(-2, -2),
+      mcse = apply(est10, 2, sd) / sqrt(200))
+```
+
+With no effect of $A_0$ on $L_1$ the true MSM coefficients are −2 and −2, and the mean adjusted estimates (`r paste(f2(colMeans(est10)), collapse = " and ")`) are within a few Monte Carlo standard errors of them. Time-varying confounding requires g-methods when a time-varying confounder is itself affected by earlier treatment; if it is not, ordinary adjustment for the confounder history estimates the joint effects correctly.
+
+::: {.callout-note title="Marking notes"}
+Students should state the new truth before simulating. Accept any reasonable number of repetitions, provided Monte Carlo error is reported.
+:::

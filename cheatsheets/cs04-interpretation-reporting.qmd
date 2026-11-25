@@ -1,0 +1,82 @@
+---
+title: "Interpretation, diagnostics and reporting"
+subtitle: "Checklists for reading output correctly and reporting it completely"
+---
+
+## Reading coefficients correctly
+
+| In this model | The coefficient | Means |
+|---|---|---|
+| `sbp ~ month * arm` | `armEP` | Difference EP − UC at month 0, not the treatment effect |
+| | `month:armEP` | Difference in slope (mmHg per month), EP − UC |
+| `sbp ~ visit_f * arm` (UC, baseline reference) | `visit_f12:armEP` | Difference in mean change from baseline to month 12, EP − UC |
+| `sbp ~ month12 * arm`, with `month12 = month − 12` | `armEP` | Difference EP − UC at month 12 |
+| Logistic GLMM | exp(`week:armActive`) | Ratio of conditional odds ratios per week, for a given participant |
+| GEE, logit link | exp(`week:armActive`) | Ratio of population-average odds ratios per week |
+| NB GLMM with offset | exp(`post:armActive`) | Ratio of rate ratios, after vs before baseline, active vs placebo |
+| LMM with `steps_wc`, `steps_gm` | `steps_wc` | Within-person association: a week with 1,000 more steps than your own average |
+| | `steps_gm` | Between-person association: people who walk 1,000 more steps on average |
+
+## Uncertainty
+
+* A **confidence interval** describes uncertainty about a mean or a contrast. A **prediction interval** describes where a new observation or a new participant's value is likely to fall. Prediction intervals are much wider.
+* State the **degrees-of-freedom method** for LMMs (Satterthwaite or Kenward–Roger) and the **type of standard error** for GEE (robust, with small-sample correction if clusters are few).
+* State whether p-values and intervals are **adjusted for multiplicity**, for which family, and by which method. `emmeans` adjusts `trt.vs.ctrl` contrasts by default.
+* Report **Monte Carlo standard errors** for any simulation-based quantity.
+
+## Diagnostics checklist
+
+| Check | How | What a problem looks like | Sensible response |
+|---|---|---|---|
+| Warnings | Read every message; `isSingular()`; gradient checks | Convergence failure, singular fit, separation | Rescale, compare optimisers, simplify random effects for a stated reason |
+| Mean model | Residuals against time and fitted values, by arm; observed vs fitted means | Systematic curvature or arm-specific pattern | More flexible time (factor, spline) |
+| Residual variance | Residuals by visit and fitted value | Fanning | `varIdent()`, transformation if justified |
+| Correlation | Semivariogram; observed vs implied correlation | Residual correlation at short lags | Serial correlation structure |
+| Random effects | Q–Q plots of predicted effects (shrunken) | Severe outliers or bimodality | Look for subgroups; fixed effects are usually insensitive |
+| Influence | Leave-one-participant-out change in the estimand | One participant moves the estimate by a large fraction of its SE | Check the data; report a sensitivity analysis |
+| GLMM fit | DHARMa residuals, dispersion and zero tests (unconditional for grouped checks) | Over-dispersion, excess zeros | NB family; zero inflation only with a reason |
+
+Never change a model solely to obtain a significant result. Record every decision, with its reason and date, in the analysis log (`admin/templates/analysis_log_template.md`).
+
+## Reporting checklist
+
+**Design and data**
+
+* Number randomised or enrolled, and number with data at each occasion, by group (flow table).
+* Scheduled and actual measurement times; how time was coded and centred.
+* Amount and pattern of missing data, and reasons where known.
+
+**Model**
+
+* The estimand.
+* Outcome, mean model (time specification, covariates, interactions).
+* Random effects and/or residual covariance structure, and how it was chosen.
+* Estimation method (REML, ML, adaptive quadrature, GEE with its working correlation), software and package versions.
+
+**Assumptions and sensitivity**
+
+* The missing-data assumption (MAR, MCAR), and why it is plausible.
+* Sensitivity analyses (delta adjustment, alternative covariance, influential participants) and their results.
+* Diagnostics performed and what they showed.
+
+**Results**
+
+* Estimates of the estimand with 95% CIs, on an interpretable scale (mmHg, probability, rate per 28 days).
+* Variance components or working correlation as context.
+* A figure of model-estimated trajectories with CIs, with observed means overlaid where helpful.
+* Whether each result is confirmatory or exploratory, and any multiplicity adjustment.
+
+**Reproducibility**
+
+* Analysis plan (with date) and any deviations.
+* Code, data access, `sessionInfo()` or `renv.lock`.
+
+## Phrases to avoid and better alternatives
+
+| Avoid | Prefer |
+|---|---|
+| "The treatment effect was significant at month 6 but not month 3, so the effect starts at month 6" | "The estimated difference was −3.9 mmHg at month 3 and −7.7 mmHg at month 6 (95% CIs ...)" |
+| "The GLMM overestimates the effect compared with GEE" | "The GLMM estimates a conditional effect, which is larger in magnitude than the population-average effect estimated by GEE" |
+| "Missing data were MAR" | "The analysis assumes data are missing at random given the observed outcomes and arm; sensitivity analyses examined departures" |
+| "Steps reduce blood pressure within people" | "Weeks with more steps than a participant's own average were associated with lower SBP" |
+| "No significant random slope variance, so it was removed" | "The random slope was retained because individuals plausibly differ in rate of change; its removal did not change the estimand" |

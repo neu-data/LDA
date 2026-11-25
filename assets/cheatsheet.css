@@ -1,0 +1,33 @@
+/* Cheat sheets: compact, printable on A4 (portrait), light and restrained. */
+body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 0.86rem; line-height: 1.4; color: #222; background: #fff; }
+main.content, #quarto-content { max-width: 1180px !important; }
+h1.title { font-size: 1.6rem; margin-bottom: 0.2rem; }
+.subtitle { color: #555; }
+h2 { font-size: 1.1rem; border-bottom: 2px solid #0b5d8f; padding-bottom: 0.15rem; margin-top: 1.2rem; }
+h3 { font-size: 0.98rem; margin: 0 0 0.35rem 0; color: #0b5d8f; }
+p, li { max-width: none; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.card { border: 1px solid #d6d6d6; border-radius: 4px; padding: 0.55rem 0.7rem; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+.card.adv { border-color: #e5c2ab; }
+.card p { margin: 0.2rem 0; }
+.card ul { margin: 0.1rem 0 0.2rem 1rem; padding-left: 0.4rem; }
+.lab { font-weight: 650; color: #333; }
+.err { background: #fbf3ee; border-left: 3px solid #c0622b; padding: 0.15rem 0.4rem; margin-top: 0.3rem; }
+div.sourceCode, pre.sourceCode { font-size: 0.74rem; margin: 0.25rem 0; background: #f6f6f4; border: 1px solid #ececec; }
+pre code { white-space: pre-wrap; }
+table { font-size: 0.78rem; width: 100%; border-collapse: collapse; }
+th { background: #eef4f8; text-align: left; }
+td, th { border: 1px solid #ddd; padding: 0.25rem 0.4rem; vertical-align: top; }
+.note { color: #555; font-size: 0.8rem; }
+.core-tag, .advanced-tag { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 0 0.35rem; border-radius: 3px; vertical-align: middle; }
+.core-tag { background: #e7f0f6; color: #0b5d8f; border: 1px solid #b9d3e4; }
+.advanced-tag { background: #f8ece4; color: #8a3b0a; border: 1px solid #e5c2ab; }
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { font-size: 8.6pt; }
+  #quarto-margin-sidebar, #TOC, nav { display: none !important; }
+  .cards { gap: 5pt; }
+  h2 { page-break-after: avoid; }
+  .pagebreak { page-break-before: always; }
+}
+@media (max-width: 800px) { .cards { grid-template-columns: 1fr; } }

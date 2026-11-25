@@ -1,0 +1,282 @@
+---
+title: "Module 3. Statistical foundations and traditional approaches"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+wide <- load_walk("wide")
+yv <- paste0("sbp_m", c(0, 1, 3, 6, 9, 12))
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This answer key gives complete code, the executed output and model answers for the Module 3 workbook. Numbers in the answers are produced by inline R code, so they match the output exactly. Marking notes list acceptable alternatives and common errors.
+
+# Guided exercises
+
+## Exercise 1. Regression with an arm-by-time interaction
+
+```{r}
+#| label: ex1
+m1 <- lm(sbp ~ month * arm, data = walk)
+summary(m1)
+ci1 <- confint(m1)
+ci1
+b <- coef(m1)
+```
+
+**Question 2.** `(Intercept)`: mean SBP in usual care at month 0 is `r f1(b[1])` mmHg. `month`: in usual care mean SBP changes by `r f2(b["month"])` mmHg per month (95% CI `r f2(ci1["month", 1])` to `r f2(ci1["month", 2])`), essentially no change. `armEP`: at month 0, mean SBP in EP differs from UC by `r f2(b["armEP"])` mmHg, close to zero as expected after randomisation. `month:armEP`: SBP in EP falls by an extra `r f2(-b["month:armEP"])` mmHg per month compared with UC (95% CI `r f2(ci1["month:armEP", 1])` to `r f2(ci1["month:armEP", 2])`); this is the treatment effect on the rate of change.
+
+```{r}
+#| label: ex1-pred
+nd <- data.frame(month = 12, arm = factor(c("UC", "EP"), levels = c("UC", "SP", "EP")))
+pr <- predict(m1, newdata = nd, interval = "confidence")
+pr
+by_hand <- c(UC = b[1] + 12 * b[2], EP = b[1] + 12 * b[2] + b[4] + 12 * b[6])
+by_hand
+```
+
+**Question 3.** By hand: UC `r f1(by_hand[1])` mmHg, EP `r f1(by_hand[2])` mmHg, difference `r f1(by_hand[2] - by_hand[1])` mmHg, which equals $\hat\beta_3 + 12\hat\beta_5$. `predict()` gives the same values.
+
+```{r}
+#| label: ex1-res
+walk$res1 <- resid(m1)
+rc <- visit_correlation(walk, id, month_sched, res1)
+round(rc, 2)
+```
+
+**Question 5.** The table tests the independence of residuals. The correlations between residuals from the same participant range from `r f2(min(rc[upper.tri(rc)]))` to `r f2(max(rc[upper.tri(rc)]))`, so the assumption fails badly. The standard errors in `summary(m1)` are therefore wrong: those of between-participant contrasts (arm at month 0) are too small, and those of within-participant contrasts (slopes and slope differences) are typically too large.
+
+*Marking notes.* Full credit requires recognising that `armEP` is the difference at month 0, not the treatment effect. Accept "the interaction is the difference in slopes" in any wording. A common error is to say that a correlation of residuals "shows the model fits well"; it shows the opposite for the independence assumption. Accept use of `month_sched` in `visit_correlation()`; the model must use actual `month`.
+
+## Exercise 2. Paired t-tests within each arm
+
+```{r}
+#| label: ex2
+paired_arm <- function(a) {
+  d <- wide |> filter(arm == a, !is.na(sbp_m0), !is.na(sbp_m12))
+  t.test(d$sbp_m12, d$sbp_m0, paired = TRUE)
+}
+pt <- lapply(c("UC", "SP", "EP"), paired_arm)
+names(pt) <- c("UC", "SP", "EP")
+pt_tab <- data.frame(arm = names(pt),
+                     n = sapply(pt, \(x) x$parameter + 1),
+                     change = sapply(pt, \(x) unname(x$estimate)),
+                     lower = sapply(pt, \(x) x$conf.int[1]),
+                     upper = sapply(pt, \(x) x$conf.int[2]),
+                     p = sapply(pt, \(x) x$p.value))
+pt_tab
+```
+
+**Question 2.** Mean change from baseline to month 12: UC `r fmt_ci(pt_tab$change[1], pt_tab$lower[1], pt_tab$upper[1])` mmHg; SP `r fmt_ci(pt_tab$change[2], pt_tab$lower[2], pt_tab$upper[2])` mmHg; EP `r fmt_ci(pt_tab$change[3], pt_tab$lower[3], pt_tab$upper[3])` mmHg.
+
+**Question 3.** Each paired test answers a within-arm question about change, which mixes any programme effect with regression to the mean, seasonal and trial effects. Whether the programmes work depends on the *difference* in change between arms, which the separate tests do not estimate; a significant result in one arm and a non-significant result in another is not a test of that difference. The correct analysis compares arms directly (for example ANCOVA, Exercise 4).
+
+```{r}
+#| label: ex2-unpaired
+d_ep <- wide |> filter(arm == "EP", !is.na(sbp_m0), !is.na(sbp_m12))
+up <- t.test(d_ep$sbp_m12, d_ep$sbp_m0)
+up$conf.int
+r_ep <- cor(d_ep$sbp_m0, d_ep$sbp_m12)
+r_ep
+```
+
+**Question 4.** The unpaired interval (`r f1(up$conf.int[1])` to `r f1(up$conf.int[2])`, width `r f1(diff(up$conf.int))`) is much wider than the paired one (width `r f1(diff(pt$EP$conf.int))`). The unpaired test treats the two sets of measurements as independent, but baseline and month-12 SBP in EP are correlated (r = `r f2(r_ep)`). The variance of a difference is $\sigma_0^2 + \sigma_{12}^2 - 2\rho\sigma_0\sigma_{12}$, so the positive correlation makes the paired differences much less variable.
+
+*Marking notes.* Accept a sign reversal if the student consistently computes baseline minus month 12 and says so. The unpaired test on paired data is a deliberate error here; students should not recommend it.
+
+## Exercise 3. Repeated-measures ANOVA and sphericity
+
+```{r}
+#| label: ex3
+cc <- wide[complete.cases(wide[, yv]), ]
+table(cc$arm)
+lc <- cc |>
+  select(id, arm, all_of(yv)) |>
+  pivot_longer(all_of(yv), names_to = "visit", values_to = "sbp") |>
+  mutate(visit = factor(visit, levels = yv), id = factor(id))
+summary(aov(sbp ~ arm * visit + Error(id / visit), data = lc))
+```
+
+```{r}
+#| label: ex3-mlm
+Y <- as.matrix(cc[, yv])
+mlm <- lm(Y ~ arm, data = cc)
+idata <- data.frame(visit = factor(yv, levels = yv))
+sph <- anova(mlm, X = ~1, idata = idata, test = "Spherical")
+sph
+mau <- mauchly.test(mlm, X = ~1, idata = idata)
+mau
+hd <- attr(sph, "heading")
+eps_gg <- as.numeric(sub(".*: *", "", grep("Greenhouse", hd, value = TRUE)))
+eps_hf <- as.numeric(sub(".*: *", "", grep("Huynh", hd, value = TRUE)))
+```
+
+**Question 4.** The row labelled `arm` tests the arm-by-visit interaction (the row `(Intercept)` tests visit). F = `r f2(sph["arm", "F"])` on `r sph["arm", "num Df"]` and `r sph["arm", "den Df"]` df. $\hat\epsilon_{\text{GG}}$ = `r f2(eps_gg)`, $\hat\epsilon_{\text{HF}}$ = `r f2(eps_hf)`. Corrected p-values: Greenhouse–Geisser `r fmt_p(sph["arm", "G-G Pr"])`, Huynh–Feldt `r fmt_p(sph["arm", "H-F Pr"])`. Mauchly's test rejects sphericity (W = `r f2(mau$statistic)`, `r fmt_p(mau$p.value)`).
+
+```{r}
+#| label: ex3-var
+S <- cov(Y)
+v01  <- S["sbp_m0", "sbp_m0"] + S["sbp_m1", "sbp_m1"] - 2 * S["sbp_m0", "sbp_m1"]
+v012 <- S["sbp_m0", "sbp_m0"] + S["sbp_m12", "sbp_m12"] - 2 * S["sbp_m0", "sbp_m12"]
+c(m0_m1 = v01, m0_m12 = v012)
+```
+
+**Question 5.** Var(month 1 − month 0) = `r f1(v01)` mmHg² and Var(month 12 − month 0) = `r f1(v012)` mmHg². Sphericity requires the variance of every pairwise difference to be equal; here the difference between distant visits is about `r round(v012 / v01, 1)` times as variable as that between adjacent visits, because correlation declines with the time between measurements.
+
+**Question 6.** It excludes `r nrow(wide) - nrow(cc)` of `r nrow(wide)` participants (listwise deletion), which may bias results because dropout depends on SBP; it uses scheduled rather than actual visit times; it cannot include time-varying covariates such as steps; it has no participant-specific slopes; it relies on sphericity (violated); and it gives omnibus F-tests rather than an estimate of the month-12 effect with a confidence interval. Any three with explanation earn full credit.
+
+## Exercise 4. Three analyses of month 12
+
+```{r}
+#| label: ex4
+d12 <- wide |>
+  filter(!is.na(sbp_m0), !is.na(sbp_m12)) |>
+  mutate(chg = sbp_m12 - sbp_m0)
+m_fu  <- lm(sbp_m12 ~ arm, data = d12)
+m_chg <- lm(chg ~ arm, data = d12)
+m_anc <- lm(sbp_m12 ~ arm + sbp_m0, data = d12)
+tab <- bind_rows(
+  fixef_table(m_fu)  |> mutate(analysis = "Follow-up only"),
+  fixef_table(m_chg) |> mutate(analysis = "Change score"),
+  fixef_table(m_anc) |> mutate(analysis = "ANCOVA")) |>
+  filter(term == "armEP") |> select(analysis, estimate, se, lower, upper)
+tab
+rho <- cor(d12$sbp_m0, d12$sbp_m12)
+ratios <- data.frame(
+  analysis = c("Change score", "ANCOVA"),
+  predicted = c(sqrt(2 * (1 - rho)), sqrt(1 - rho^2)),
+  observed = tab$se[2:3] / tab$se[1])
+ratios
+```
+
+**Question 2.** EP vs UC: follow-up only `r f2(tab$estimate[1])` (SE `r f2(tab$se[1])`), change score `r f2(tab$estimate[2])` (SE `r f2(tab$se[2])`), ANCOVA `r f2(tab$estimate[3])` (SE `r f2(tab$se[3])`) mmHg. ANCOVA has the smallest standard error.
+
+**Question 3.** $\rho$ = `r f2(rho)`. Predicted SE ratios relative to follow-up only are `r f2(ratios$predicted[1])` (change) and `r f2(ratios$predicted[2])` (ANCOVA); observed ratios are `r f2(ratios$observed[1])` and `r f2(ratios$observed[2])`. They agree reasonably; the theory assumes equal variances at baseline and month 12 and ignores sampling variation in the standard errors.
+
+**Question 4.** The `sbp_m0` coefficient (`r f2(coef(m_anc)["sbp_m0"])`) is the expected difference in month-12 SBP per 1 mmHg higher baseline SBP, within arm. Follow-up only corresponds to a baseline coefficient of 0 and change to a coefficient of 1; ANCOVA estimates it, and because the estimate lies between 0 and 1 the adjustment for any chance baseline imbalance lies between the two, so the ANCOVA estimate lies between the other two estimates.
+
+*Marking notes.* Students may report SP instead of, or as well as, EP. A common error is to say that the three analyses estimate different effects; in a randomised trial they estimate the same effect with different precision.
+
+## Exercise 5. Checking ANCOVA and an equivalence
+
+```{r}
+#| label: ex5
+m_int <- lm(sbp_m12 ~ arm * sbp_m0, data = d12)
+a5 <- anova(m_anc, m_int)
+a5
+```
+
+```{r}
+#| label: fig-ex5
+#| fig-cap: "Month-12 against baseline SBP with a regression line per arm (left), and residuals against fitted values for the ANCOVA model (right)."
+p1 <- ggplot(d12, aes(sbp_m0, sbp_m12, colour = arm)) +
+  geom_point(alpha = 0.5, size = 1) +
+  geom_smooth(method = "lm", se = FALSE, formula = y ~ x) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Baseline SBP (mmHg)", y = "Month-12 SBP (mmHg)")
+p2 <- ggplot(data.frame(f = fitted(m_anc), r = resid(m_anc)), aes(f, r)) +
+  geom_point(alpha = 0.5, size = 1) + geom_hline(yintercept = 0, colour = "#888888") +
+  labs(x = "Fitted (mmHg)", y = "Residual (mmHg)")
+p1 + p2
+```
+
+**Questions 1 and 2.** The test of different baseline slopes gives `r fmt_p(a5[2, "Pr(>F)"])`, and the lines are nearly parallel, so a common slope is reasonable. The residuals scatter evenly around zero with no trend or funnel.
+
+```{r}
+#| label: ex5-equiv
+m_chg_adj <- lm(chg ~ arm + sbp_m0, data = d12)
+rbind(ancova = coef(m_anc), change_adj = coef(m_chg_adj))
+```
+
+**Question 3.** The arm coefficients are identical. Subtracting $y_{i0}$ from both sides of $y_{i,12} = \beta_0 + \beta_1\text{SP}_i + \beta_2\text{EP}_i + \gamma y_{i0} + \varepsilon_i$ gives $y_{i,12} - y_{i0} = \beta_0 + \beta_1\text{SP}_i + \beta_2\text{EP}_i + (\gamma - 1) y_{i0} + \varepsilon_i$: the same model, with the baseline coefficient reduced by exactly 1 (`r f2(coef(m_anc)["sbp_m0"])` versus `r f2(coef(m_chg_adj)["sbp_m0"])`).
+
+# Independent exercises
+
+## Exercise 6. Month 6 instead of month 12
+
+```{r}
+#| label: ex6
+d6 <- wide |> filter(!is.na(sbp_m0), !is.na(sbp_m6)) |> mutate(chg = sbp_m6 - sbp_m0)
+tab6 <- bind_rows(
+  fixef_table(lm(sbp_m6 ~ arm, data = d6)) |> mutate(analysis = "Follow-up only"),
+  fixef_table(lm(chg ~ arm, data = d6)) |> mutate(analysis = "Change score"),
+  fixef_table(lm(sbp_m6 ~ arm + sbp_m0, data = d6)) |> mutate(analysis = "ANCOVA")) |>
+  filter(term %in% c("armSP", "armEP"))
+tab6
+per_visit <- bind_rows(lapply(yv, function(v) {
+  d <- wide[!is.na(wide[[v]]), ]
+  fixef_table(lm(reformulate("arm", v), data = d)) |>
+    filter(term == "armEP") |> mutate(visit = v, n = nrow(d))
+}))
+per_visit
+```
+
+**Model answer.** `r nrow(d6)` participants have month-6 data. The month-6 ANCOVA estimate for EP is `r f2(tab6$estimate[tab6$analysis == "ANCOVA" & tab6$term == "armEP"])` mmHg (SE `r f2(tab6$se[tab6$analysis == "ANCOVA" & tab6$term == "armEP"])`); the per-visit estimate at month 6 is `r f2(per_visit$estimate[4])` (SE `r f2(per_visit$se[4])`), identical to the follow-up-only analysis because baseline is available for everyone. ANCOVA is more precise because it uses each participant's baseline to remove stable between-person variation. The per-visit tests use `r paste(per_visit$n, collapse = ", ")` participants at months 0 to 12, so each compares a different group of people.
+
+## Exercise 7. Precision of ANCOVA in a small trial
+
+```{r}
+#| label: ex7
+sim_three <- function(rho, n = 30, effect = -5, sd = 13, reps = 2000) {
+  S <- sd^2 * matrix(c(1, rho, rho, 1), 2)
+  res <- replicate(reps, {
+    y <- MASS::mvrnorm(2 * n, c(145, 145), S)
+    trt <- rep(0:1, each = n)
+    y[, 2] <- y[, 2] + effect * trt
+    fa <- coef(summary(lm(y[, 2] ~ trt + y[, 1])))
+    c(fu = coef(lm(y[, 2] ~ trt))[[2]],
+      chg = coef(lm(I(y[, 2] - y[, 1]) ~ trt))[[2]],
+      anc = fa[2, 1], p_anc = fa[2, 4])
+  })
+  data.frame(rho = rho, effect = effect,
+             analysis = c("Follow-up only", "Change score", "ANCOVA"),
+             mean_est = rowMeans(res[1:3, ]), emp_se = apply(res[1:3, ], 1, sd),
+             rej_anc = mean(res[4, ] < 0.05))
+}
+set.seed(7)
+s7 <- bind_rows(sim_three(0.3), sim_three(0.6))
+s7
+set.seed(8)
+t1 <- sim_three(0.6, effect = 0)
+t1$rej_anc[1]
+```
+
+**Model answer.** With 30 per arm all three estimators are approximately unbiased (means near −5). At $\rho = 0.3$ the change score is the least precise (SE `r f2(s7$emp_se[2])` vs `r f2(s7$emp_se[1])` for follow-up only) and ANCOVA the most precise (`r f2(s7$emp_se[3])`); at $\rho = 0.6$ change (`r f2(s7$emp_se[5])`) beats follow-up only (`r f2(s7$emp_se[4])`) and ANCOVA is again best (`r f2(s7$emp_se[6])`). With no true effect, the ANCOVA test rejected in `r round(100 * t1$rej_anc[1], 1)`% of simulated trials, close to the nominal 5%, so estimating $\gamma$ does not inflate the type I error even in a small trial. Monte Carlo error with 2,000 replicates is about 0.5 percentage points for a rate near 5%.
+
+*Marking notes.* Accept any number of replicates of 1,000 or more, and any seed. Values will vary slightly with the seed; the ordering of precision should not.
+
+## Exercise 8. RM-ANOVA with fewer visits
+
+```{r}
+#| label: ex8
+yv3 <- c("sbp_m0", "sbp_m6", "sbp_m12")
+cc3 <- wide[complete.cases(wide[, yv3]), ]
+nrow(cc3)
+Y3 <- as.matrix(cc3[, yv3])
+mlm3 <- lm(Y3 ~ arm, data = cc3)
+id3 <- data.frame(visit = factor(yv3, levels = yv3))
+sph3 <- anova(mlm3, X = ~1, idata = id3, test = "Spherical")
+sph3
+hd3 <- attr(sph3, "heading")
+gg3 <- as.numeric(sub(".*: *", "", grep("Greenhouse", hd3, value = TRUE)))
+hf3 <- as.numeric(sub(".*: *", "", grep("Huynh", hd3, value = TRUE)))
+```
+
+**Model answer.** `r nrow(cc3)` participants have months 0, 6 and 12, compared with `r nrow(cc)` with all six visits: fewer visits required means fewer participants lost to listwise deletion. With three visits $\hat\epsilon_{\text{GG}}$ = `r f2(gg3)` and $\hat\epsilon_{\text{HF}}$ = `r f2(hf3)` (truncated at 1 if the formula exceeds it). Choosing visits after seeing the data would be unacceptable; any subset must be pre-specified, and even then the analysis still discards intermediate visits and participants with incomplete data. A mixed model avoids the choice altogether.
+
+*Marking notes.* With three occasions epsilon is often close to 1; students should not over-interpret small differences in epsilon.
+
+## Exercise 9. Advising a colleague
+
+**Model answer (example).** "Testing each programme against usual care at each of the six visits gives 12 tests. Even with no effect at all, the chance that at least one is significant at 5% is `r round(100 * (1 - 0.95^12))`% if the tests were independent, and still well above 5% when the correlation between visits is taken into account (see the simulation in the course notes). Each test ignores baseline, so it is less precise than an ANCOVA, and each uses a different group of participants: `r per_visit$n[1]` at baseline but only `r per_visit$n[6]` at month 12, because dropout depends on blood pressure. I suggest one pre-specified primary analysis: a linear mixed model using all visits and all participants, with the difference in mean change at month 12 as the primary estimand, and visit-specific differences reported as secondary contrasts from the same model."
+
+*Marking notes.* Award marks for multiplicity, inefficiency, changing samples (missing data), and a concrete alternative. Bonferroni alone is not an adequate alternative.

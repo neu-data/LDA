@@ -1,0 +1,18 @@
+# R and RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+Rplots.pdf
+
+# Quarto and editor/tool state
+.quarto/
+.claude/
+*_cache/
+
+# Large regenerable model (about 800 MB, over GitHub's 100 MB limit).
+# Recreate with: Rscript scripts/13d_joint_model.R
+outputs/models/m13_jm.rds
+
+# Internal authoring notes
+admin/agent_brief_common.md

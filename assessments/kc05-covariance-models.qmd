@@ -1,0 +1,131 @@
+---
+title: "Module 5. Modelling covariance and choosing a model"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Answer each question briefly. Questions 9 to 12 use output produced in this document. Answers with explanations are at the end, for instructors.
+
+## Questions
+
+**Q1 (LO 5.1).** Which residual correlation structure assumes that the correlation between two measurements on the same participant is the same whatever the time between them?
+
+a. AR(1)  b. Compound symmetry  c. Exponential  d. Unstructured
+
+**Q2 (LO 5.1).** WALK visits are scheduled at months 0, 1, 3, 6, 9 and 12, and actual times vary around the schedule. Why is `corExp(form = ~ month | id)` usually preferable to `corAR1(form = ~ visit | id)` for these data?
+
+**Q3 (LO 5.1).** True or false, with a justification: with six scheduled visits, an unstructured covariance (`corSymm` plus `varIdent`) has 21 covariance parameters.
+
+**Q4 (LO 5.2).** In a `gls` model with `weights = varIdent(form = ~ 1 | visit_f)`, the estimated ratio for month 12 is 1.20 and `sigma` is 12. What is the estimated residual SD at month 12?
+
+**Q5 (LO 5.3).** A random intercept and slope model has $\tau_0^2 = 140$, $\tau_{01} = -1.5$, $\tau_1^2 = 0.3$ and independent residuals with $\sigma^2 = 32$ (time in months). Compute the implied variance at month 12 and the implied covariance between months 0 and 12.
+
+**Q6 (LO 5.3).** True or false, with a justification: a model with only a random intercept implies the same marginal covariance as a compound symmetry structure with positive correlation.
+
+**Q7 (LO 5.4).** You want to know whether a model with categorical time fits better than one with linear time, both with a random intercept and slope. Should you compare REML or ML log-likelihoods? Why?
+
+**Q8 (LO 5.5).** True or false, with a justification: when testing whether a single variance component is zero, the p-value from the $\chi^2_1$ distribution is too small, so it should be doubled.
+
+**Q9 (LO 5.4).** Use the output below. Which model has the lowest AIC and BIC? How does the model with random intercept, random slope and exponential correlation compare on each criterion, and why do the two criteria treat it differently?
+
+```{r}
+#| label: q9
+f_mean <- sbp ~ visit_f * arm
+m_cs  <- gls(f_mean, data = walk, correlation = corCompSymm(form = ~ 1 | id))
+m_exp <- gls(f_mean, data = walk, correlation = corExp(form = ~ month | id, nugget = TRUE))
+m_rs  <- lme(f_mean, random = ~ 1 + month | id, data = walk)
+m_ri_exp <- lme(f_mean, random = ~ 1 | id, data = walk,
+                correlation = corExp(form = ~ month | id, nugget = TRUE))
+m_rs_exp <- lme(f_mean, random = ~ 1 + month | id, data = walk,
+                correlation = corExp(form = ~ month | id, nugget = TRUE))
+q9 <- data.frame(model = c("CS", "Exponential", "RI + slope", "RI + exponential",
+                           "RI + slope + exponential"),
+                 AIC = sapply(list(m_cs, m_exp, m_rs, m_ri_exp, m_rs_exp), AIC),
+                 BIC = sapply(list(m_cs, m_exp, m_rs, m_ri_exp, m_rs_exp), BIC))
+knitr::kable(q9, digits = 1)
+```
+
+**Q10 (LO 5.5).** Interpret this output. What has happened, and what would you do?
+
+```{r}
+#| label: q10
+m_sing <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 + month | clinic),
+               data = walk, control = lmer_ctrl)
+VarCorr(m_sing)
+isSingular(m_sing)
+```
+
+**Q11 (LO 5.5).** The output below compares the primary model with and without a clinic random intercept (REML fits). Report the appropriate p-value.
+
+```{r}
+#| label: q11
+m_prim   <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_clinic <- update(m_prim, . ~ . + (1 | clinic))
+lr_test(m_prim, m_clinic)
+```
+
+**Q12 (LO 5.6).** The table shows the EP versus UC difference in mean change at month 12 under four covariance models. A colleague proposes choosing the model with the smallest standard error "because it is the most efficient". Comment.
+
+```{r}
+#| label: q12
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cw <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+L  <- list("EP - UC" = cw("EP", "12") - cw("EP", "0") - cw("UC", "12") + cw("UC", "0"))
+q12 <- bind_rows(lapply(list(CS = m_cs, Exponential = m_exp, `RI + slope` = m_rs,
+                             `RI + exponential` = m_ri_exp), function(m) {
+  e <- if (inherits(m, "gls")) emmeans(m, ~ visit_f * arm, mode = "df.error") else
+    emmeans(m, ~ visit_f * arm)
+  s <- summary(contrast(e, L)); data.frame(estimate = s$estimate, SE = s$SE)
+}), .id = "model")
+knitr::kable(q12, digits = 2)
+```
+
+**Q13 (LO 5.6).** Give two reasons, other than the lowest AIC, for preferring a random intercept and slope model as the primary analysis of WALK.
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+q5_var <- 140 + 2 * (-1.5) * 12 + 0.3 * 144 + 32
+q5_cov <- 140 + (-1.5) * 12
+lt <- lr_test(m_prim, m_clinic)
+best_aic <- q9$model[which.min(q9$AIC)]; best_bic <- q9$model[which.min(q9$BIC)]
+```
+
+**A1.** b. Compound symmetry gives every pair of measurements the same correlation $\rho$.
+
+**A2.** AR(1) by visit index treats every step between visits as equal, but the gaps are 1, 2, 3, 3 and 3 months and actual times vary. The exponential structure uses actual time differences, so correlation decays according to the real time between measurements.
+
+**A3.** True. Six variances plus $6 \times 5/2 = 15$ correlations. (In `gls`, one variance is `sigma` and five are ratios; the count is the same.)
+
+**A4.** $12 \times 1.20 = 14.4$ mmHg. `varIdent` ratios multiply the reference SD.
+
+**A5.** Variance at month 12: $140 + 2(-1.5)(12) + 0.3(144) + 32 = `r q5_var`$ mmHg². Covariance between months 0 and 12: $\tau_0^2 + \tau_{01}(0 + 12) + \tau_1^2(0)(12) = `r q5_cov`$ mmHg². Residual variance does not enter the covariance because residuals are independent.
+
+**A6.** True. $V_i = \tau_0^2 J + \sigma^2 I$, which has equal variances and equal covariances $\tau_0^2$, that is compound symmetry with $\rho = \tau_0^2/(\tau_0^2 + \sigma^2) \ge 0$. In WALK the two fits have identical log-likelihoods.
+
+**A7.** ML. The models have different fixed effects, and REML likelihoods depend on the fixed-effects design matrix, so they are not comparable (rescaling time from months to weeks alone changes the REML log-likelihood). `anova()` on `lmer` fits refits with ML automatically.
+
+**A8.** False. The naive p-value is too **large** (conservative), because under the null the LR statistic is zero about half the time. The correct p-value from the 50:50 mixture of $\chi^2_0$ and $\chi^2_1$ is half the naive one.
+
+**A9.** AIC favours `r best_aic` and BIC favours `r best_bic`. The model that adds a random slope is close on AIC (difference `r round(q9$AIC[5] - min(q9$AIC), 1)`) but clearly worse on BIC (difference `r round(q9$BIC[5] - min(q9$BIC), 1)`). Its two extra parameters improve the log-likelihood only slightly once serial correlation is included; AIC charges 2 per parameter while BIC charges $\log n$ (about 7.5 here), so BIC favours simpler models more strongly. Differences of one or two AIC units are not meaningful evidence either way.
+
+**A10.** The fit is singular: the clinic intercept-slope correlation is estimated as −1, so the clinic covariance matrix has collapsed to rank one. With only 8 clinics there is almost no information about clinic-level slope variation. Simplify (drop the clinic slope, or keep only a clinic intercept), and check that the treatment estimate does not change (in the notes it changes by less than a third of a standard error).
+
+**A11.** LR = `r round(lt$chisq, 2)` on 1 parameter tested on the boundary. The boundary-corrected p-value is $\tfrac12 P(\chi^2_1 > `r round(lt$chisq, 2)`) = `r formatC(p_boundary_mixture(lt$chisq), format = "f", digits = 4)`$, half the naive `r formatC(lt$p, format = "f", digits = 4)`.
+
+**A12.** The estimates are almost identical (`r round(min(q12$estimate), 2)` to `r round(max(q12$estimate), 2)`). Compound symmetry has the smallest SE (`r round(q12$SE[q12$model == "CS"], 2)`), but it is the worst-fitting of these models and its small SE comes from assuming that baseline and month 12 are as strongly correlated as adjacent visits, which the data contradict. A smaller SE from a misspecified model is not efficiency, it is overconfidence. Choose the covariance model on fit and substantive grounds (ideally prespecified), not on the size of the SE or p-value.
+
+**A13.** Any two of: it was prespecified; it handles irregular actual visit times; it describes individual trajectories (needed for subject-specific predictions); its treatment estimate and SE are very close to the best-fitting and unstructured models; it is widely understood and easy to fit with `lmer`.

@@ -1,0 +1,19 @@
+%% D3. Population-average or subject-specific question?
+%% A guide to reasoning, not an automatic rule for choosing a model.
+flowchart TD
+  A["Write the research question in words"] --> B["About averages in a population? e.g. what proportion would have moderate or severe itch under each treatment"]
+  A --> C["About change within a typical individual, or how individuals vary?"]
+  B --> B1["Marginal (population-average) target"]
+  C --> C1["Conditional (subject-specific) target"]
+  B1 --> D{"Identity link, continuous outcome?"}
+  C1 --> D
+  D -->|Yes| E["LMM fixed effects serve both: marginal and conditional coefficients coincide"]
+  D -->|"No: logit or log link"| F["Coefficients differ. For logit links GLMM effects are further from zero than GEE effects"]
+  F --> G["Marginal target: GEE, or GLMM predictions averaged over the random effects"]
+  F --> H["Conditional target: GLMM coefficients and predictions for given random effects"]
+  G --> I["Report on the probability or count scale where possible"]
+  H --> I
+  classDef q fill:#ffffff,stroke:#555555,color:#222222;
+  classDef m fill:#eef4f8,stroke:#0b5d8f,color:#222222;
+  class A,B,C,D q;
+  class B1,C1,E,F,G,H,I m;

@@ -1,0 +1,491 @@
+---
+title: "Module 9. Time-varying predictors and nonlinear change"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+kidney <- load_kidney()
+truth  <- readRDS(here("data", "walk_truth.rds"))
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+walk <- walk |>
+  group_by(id) |> mutate(steps_pm = mean(steps)) |> ungroup() |>
+  mutate(steps_wc = steps - steps_pm,
+         steps_gm = steps_pm - mean(steps_pm[!duplicated(id)]),
+         age10 = (age - 60) / 10, bmi_c = bmi - 29,
+         month_p3 = pmax(month - 3, 0))
+diff_change <- function(m) {
+  e  <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+  ch <- contrast(e, list(change = c(-1, 1)), by = "arm")
+  as.data.frame(summary(contrast(ch, "trt.vs.ctrl", by = NULL),
+                        infer = TRUE, adjust = "none"))
+}
+```
+
+## What this module covers
+
+- Time-invariant and time-varying covariates
+- Within-person and between-person associations (person-mean centring)
+- Time-varying covariates that are affected by treatment (mediation)
+- Unequal intervals: actual time, not visit number
+- Curved trajectories: polynomial, piecewise, spline, GAMM
+- What we can and cannot conclude causally
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.notes}
+Open by reminding participants that so far every covariate has been fixed at baseline, and time has been either categorical or a straight line. This module relaxes both. Learning outcomes 9.1 to 9.6. The running example is WALK, with steps as the time-varying covariate; KIDNEY appears for irregular times and the GAMM. Stress that the data are simulated, which lets us compare with the truth.
+:::
+
+# Time-varying covariates
+
+## Some covariates change at every visit
+
+```{r}
+#| echo: false
+walk |> filter(id == "W001") |> select(id, arm, age, bmi, month, steps, sbp) |>
+  knitr::kable()
+```
+
+- **Time-invariant:** arm, age, sex, BMI (repeated on every row)
+- **Time-varying:** steps (thousands/day), time itself
+
+::: {.notes}
+Point at the columns: age and BMI repeat; steps and SBP change. Ask: what two pieces of information does W001's steps column carry? Answer: how active W001 is compared with other people (the level), and how W001's activity fluctuates from week to week (the deviations). The rest of this section is about separating those two.
+:::
+
+## The programmes change steps: steps is partly an outcome
+
+```{r}
+#| echo: false
+#| fig-height: 4
+walk |>
+  group_by(arm, month_sched) |>
+  summarise(mean = mean(steps), se = sd(steps) / sqrt(n())) |>
+  ggplot(aes(month_sched, mean, colour = arm)) +
+  geom_line() + geom_point() +
+  geom_errorbar(aes(ymin = mean - 1.96 * se, ymax = mean + 1.96 * se), width = 0.25) +
+  scale_x_continuous(breaks = c(0, 1, 3, 6, 9, 12)) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Scheduled month", y = "Mean steps (thousands/day)")
+```
+
+::: {.notes}
+Steps rise by about one to two thousand a day in the programme arms and hardly change in usual care. So steps is a post-randomisation variable affected by treatment. Ask participants to keep this in mind: it will matter when we put steps into a model with arm.
+:::
+
+# Within and between
+
+## Two different questions about steps and blood pressure
+
+- **Between-person:** do people who usually walk more have lower SBP?
+- **Within-person:** when a person walks more than usual, is their SBP lower than usual?
+
+Truth (simulation only): between `r truth$beta_steps_between`, within `r truth$beta_steps_within` mmHg per 1,000 steps/day.
+
+A single coefficient for `steps` blends the two.
+
+::: {.notes}
+Give an everyday example where the two differ in sign: fit people have low resting heart rates, but a person's heart rate is higher while exercising (Curran and Bauer 2011). The naive coefficient is a weighted mixture whose weights depend on the variance at each level, so it answers no clear question. Because the data are simulated we know both true values.
+:::
+
+## Person-mean centring splits the covariate in two
+
+$$
+y_{ij} = \mathbf{x}_{ij}^\top\boldsymbol\beta + \beta_W(s_{ij} - \bar s_i) + \beta_B(\bar s_i - \bar s) + b_{0i} + b_{1i}t_{ij} + \varepsilon_{ij}
+$$
+
+```{r}
+walk <- walk |>
+  group_by(id) |> mutate(steps_pm = mean(steps)) |> ungroup() |>
+  mutate(steps_wc = steps - steps_pm,                          # within
+         steps_gm = steps_pm - mean(steps_pm[!duplicated(id)])) # between
+```
+
+Contextual effect: $\beta_C = \beta_B - \beta_W$ (enter raw `steps` + person mean).
+
+::: {.notes}
+Walk through the symbols: s_ij is steps at the visit, s-bar_i the person mean, s-bar the grand mean of person means. beta_W is the within-person effect, beta_B the between-person effect. The deviation has mean zero within each person, so it cannot be correlated with the random intercept. The contextual parameterisation gives the same fit with the second coefficient equal to between minus within. Common question: why not centre at the grand mean? Because that only shifts the intercept and does not separate the levels.
+:::
+
+## Fitting the three versions
+
+```{r}
+m_naive  <- lmer(sbp ~ steps + visit_f * arm + (1 + month | id),
+                 data = walk, control = lmer_ctrl)
+m_wb     <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + (1 + month | id),
+                 data = walk, control = lmer_ctrl)
+m_wb_adj <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm +
+                   age10 + sex + bmi_c + (1 + month | id),
+                 data = walk, control = lmer_ctrl)
+m_ctx    <- lmer(sbp ~ steps + steps_gm + visit_f * arm +
+                   age10 + sex + bmi_c + (1 + month | id),
+                 data = walk, control = lmer_ctrl)
+```
+
+::: {.notes}
+All four keep the primary mean structure so the steps terms are net of each arm's average trajectory. The adjusted model adds age, sex and BMI, which matter for the between-person comparison.
+:::
+
+## The within-person effect is stable; the between-person effect needs adjustment
+
+```{r}
+#| echo: false
+ft <- function(m, nm) fixef_table(m) |> filter(term == nm)
+ci <- function(x) fmt_ci(x$estimate, x$lower, x$upper, 2)
+nv <- ft(m_naive, "steps"); w1 <- ft(m_wb, "steps_wc"); b1 <- ft(m_wb, "steps_gm")
+w2 <- ft(m_wb_adj, "steps_wc"); b2 <- ft(m_wb_adj, "steps_gm"); cx <- ft(m_ctx, "steps_gm")
+knitr::kable(data.frame(
+  Model = c("Naive", "Centred", "Centred", "Centred + age, sex, BMI",
+            "Centred + age, sex, BMI", "Contextual + age, sex, BMI"),
+  Term = c("steps", "within", "between", "within", "between", "contextual"),
+  `Estimate (95% CI)` = c(ci(nv), ci(w1), ci(b1), ci(w2), ci(b2), ci(cx)),
+  Truth = c("none", -0.6, -1.5, -0.6, -1.5, -0.9), check.names = FALSE))
+```
+
+::: {.notes}
+Point at each row. The naive coefficient (`r f2(nv$estimate)`) sits between within and between. Within is `r f2(w2$estimate)`, unchanged by adjustment, because a person cannot be confounded by their own stable characteristics. Between moves from `r f2(b1$estimate)` to `r f2(b2$estimate)` when BMI is added: heavier people walk less and have higher SBP. The contextual effect `r f2(cx$estimate)` excludes zero, so within and between differ. Likely question: why is between less precise although person means vary more? Only 360 people versus about 1,900 occasions.
+:::
+
+## Reading the contextual effect
+
+> Among participants walking the same number of steps this week, those who **usually** walk 1,000 more steps a day have SBP about `r f1(abs(cx$estimate))` mmHg lower.
+
+- Tests whether between and within effects differ
+- Same fit as the within/between version, different labels
+
+::: {.notes}
+Many participants find the contextual effect confusing. Emphasise "same steps this week, different usual level". Both parameterisations are the same model; choose the one whose parameters answer your question.
+:::
+
+## Try it
+
+Workbook exercise 1: person-mean centring of steps, naive vs decomposed coefficients, and the effect of adjusting for BMI.
+
+::: {.notes}
+Give participants time for guided exercise 1. Ask them to write one sentence interpreting each coefficient before looking at the answer key.
+:::
+
+# Mediation
+
+## Adjusting for steps changes the treatment estimand
+
+```{r}
+m_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+                  data = walk, control = lmer_ctrl)
+m_steps   <- lmer(sbp ~ steps_wc + visit_f * arm + (1 + month | id),
+                  data = walk, control = lmer_ctrl)
+```
+
+```{r}
+#| echo: false
+d0 <- diff_change(m_primary); d1 <- diff_change(m_steps)
+knitr::kable(data.frame(
+  Contrast = c("SP vs UC", "EP vs UC"),
+  `Primary (total effect)` = fmt_ci(d0$estimate, d0$lower.CL, d0$upper.CL),
+  `Adjusted for steps` = fmt_ci(d1$estimate, d1$lower.CL, d1$upper.CL),
+  `Truth: total / not via steps` = c("-4.6 / -4.0", "-8.1 / -7.0"),
+  check.names = FALSE))
+```
+
+::: {.notes}
+Steps is a mediator: the programme raises steps, and more steps lower SBP. Adjusting removes the part of the effect that goes through walking: the estimates move towards zero by about `r f2(d1$estimate[1] - d0$estimate[1])` (SP) and `r f2(d1$estimate[2] - d0$estimate[2])` (EP), close to the true mediated parts (about 0.6 and 1.1). The adjusted estimate is a different, non-randomised quantity. Rule for trials: do not adjust the primary comparison for post-randomisation variables.
+:::
+
+## Total and direct effects answer different questions
+
+- **Total effect** (primary model): what randomisation to a programme does. Protected by randomisation.
+- **Direct effect** (adjusted for steps): the effect not acting through walking. Needs no confounding of steps and SBP, which randomisation does not guarantee.
+- Formal mediation with time-varying mediators: Module 13
+
+::: {.notes}
+Ask: who would want the direct effect? Perhaps a programme designer asking whether the education component matters beyond walking. But it needs strong assumptions. Illness, medication changes or stress could affect both steps and SBP.
+:::
+
+# Time scales
+
+## Visit number is not time
+
+```{r}
+m_actual <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_sched  <- lmer(sbp ~ month_sched * arm + (1 + month_sched | id), data = walk,
+                 control = lmer_ctrl)
+m_visit  <- lmer(sbp ~ I(visit - 1) * arm + (1 + I(visit - 1) | id), data = walk,
+                 control = lmer_ctrl)
+sapply(list(actual = m_actual, sched = m_sched, visit = m_visit),
+       function(m) fixef(m)[6])        # EP vs UC slope difference
+```
+
+::: {.notes}
+WALK visits are at months 0, 1, 3, 6, 9, 12: unequally spaced. Visit number treats the one-month gap like the three-month gaps, so the "per visit" slope has no stable unit. Actual and scheduled month agree closely here because deviations from schedule are small and unrelated to SBP; that is the best case, not a guarantee.
+:::
+
+## KIDNEY: irregular visits, more frequent when eGFR is low
+
+```{r}
+kidney <- kidney |> group_by(id) |> arrange(years, .by_group = TRUE) |>
+  mutate(visit_no = row_number() - 1) |> ungroup()
+mk_years <- lmer(egfr ~ years + (1 + years | id), data = kidney, control = lmer_ctrl)
+mk_visit <- lmer(egfr ~ visit_no + (1 + visit_no | id), data = kidney, control = lmer_ctrl)
+c(per_year = fixef(mk_years)[2], per_visit = fixef(mk_visit)[2])
+```
+
+::: {.notes}
+A KIDNEY "visit" lasts from weeks to more than a year and is shorter for sicker patients, so the per-visit slope mixes kidney decline with the clinic's scheduling policy. Only the per-year slope means something clinically. Use actual time in the fixed and random parts. Module 10 returns to the informative timing.
+:::
+
+## Try it
+
+Workbook exercise 2: time scales in WALK and KIDNEY.
+
+::: {.notes}
+Ask participants to compute the mean and SD of month minus month_sched at each scheduled visit and then compare the slopes.
+:::
+
+# Nonlinear trajectories
+
+## The true change is fast, then levels off
+
+$$\mu(t) - \mu(0) = -A\{1 - \exp(-t/2)\}$$
+
+Three ways to bend a line inside `lmer()`:
+
+- **Quadratic:** $t$, $t^2$
+- **Piecewise linear:** $t$, $(t - 3)_+$ (knot at month 3)
+- **Natural spline:** `splines::ns(month, df = 3)`
+
+All are linear in the parameters.
+
+::: {.notes}
+The exponential approach is known only because the data are simulated. Polynomials, piecewise lines and splines are basis expansions of time: new columns in the design matrix, fitted like any fixed effect. Nonlinear-in-parameters models (fitting A and the rate directly) are in Module 13.
+:::
+
+## Fitting the candidates by ML
+
+```{r}
+fit_ml <- function(f) lmer(f, data = walk, control = lmer_ctrl, REML = FALSE)
+m_lin  <- fit_ml(sbp ~ month * arm + (1 + month | id))
+m_quad <- fit_ml(sbp ~ (month + I(month^2)) * arm + (1 + month | id))
+m_pw   <- fit_ml(sbp ~ (month + month_p3) * arm + (1 + month | id))
+m_ns   <- fit_ml(sbp ~ splines::ns(month, df = 3) * arm + (1 + month | id))
+m_cat  <- fit_ml(sbp ~ visit_f * arm + (1 + month | id))
+```
+
+::: {.notes}
+ML because the fixed effects differ and we compare by AIC and BIC. Note the interaction with arm: each arm gets its own shape. Refit the chosen model with REML for reporting.
+:::
+
+## Fitted shapes against the truth
+
+```{r}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 4.2
+#| out-width: "100%"
+nd <- expand.grid(month = seq(0, 12, by = 0.1),
+                  arm = factor(c("UC", "SP", "EP"), levels = c("UC", "SP", "EP"))) |>
+  mutate(month_p3 = pmax(month - 3, 0))
+mods <- list(Linear = m_lin, Quadratic = m_quad, Piecewise = m_pw, `Natural spline` = m_ns)
+curves <- bind_rows(lapply(names(mods), function(nm) {
+  nd |> mutate(fit = predict(mods[[nm]], newdata = nd, re.form = NA), model = nm) |>
+    group_by(arm) |> mutate(change = fit - fit[month == 0]) |> ungroup()
+})) |> mutate(model = factor(model, levels = names(mods)))
+true_curve <- nd |>
+  mutate(change = -truth$A[as.character(arm)] * (1 - exp(-month / truth$tau)) +
+           truth$beta_steps_within * truth$steps_inc[as.character(arm)] * (1 - exp(-month)))
+ggplot(curves, aes(month, change, colour = arm)) +
+  geom_line(data = true_curve, aes(group = arm), linetype = "dashed", colour = "black") +
+  geom_line(linewidth = 0.9) + facet_wrap(~ model, nrow = 1) +
+  scale_x_continuous(breaks = c(0, 3, 6, 9, 12)) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Month", y = "Mean change in SBP (mmHg)")
+```
+
+::: {.notes}
+Dashed lines are the truth. Linear: hopeless. Quadratic: follows the fall, then turns back up after month 8, an artefact of symmetry. Piecewise: fast then slow with a corner at month 3. Spline: closest in the programme arms, slight wiggle in usual care. Ask: which would you show a clinician, and which would you use for the month-12 estimand?
+:::
+
+## Comparing the fits
+
+```{r}
+#| echo: false
+m12 <- function(m) {
+  p <- predict(m, newdata = filter(nd, month %in% c(0, 12)), re.form = NA)
+  ch <- p[c(2, 4, 6)] - p[c(1, 3, 5)]
+  c(SP = unname(ch[2] - ch[1]), EP = unname(ch[3] - ch[1]))
+}
+all_m <- c(mods, list(Categorical = m_cat))
+cat_ct <- fixef(m_cat)[c("visit_f12:armSP", "visit_f12:armEP")]
+knitr::kable(data.frame(
+  Model = names(all_m),
+  Parameters = sapply(all_m, function(m) attr(logLik(m), "df")),
+  AIC = round(sapply(all_m, AIC)), BIC = round(sapply(all_m, BIC)),
+  `SP vs UC, m12` = f2(c(sapply(mods, m12)["SP", ], cat_ct[1])),
+  `EP vs UC, m12` = f2(c(sapply(mods, m12)["EP", ], cat_ct[2])),
+  check.names = FALSE, row.names = NULL))
+```
+
+Truth at month 12: SP −4.6, EP −8.1.
+
+::: {.notes}
+AIC prefers the spline, BIC the piecewise model; the categorical model pays a BIC penalty for 22 parameters. Month-12 contrasts vary by about one mmHg across shapes. That is why the primary estimand uses categorical time, and smooth models are used to describe shape.
+:::
+
+## Piecewise coefficients are rates for each phase
+
+```{r}
+#| echo: false
+pw <- fixef_table(m_pw); g <- function(nm) pw$estimate[pw$term == nm]
+uc1 <- g("month"); uc2 <- uc1 + g("month_p3")
+ep1 <- uc1 + g("month:armEP"); ep2 <- uc2 + g("month:armEP") + g("month_p3:armEP")
+knitr::kable(data.frame(Arm = c("Usual care", "Enhanced programme"),
+                        `Months 0-3 (mmHg/month)` = f2(c(uc1, ep1)),
+                        `After month 3 (mmHg/month)` = f2(c(uc2, ep2)),
+                        check.names = FALSE))
+```
+
+::: {.notes}
+Slope before the knot is the month coefficient; after the knot add the month_p3 coefficient. For EP add the interaction terms too. The knot at month 3 was chosen in advance as the end of the intensive phase, not by searching. Warn against knot shopping.
+:::
+
+## Try it
+
+Workbook exercise 3: quadratic, piecewise and spline trajectories.
+
+::: {.notes}
+Participants fit the models, compare AIC and BIC, and compute the phase-specific slopes from the piecewise model.
+:::
+
+# GAMMs
+
+## A GAMM lets the data choose the smoothness
+
+$$
+y_{ij} = \beta_0 + \alpha_1\text{SP}_i + \alpha_2\text{EP}_i + f_{a(i)}(t_{ij}) + b_{0i} + b_{1i}t_{ij} + \varepsilon_{ij}
+$$
+
+- $f_a$: penalised spline for each arm; roughness penalty estimated by REML
+- Effective degrees of freedom (edf): 1 = straight line
+- Smooths are centred: arm coefficients are **average** differences
+
+::: {.notes}
+A penalised smooth is itself a mixed model: the wiggly part is a random effect, and its variance sets the smoothness. Emphasise the centring point; it is the commonest misreading of GAMM output.
+:::
+
+## Fitting a GAMM in mgcv
+
+```{r}
+g_walk <- gamm(sbp ~ arm + s(month, by = arm, k = 5),
+               random = list(id = ~ 1 + month), data = walk, method = "REML")
+summary(g_walk$gam)$s.table
+```
+
+Same model with random-effect smooths (independent intercepts and slopes):
+
+```{r}
+#| eval: false
+bam(sbp ~ arm + s(month, by = arm, k = 5) + s(idf, bs = "re") +
+      s(idf, month, bs = "re"), data = walk, method = "fREML")   # idf = factor(id)
+```
+
+::: {.notes}
+gamm() uses nlme for the random part, fast and estimates the intercept-slope correlation. The gam() version with s(id, bs = "re") is valid syntax but took about nine minutes on 360 participants; bam() fits the same formula in under a minute. id must be a factor. Point at the edf column: all above 1, highest for EP.
+:::
+
+## GAMM trajectories with intervals
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+ndp <- expand.grid(month = seq(0, 12, by = 0.1),
+                   arm = factor(c("UC", "SP", "EP"), levels = c("UC", "SP", "EP")))
+pp <- predict(g_walk$gam, newdata = ndp, se.fit = TRUE)
+ndp <- ndp |> mutate(fit = pp$fit, lo = fit - 1.96 * pp$se.fit, hi = fit + 1.96 * pp$se.fit)
+obs_means <- walk |> group_by(arm, month_sched) |> summarise(sbp = mean(sbp))
+ggplot(ndp, aes(month, fit, colour = arm, fill = arm)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, colour = NA) +
+  geom_line(linewidth = 0.8) + geom_point(data = obs_means, aes(month_sched, sbp)) +
+  scale_x_continuous(breaks = c(0, 3, 6, 9, 12)) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  scale_fill_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Month", y = "Mean SBP (mmHg)")
+```
+
+::: {.notes}
+Points are observed means, which are affected by dropout; the curves use all data under MAR. To get the month-12 estimand, compute it from predictions with the lpmatrix (shown in the notes).
+:::
+
+## GAMM for KIDNEY: accelerating decline, steeper with diabetes
+
+```{r}
+#| echo: false
+#| fig-height: 4
+kidney <- kidney |> mutate(age10 = (age - 60) / 10,
+                           dm = factor(diabetes, levels = 0:1, labels = c("No", "Yes")))
+g_kid <- gamm(egfr ~ dm + age10 + s(years, by = dm, k = 6),
+              random = list(id = ~ 1 + years), data = kidney, method = "REML")
+ndk <- expand.grid(years = seq(0, 5, by = 0.05), dm = c("No", "Yes"), age10 = 0)
+pk <- predict(g_kid$gam, newdata = ndk, se.fit = TRUE)
+ndk <- ndk |> mutate(fit = pk$fit, lo = fit - 1.96 * pk$se.fit, hi = fit + 1.96 * pk$se.fit)
+ggplot(ndk, aes(years, fit, colour = dm, fill = dm)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, colour = NA) + geom_line(linewidth = 0.8) +
+  scale_colour_manual(values = c(No = "#0072B2", Yes = "#D55E00"), name = "Diabetes") +
+  scale_fill_manual(values = c(No = "#0072B2", Yes = "#D55E00"), name = "Diabetes") +
+  labs(x = "Years since entry", y = "Mean eGFR, age 60")
+```
+
+::: {.notes}
+`gamm(egfr ~ dm + age10 + s(years, by = dm, k = 6), random = list(id = ~ 1 + years))`. Irregular times are no problem. The decline accelerates and is steeper with diabetes. Wider bands after year 4 because fewer patients remain. Measurements stop at kidney failure and visits depend on eGFR: Module 10 and the joint model in Module 13.
+:::
+
+## Try it
+
+Workbook exercise 4: a GAMM for WALK and the month-12 contrast from predictions.
+
+::: {.notes}
+If time is short, participants can fit gamm() only and skip bam().
+:::
+
+# Causal interpretation
+
+## Within-person does not mean causal
+
+- **Time-varying confounding:** illness lowers steps and raises SBP
+- **Reverse causation:** high SBP prompts advice to walk more
+- **Mediation:** steps lies between programme and SBP
+
+Randomisation protects the arm comparison, not the steps association.
+
+::: {.notes}
+Work through the reverse-causation story: high SBP at a visit, nurse advises walking, steps rise at the next visit while SBP is still high because of serial correlation. Weeks with more steps then coincide with higher SBP, which pulls the within-person association towards zero or even reverses it. Lagging helps only partly. Pointer: marginal structural models and g-methods in Module 13 (Hernán and Robins 2020).
+:::
+
+## Say what you estimated
+
+- Causal: "1,000 more steps a day **lowers** SBP by 0.6 mmHg"
+- Associational: "SBP was 0.6 mmHg lower at visits when participants walked 1,000 more steps than their own average"
+
+Use the second unless the design justifies the first.
+
+::: {.notes}
+Ask participants to rewrite a causal sentence from a paper they know as an associational one. Close the module: summary of the four tools and the causal caution.
+:::
+
+## Summary
+
+- Decompose time-varying covariates into within and between parts
+- Do not adjust trial treatment effects for post-randomisation mediators
+- Use actual time; irregular visits are fine in a mixed model
+- Piecewise for interpretable phases, splines and GAMMs for shape; categorical time for the visit-specific estimand
+- Associations with time-varying covariates are not causal effects by default
+
+::: {.notes}
+Point to the workbook independent exercises and the knowledge check kc09.
+:::

@@ -1,0 +1,5 @@
+model,grp,var1,var2,type,value,icc
+Intercept only,id,(Intercept),NA,SD,12.23069444163569,0.764275104147692
+Intercept only,Residual,NA,NA,SD,6.792489663153745,0.764275104147692
+Visit x arm means,id,(Intercept),NA,SD,12.021229241762859,0.7925397898412683
+Visit x arm means,Residual,NA,NA,SD,6.1504337974851415,0.7925397898412683

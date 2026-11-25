@@ -1,0 +1,27 @@
+/*-- scss:defaults --*/
+$body-bg: #ffffff;
+$body-color: #222222;
+$link-color: #0b5d8f;
+$presentation-heading-color: #1f1f1f;
+$presentation-heading-font-weight: 650;
+$font-family-sans-serif: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+$font-family-monospace: Consolas, "Cascadia Mono", "Courier New", monospace;
+$presentation-font-size-root: 30px;
+$presentation-h2-font-size: 1.45em;
+$code-block-bg: #f6f6f4;
+$code-block-font-size: 0.62em;
+
+/*-- scss:rules --*/
+.reveal .slide-title-block { border-bottom: 2px solid #0b5d8f; }
+.reveal h2 { border-bottom: 1px solid #dddddd; padding-bottom: 0.2em; }
+.reveal .small { font-size: 0.75em; }
+.reveal .muted { color: #666666; }
+.reveal table { font-size: 0.7em; }
+.reveal pre code { max-height: 520px; }
+.reveal .callout { font-size: 0.8em; }
+.reveal .advanced-tag { background: #f8ece4; color: #8a3b0a; border: 1px solid #e5c2ab;
+  font-size: 0.55em; padding: 0.05em 0.4em; border-radius: 3px; vertical-align: middle; }
+.reveal .core-tag { background: #e7f0f6; color: #0b5d8f; border: 1px solid #b9d3e4;
+  font-size: 0.55em; padding: 0.05em 0.4em; border-radius: 3px; vertical-align: middle; }
+.reveal .slide-number { color: #888888; }
+.reveal .footer { color: #888888; font-size: 0.5em; }

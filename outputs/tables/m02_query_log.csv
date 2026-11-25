@@ -1,0 +1,9 @@
+id,visit,issue,detail,action
+W216,2,conflicting duplicate,2024-07-20: SBP 143,kept earliest-dated record
+W216,2,conflicting duplicate,2024-07-22: SBP 137,kept earliest-dated record
+W255,5,conflicting duplicate,2024-12-12: SBP 129,kept earliest-dated record
+W255,5,conflicting duplicate,2024-12-14: SBP 139,kept earliest-dated record
+W290,2,conflicting duplicate,2024-11-21: SBP 136,kept earliest-dated record
+W290,2,conflicting duplicate,2024-11-23: SBP 140,kept earliest-dated record
+W088,6,SBP implausible,raw value: 1190,set to missing; query sent to clinic
+W345,1,SBP blank,raw value: NA,set to missing; query sent to clinic

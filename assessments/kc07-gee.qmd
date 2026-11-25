@@ -1,0 +1,111 @@
+---
+title: "Module 7. Generalized estimating equations"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: false
+source(here::here("R", "setup.R"))
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary() |> arrange(id, period)
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Thirteen questions on Module 7. Each question shows the learning outcome it addresses. Answers and explanations are at the end.
+
+## Questions
+
+**Q1 (LO 7.1).** A GEE logistic model for CLEAR gives an odds ratio of 0.92 per week for the extra decline on active treatment. Which statement is correct?
+
+a. For each participant, the odds of itch on active treatment fall by a factor 0.92 per week more than they would on placebo.
+b. The odds of itch in the population treated with the active drug fall by a factor 0.92 per week more than in the population given placebo.
+c. The probability of itch falls by 8 percentage points per week more on active treatment.
+d. The odds ratio is the same as the one a logistic mixed model would give.
+
+**Q2 (LO 7.2).** True or false, with a one-sentence justification: "If the working correlation is misspecified, the GEE estimates of the regression coefficients are biased."
+
+**Q3 (LO 7.2).** Which condition is needed for the GEE estimating equations $\sum_i D_i^\top V_i^{-1}(\mathbf{y}_i - \boldsymbol\mu_i) = \mathbf{0}$ to give consistent estimates?
+
+a. The working correlation equals the true correlation.
+b. The mean model $g(\mu_{ij}) = \mathbf{x}_{ij}^\top\boldsymbol\beta$ is correctly specified (and missing data are MCAR).
+c. The outcome is normally distributed.
+d. All clusters have the same size.
+
+**Q4 (LO 7.2).** A trial has 6 scheduled visits and 400 participants. Which working correlation would you prespecify, and why? Give one alternative that would also be defensible.
+
+**Q5 (LO 7.3).** In a GEE fit, the model-based SE of a treatment-by-time interaction is 0.029 and the robust SE is 0.028. What does the agreement suggest? Which SE would you report?
+
+**Q6 (LO 7.3).** Where does `geeglm()` store the model-based variance matrix, and which variance does `summary()` report?
+
+**Q7 (LO 7.4).** The following output comes from a Poisson GEE for the DIARY migraine counts.
+
+```{r}
+#| label: q7-output
+#| echo: true
+gee_q7 <- geeglm(migraine_days ~ post * arm + offset(log(days)),
+                 id = factor(id), waves = period + 1, data = diary,
+                 family = poisson, corstr = "exchangeable")
+coef(summary(gee_q7))
+gee_q7$geese$gamma
+```
+
+(a) Give the treatment effect as a rate ratio with a 95% confidence interval. (b) What does the scale parameter tell you? (c) Why is `log(days)` in the model as an offset?
+
+**Q8 (LO 7.4).** An analyst fits `geeglm(itch ~ week * arm, id = id, data = clear, ...)` where `id` holds character strings such as `"C001"`. R prints "NAs introduced by coercion" and some standard errors are `NaN`. What has happened and how should it be fixed?
+
+**Q9 (LO 7.5).** A cluster-randomised trial has 12 clinics (6 per arm). Why are uncorrected sandwich standard errors a concern, and what would you do?
+
+**Q10 (LO 7.5).** True or false, with justification: "With 10 clusters, switching from the sandwich to the model-based SE solves the small-sample problem."
+
+**Q11 (LO 7.6).** In CLEAR, participants with more severe itch at their last visit were more likely to drop out. Which statement is correct?
+
+a. Standard GEE is valid because the dropout is MAR.
+b. Standard GEE may be biased; a likelihood-based mixed model or inverse-probability-weighted GEE is valid under MAR if correctly specified.
+c. Standard GEE is valid if an exchangeable working correlation is used.
+d. Dropout never biases population-average estimates.
+
+**Q12 (LO 7.6).** Why should an independence working correlation be used with observation-level inverse-probability weights? And why are the resulting sandwich SEs only approximate?
+
+**Q13 (LO 7.1, 7.2).** `QIC()` for three working correlations of the same mean model gives the smallest QIC for independence, although the residuals are strongly correlated. Explain why this can happen and how you would choose the working correlation.
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers-values
+#| include: false
+c7 <- coef(gee_q7); s7 <- sqrt(diag(vcov(gee_q7)))
+rr <- exp(c7["post:armActive"])
+rr_ci <- exp(c7["post:armActive"] + c(-1, 1) * 1.96 * s7["post:armActive"])
+```
+
+**Q1.** b. GEE estimates population-average (marginal) effects. (a) describes a subject-specific effect; (c) confuses odds with probabilities; (d) is false for the logit link, where the mixed-model odds ratio is further from 1.
+
+**Q2.** False. Consistency of $\hat{\boldsymbol\beta}$ requires only a correct mean model (and MCAR missingness); the working correlation affects efficiency, and the sandwich keeps the standard errors valid.
+
+**Q3.** b. The estimating equations have mean zero at the true $\boldsymbol\beta$ whenever $E(\mathbf{y}_i - \boldsymbol\mu_i) = 0$, whatever $V_i$; MCAR ensures this also holds for the observed data. Normality and equal cluster sizes are not required.
+
+**Q4.** Unstructured or exchangeable. With six fixed visits and 400 clusters, the 15 unstructured correlations are well estimated and unstructured is the most flexible; exchangeable is a parsimonious alternative. AR(1) is defensible if visits are equally spaced and correlation is expected to decay with lag. Independence is valid but usually inefficient. Credit any justified choice that is prespecified.
+
+**Q5.** The working correlation is close to the true correlation (the model-based variance is nearly right). Report the robust SE by default; with many clusters the two lead to the same conclusions. If they differed greatly, that would signal a poor working correlation.
+
+**Q6.** In `fit$geese$vbeta.naiv`. `summary()` reports the robust (sandwich) SE, also given by `vcov(fit)`.
+
+**Q7.** (a) Rate ratio `r f2(rr)` (95% CI `r f2(rr_ci[1])` to `r f2(rr_ci[2])`): relative to baseline, the post-baseline migraine rate is about `r round(100 * (1 - rr))`% lower on active treatment than on placebo, but the interval includes 1. (b) $\hat\phi$ = `r f2(gee_q7$geese$gamma)`: the counts vary about `r f2(gee_q7$geese$gamma, 1)` times as much as Poisson counts (overdispersion). This does not invalidate GEE; the scale and the sandwich account for it. (c) The number of diary days varies (14 to 28); the offset makes the model about the rate per diary day, so periods with fewer recorded days are not mistaken for periods with fewer migraines.
+
+**Q8.** `geeglm` converts the cluster variable to numbers. Character identifiers become `NA`, and the whole dataset is treated as one cluster, so the sandwich (and the working correlation) are meaningless. Fix: `id = factor(id)` or an integer identifier, with data sorted by participant and time.
+
+**Q9.** The sandwich is consistent only as the number of clusters grows; with 12 clusters it is biased downwards, and Wald intervals undercover. Use a bias-corrected sandwich such as Mancl–DeRouen with a $t$ reference distribution on about $N - p$ degrees of freedom, report the number of clusters, and consider a mixed model or a cluster-level analysis as a sensitivity analysis.
+
+**Q10.** False. The model-based SE is valid only if the working covariance is correct, which is rarely the case. In the notes' simulation it undercovered at every number of clusters. A bias-corrected sandwich is the better remedy.
+
+**Q11.** b. Standard GEE requires MCAR (or missingness depending only on covariates in the model). MAR dropout that depends on observed outcomes biases unweighted GEE, whatever the working correlation.
+
+**Q12.** With observation-specific weights, a non-diagonal working correlation combines observations with different probabilities of being observed, and the weighted estimating equations can be biased even if the weights are right. The SEs are approximate because the sandwich treats the weights as known, whereas they were estimated; a bootstrap that re-estimates the dropout model accounts for this.
+
+**Q13.** QIC's quasi-likelihood term is computed under independence and rewards the fit of the marginal means; it is only weakly related to the correlation, so it can favour independence. Choose the working correlation from the design and the empirical residual correlations, compare model-based with robust SEs, prefer simple structures with few clusters, and prespecify the choice. QIC is more useful for comparing mean models.

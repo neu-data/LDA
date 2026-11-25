@@ -1,0 +1,250 @@
+---
+title: "Longitudinal Data Analysis: Concepts, Methods and Practical Applications Using R"
+subtitle: "Course syllabus"
+---
+
+## Purpose of the course
+
+Longitudinal studies measure the same people (or clinics, animals or plots) repeatedly over time. This makes it possible to study how outcomes change, whether change differs between groups, and how individuals differ in their trajectories. Repeated measurements on the same person are correlated, and longitudinal studies almost always have missed visits, dropout and irregular timing. Methods that ignore these features can give misleading estimates and standard errors.
+
+This course goes step by step from the structure of longitudinal data to the main modelling frameworks:
+
+* linear mixed-effects models;
+* models for the covariance structure;
+* generalized estimating equations;
+* generalized linear mixed models.
+
+It then covers time-varying predictors, nonlinear change, missing data, diagnostics, study planning and reporting. Each method is taught in the same order:
+
+1. the question it answers;
+2. the intuition behind it;
+3. the model equation;
+4. its assumptions;
+5. fitting it in R;
+6. interpreting the results;
+7. checking the fit;
+8. reporting it.
+
+The course is not organised by dates or fixed teaching hours. Each module is a self-contained unit with notes, slides, guided and independent exercises, and a knowledge check. Participants and instructors can spend as long on a module as understanding requires.
+
+## Audience and prerequisites
+
+The course is for researchers, analysts and postgraduate learners with basic statistical knowledge: descriptive statistics, confidence intervals, hypothesis tests and simple linear regression. Some familiarity with R is helpful but not essential.
+
+**Module 0 (Foundations refresher)** is for participants who need to refresh regression or R before starting the longitudinal material. It covers:
+
+* R projects and data frames;
+* the `dplyr`/`ggplot2` workflow;
+* linear and logistic regression;
+* interactions;
+* confidence intervals;
+* residuals.
+
+Participants who are confident in these topics can take the Module 0 knowledge check and go straight to Module 1.
+
+## Core and advanced material
+
+Material is labelled consistently across notes, slides and exercises:
+
+* <span class="core-tag">CORE</span> material is needed by anyone who analyses longitudinal data. Modules 0–12 are core, apart from sections inside them that are marked as advanced.
+* <span class="advanced-tag">ADVANCED</span> extensions are for participants who need specialist methods. Module 13 is entirely advanced. Each advanced section explains when the specialist method is needed and where to learn more.
+
+## Datasets
+
+All worked examples use **simulated** data. The studies are fictional and the results are illustrations, never empirical findings. Because the data were simulated, the true values are known, so you can check whether a method recovers them. The datasets, their dictionaries and the simulation scripts (with fixed seeds) are in the `data/` and `data-raw/` folders.
+
+| Dataset | Outcome | Main purpose |
+|---|---|---|
+| **WALK** (core) | Systolic blood pressure (continuous) | A three-arm trial with 6 scheduled visits, irregular actual visit times, missed visits, dropout, 8 clinics and a time-varying covariate (daily steps) |
+| **CLEAR** | Itch: binary and ordinal | GEE vs logistic GLMM; ordinal mixed models |
+| **DIARY** | Migraine days: count with varying exposure | Poisson and negative binomial models, offsets, overdispersion |
+| **KIDNEY** | eGFR (continuous) + kidney failure (time to event) | Irregular and informative visit timing; joint models |
+
+## Software
+
+R (version 4.4 or later; the materials were run with R 4.6.1) and a small, fixed set of packages. `R/setup.R` explains why each one is needed. The core packages are:
+
+* `lme4`/`lmerTest`
+* `nlme`
+* `glmmTMB`
+* `geepack`
+* `emmeans`
+* `mgcv`
+* `mice`
+* `DHARMa`
+* `dplyr`/`tidyr`/`readr`/`ggplot2`/`patchwork`/`here`
+
+The advanced material also uses `ordinal`, `survival` and `JMbayes2`. See the README for installation and the order in which to run things.
+
+## Modules and learning outcomes
+
+Each learning outcome is stated so that it can be assessed. The knowledge checks and practical assessments map to these outcomes. "LO 4.3" means Module 4, outcome 3.
+
+### Module 0. Foundations refresher: R and regression <span class="core-tag">CORE (optional for some)</span>
+
+By the end of this module participants will be able to:
+
+1. **0.1** Open the course R project, load data with relative paths and inspect data frames with `dplyr`.
+2. **0.2** Fit linear and logistic regression models in R and interpret each coefficient, its confidence interval and its p-value in the units of the outcome.
+3. **0.3** Specify and interpret an interaction between a categorical and a continuous predictor.
+4. **0.4** Produce and interpret residual-versus-fitted and normal Q–Q plots, and name the assumption each one checks.
+5. **0.5** Explain the difference between a confidence interval for a mean and a prediction interval for a new observation.
+
+### Module 1. Foundations of longitudinal data <span class="core-tag">CORE</span>
+
+1. **1.1** Classify a study design as longitudinal, repeated-measures, clustered or cross-sectional, and justify the classification.
+2. **1.2** Identify the subject, the observation, the visit and the measurement occasion in a given dataset.
+3. **1.3** Distinguish within-subject from between-subject variation, and estimate each from the WALK data.
+4. **1.4** Describe balanced and unbalanced designs, irregular visit times and unequal follow-up, and how each affects the choice of analysis.
+5. **1.5** State a research question about change, about group differences in change, or about individual trajectories, together with its estimand.
+6. **1.6** Use a simulation to show how ignoring within-subject correlation changes standard errors, and explain the direction of the error for between-subject and within-subject comparisons.
+
+### Module 2. Preparing and exploring longitudinal data in R <span class="core-tag">CORE</span>
+
+1. **2.1** Reshape longitudinal data between long and wide formats with `tidyr`, keeping identifiers and time variables intact.
+2. **2.2** Join visit-level and participant-level files and validate the result: unique subject–visit keys, consistent identifiers and plausible values.
+3. **2.3** Detect and resolve exact and conflicting duplicate records, missing visits and discrepancies between scheduled and actual measurement times, and document each decision.
+4. **2.4** Produce baseline summaries by group, visit-specific summaries and a participant-flow table.
+5. **2.5** Construct and interpret spaghetti plots, individual trajectory panels, group mean plots and missingness plots.
+6. **2.6** Explain why observed group means at each visit are not the same as model-estimated mean trajectories when dropout depends on the outcome.
+
+### Module 3. Statistical foundations and traditional approaches <span class="core-tag">CORE</span>
+
+1. **3.1** Interpret regression coefficients, interaction terms, confidence intervals and residuals in models that include time.
+2. **3.2** Carry out and interpret a paired comparison and a repeated-measures ANOVA, and state their assumptions.
+3. **3.3** Explain sphericity, apply the Greenhouse–Geisser and Huynh–Feldt corrections, and list the limitations of repeated-measures ANOVA (complete cases, fixed occasions, no time-varying covariates).
+4. **3.4** Compare follow-up-only analysis, change-score analysis and baseline-adjusted ANCOVA, and choose between them according to the research question and design.
+5. **3.5** Explain why separate tests at each visit are inefficient and inflate the number of comparisons.
+
+### Module 4. Linear mixed-effects models <span class="core-tag">CORE</span>
+
+1. **4.1** Write the equation of a random-intercept and a random-slope model and explain every term, including the distributions of the random effects and residuals.
+2. **4.2** Distinguish fixed effects, random effects and residual variation, and interpret variance components and the intraclass correlation.
+3. **4.3** Specify time as continuous, categorical, centred or nonlinear, and explain how each choice changes what the intercept and the group effects mean.
+4. **4.4** Fit and interpret a group-by-time interaction model with `lme4`/`lmerTest` and `nlme`, and report the difference in mean change with a confidence interval.
+5. **4.5** Explain the difference between ML and REML estimation and when each is appropriate.
+6. **4.6** Obtain and interpret predicted random effects (BLUPs) and shrinkage.
+
+### Module 5. Modelling covariance and choosing a model <span class="core-tag">CORE</span>
+
+1. **5.1** Describe compound symmetry, AR(1), continuous-time exponential correlation and unstructured covariance, and fit each with `nlme::gls()` or `nlme::lme()`.
+2. **5.2** Model heterogeneous residual variances over time.
+3. **5.3** Derive and compute the marginal covariance implied by a combination of random effects and residual correlation, and compare it with the observed covariance.
+4. **5.4** Compare models with likelihood-ratio tests and information criteria, using REML only for models with the same fixed effects and ML for comparing fixed effects.
+5. **5.5** Recognise boundary problems, convergence failures and singular fits, and respond to them sensibly.
+6. **5.6** Justify a final covariance model using both statistical evidence and substantive judgement, not complexity for its own sake.
+
+### Module 6. Interpretation, contrasts and prediction <span class="core-tag">CORE</span>
+
+1. **6.1** Interpret main effects correctly in the presence of interactions and centring.
+2. **6.2** Compute estimated marginal means, planned contrasts and differences in change with `emmeans`.
+3. **6.3** Decide how to handle multiplicity for a prespecified set of comparisons.
+4. **6.4** Produce and distinguish population-average and subject-specific predictions.
+5. **6.5** Distinguish confidence intervals for mean trajectories from prediction intervals for individual observations.
+6. **6.6** Present fitted trajectories and their uncertainty in clear, honest figures.
+
+### Module 7. Generalized estimating equations <span class="core-tag">CORE</span>
+
+1. **7.1** Explain the marginal model and its population-average interpretation.
+2. **7.2** Choose a working correlation structure and explain why the GEE estimates are consistent even when it is misspecified.
+3. **7.3** Distinguish model-based from robust (sandwich) standard errors and decide which to report.
+4. **7.4** Fit GEE with `geepack` for continuous, binary and count outcomes, and interpret the coefficients on the response scale.
+5. **7.5** Explain why the number of independent clusters matters, and recognise small-sample problems with sandwich estimators.
+6. **7.6** State the missing-data assumption of standard GEE (MCAR, or MAR given covariates) and describe the idea of inverse-probability-weighted GEE.
+
+### Module 8. Generalized linear mixed models <span class="core-tag">CORE</span>
+
+1. **8.1** Fit and interpret logistic mixed models for repeated binary outcomes.
+2. **8.2** Fit Poisson and negative binomial mixed models with exposure offsets, and assess overdispersion and zero inflation only where they are justified.
+3. **8.3** Explain the conditional (subject-specific) interpretation of GLMM coefficients.
+4. **8.4** Explain, with a numerical example, why logistic GLMM and GEE coefficients differ, and when each is the right target.
+5. **8.5** Report predicted probabilities, expected counts and other interpretable effect summaries with uncertainty.
+
+### Module 9. Time-varying predictors and nonlinear change <span class="core-tag">CORE</span>
+
+1. **9.1** Distinguish time-invariant from time-varying covariates.
+2. **9.2** Separate within-person and between-person associations with person-mean centring, and interpret the contextual effect.
+3. **9.3** Analyse data with unequal measurement intervals using actual measurement times.
+4. **9.4** Fit and compare polynomial, piecewise linear and spline trajectories.
+5. **9.5** Fit an introductory generalized additive mixed model with `mgcv` and interpret the smooth time effects.
+6. **9.6** Explain why associations with time-varying covariates may reflect confounding, reverse causation or mediation, and state the limits of causal interpretation.
+
+### Module 10. Missing data and dropout <span class="core-tag">CORE</span>
+
+1. **10.1** Classify intermittent missingness, dropout and missing covariates, and describe the missingness pattern in a dataset.
+2. **10.2** Define MCAR, MAR and MNAR with practical examples, and explain what observed data can and cannot establish about the missingness mechanism.
+3. **10.3** State the conditions under which a likelihood-based mixed-model analysis of the observed data is valid under MAR.
+4. **10.4** Show by simulation why last observation carried forward is generally unsuitable.
+5. **10.5** Carry out multiple imputation that respects the longitudinal or multilevel structure, and combine the results with Rubin's rules.
+6. **10.6** Conduct and report a delta-adjustment sensitivity analysis for departures from MAR.
+7. **10.7** Explain the consequences of informative visit timing.
+
+### Module 11. Diagnostics and troubleshooting <span class="core-tag">CORE</span>
+
+1. **11.1** Examine conditional and marginal residuals and identify influential subjects.
+2. **11.2** Assess the random-effects assumptions and judge how much a violation matters.
+3. **11.3** Apply outcome-specific diagnostics for GLMMs and GEE, including simulation-based residuals.
+4. **11.4** Diagnose and respond to convergence warnings, separation, sparse outcomes and unstable estimates.
+5. **11.5** Respond to poor fit in a principled way, without changing models to obtain significance.
+6. **11.6** Document analytical decisions in an analysis log.
+
+### Module 12. Study planning, reporting and reproducibility <span class="core-tag">CORE</span>
+
+1. **12.1** Choose measurement occasions and follow-up schedules for a stated research question.
+2. **12.2** Explain how correlation, effect size, dropout and the number of subjects affect precision.
+3. **12.3** Estimate power and sample size by simulation, and report the Monte Carlo error.
+4. **12.4** Write a longitudinal statistical analysis plan.
+5. **12.5** Report model specifications, assumptions, missing-data handling and results completely and transparently.
+6. **12.6** Organise a reproducible R project with relative paths, numbered scripts and recorded package versions.
+
+### Module 13. Advanced extensions <span class="advanced-tag">ADVANCED</span>
+
+1. **13.1** Fit and interpret a cumulative-logit mixed model for a repeated ordinal outcome, and describe multinomial alternatives.
+2. **13.2** Fit a three-level model (visits within participants within clinics) and partition the variance.
+3. **13.3** Fit a nonlinear mixed-effects model with interpretable parameters.
+4. **13.4** Describe the structure of a joint model for longitudinal and time-to-event data, and fit one with `JMbayes2`.
+5. **13.5** Explain time-varying confounding and why standard regression adjustment fails, and outline marginal structural models with inverse probability weighting.
+6. **13.6** Recognise when a specialist method or specialist collaborator is needed.
+
+## Materials for each module
+
+| Material | Location | Use |
+|---|---|---|
+| Course notes | `notes/` | Full explanations, equations, worked analyses with annotated output |
+| Slides with instructor notes | `slides/` | Teaching; press **S** in the browser for speaker view with notes |
+| Participant workbook | `workbook/` | Guided and independent exercises |
+| Instructor answer key | `answer-key/` | Worked solutions with executed output |
+| Knowledge checks and practical assessments | `assessments/` | Short checks per module; practical tasks with marking guides |
+| R scripts | `scripts/` | Numbered, runnable analyses that save to `outputs/` |
+| Cheat sheets and decision diagrams | `cheatsheets/`, `diagrams/` | Printable references; diagrams are editable Mermaid text files |
+| Glossary and references | `glossary/`, `references/` | Consistent terminology; verified references |
+| Final project | `final-project/` | Capstone brief and marking rubric |
+
+## Suggested progression
+
+Work through the modules in order. Modules 7 and 8 can be studied in either order, but the comparison of GEE and GLMM in Module 8 assumes Module 7. Modules 9–12 build on Modules 4–6. Module 13 is optional and its sections are independent of one another.
+
+A suggested route through each module:
+
+1. Read the notes and run the code.
+2. Use the slides in a taught session, or for revision.
+3. Complete the guided exercises, then the independent exercises.
+4. Take the knowledge check.
+
+Practical assessments are provided for Modules 2, 4, 6, 8 and 10. The final project brings all the stages together.
+
+## Assessment
+
+* **Knowledge checks** (each module): short formative questions with answers and explanations.
+* **Practical assessments** (Modules 2, 4, 6, 8, 10): an analysis task on a dataset with a marking guide.
+* **Final project**: a complete longitudinal analysis consisting of an analysis plan, exploratory analysis, justified model choice, diagnostics, sensitivity analysis and a written report, marked against a published rubric.
+
+## Key references
+
+The course draws mainly on these texts (full verified list in `references/`):
+
+* Verbeke and Molenberghs, *Linear Mixed Models for Longitudinal Data* (2000).
+* Molenberghs and Verbeke, *Models for Discrete Longitudinal Data* (2005).
+* Molenberghs and Verbeke, "Longitudinal Data Analysis", *Wiley StatsRef* (2017).
+* Fitzmaurice, Laird and Ware, *Applied Longitudinal Analysis* (2nd ed., 2011).
+* Diggle, Heagerty, Liang and Zeger, *Analysis of Longitudinal Data* (2nd ed., 2002).

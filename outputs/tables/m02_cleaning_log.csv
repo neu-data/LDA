@@ -1,0 +1,9 @@
+step,n
+Rows read,1906
+Exact duplicate rows removed,6
+Rows after removing exact duplicates,1900
+Visits with conflicting records,3
+Rows after resolving conflicts,1897
+Blank SBP values,1
+Implausible SBP values set to missing,1
+"Out-of-window visits (kept, flagged)",34

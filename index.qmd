@@ -1,0 +1,67 @@
+---
+title: "Longitudinal Data Analysis"
+subtitle: "Concepts, Methods and Practical Applications Using R"
+format:
+  html:
+    theme: default
+    css: assets/course.css
+    toc: false
+    number-sections: false
+    embed-resources: true
+    page-layout: full
+lang: en-GB
+---
+
+This page links every course material. Begin with the [syllabus](syllabus/syllabus.html), which sets out the learning outcomes and the suggested route through the modules. The [README](README.md) explains installation, file organisation and the order in which to run the R scripts.
+
+All examples use **simulated** data from fictional studies. The results illustrate the methods and are not empirical findings.
+
+## Modules
+
+```{r}
+#| echo: false
+#| results: asis
+mods <- data.frame(
+  n = sprintf("%02d", 0:13),
+  slug = c("refresher", "foundations", "data-preparation", "traditional-methods",
+           "linear-mixed-models", "covariance-models", "interpretation-prediction",
+           "gee", "glmm", "time-varying-nonlinear", "missing-data", "diagnostics",
+           "planning-reporting", "advanced"),
+  title = c("Foundations refresher: R and regression", "Foundations of longitudinal data",
+            "Preparing and exploring longitudinal data in R",
+            "Statistical foundations and traditional approaches",
+            "Linear mixed-effects models", "Modelling covariance and choosing a model",
+            "Interpretation, contrasts and prediction", "Generalized estimating equations",
+            "Generalized linear mixed models", "Time-varying predictors and nonlinear change",
+            "Missing data and dropout", "Diagnostics and troubleshooting",
+            "Study planning, reporting and reproducibility", "Advanced extensions"),
+  level = c("Core (optional refresher)", rep("Core", 12), "Advanced")
+)
+pa <- c("02", "04", "06", "08", "10")
+cat("| Module | Level | Notes | Slides | Workbook | Answer key | Knowledge check | Practical |\n")
+cat("|---|---|---|---|---|---|---|---|\n")
+for (i in seq_len(nrow(mods))) {
+  m <- mods[i, ]; s <- paste0(m$n, "-", m$slug)
+  prac <- if (m$n %in% pa) sprintf("[pa%s](assessments/pa%s.html)", m$n, s) else ""
+  cat(sprintf("| **%d. %s** | %s | [notes](notes/%s.html) | [slides](slides/%s-slides.html) | [wb%s](workbook/wb%s.html) | [ak%s](answer-key/ak%s.html) | [kc%s](assessments/kc%s.html) | %s |\n",
+              as.integer(m$n), m$title, m$level, s, s, m$n, s, m$n, s, m$n, s, prac))
+}
+```
+
+## Reference materials
+
+* Cheat sheets:
+  * [Choosing a longitudinal method](cheatsheets/cs01-method-selection.html)
+  * [Core methods reference](cheatsheets/cs02-core-methods.html)
+  * [R syntax quick reference](cheatsheets/cs03-r-syntax.html)
+  * [Interpretation, diagnostics and reporting](cheatsheets/cs04-interpretation-reporting.html)
+* [Method-selection diagrams](diagrams/decision-diagrams.html). Editable Mermaid sources are in `diagrams/*.mmd`.
+* [Glossary](glossary/glossary.html)
+* [Verified references](references/references.html)
+* [Data dictionary](data/dictionaries/data_dictionary.md)
+
+## Final project
+
+* [Brief, deliverables and marking rubric](final-project/final-project-brief.html)
+* SAP template: `final-project/sap_template.md`
+* [Instructor model solution](final-project/instructor-solution.html) (for instructors only)

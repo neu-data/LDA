@@ -1,0 +1,17 @@
+%% D5. Missing-data considerations
+%% A guide to reasoning, not an automatic rule for choosing a model.
+flowchart TD
+  A["Describe the missingness: intermittent visits, dropout, missing covariates; by arm and over time"] --> B["Why could data be missing? Use design and clinical knowledge, not only the data"]
+  B --> C{"Is MAR plausible given variables you can use?"}
+  C -->|"Yes, and they are in the analysis model"| D["Likelihood-based LMM or GLMM on all observed data"]
+  C -->|"Yes, but GEE is planned"| E["Standard GEE needs MCAR or covariate-dependent missingness: use weighted GEE or multiple imputation"]
+  C -->|"Yes, via auxiliary variables not in the analysis model"| F["Multiple imputation with auxiliary variables, respecting the longitudinal structure"]
+  D --> G["Avoid LOCF and complete-case analysis as the primary approach"]
+  E --> G
+  F --> G
+  G --> H["MNAR cannot be ruled out from the data: sensitivity analysis with delta adjustment and a tipping point"]
+  H --> I["Is visit timing related to the outcome? Consider the visit process (Module 10)"]
+  classDef q fill:#ffffff,stroke:#555555,color:#222222;
+  classDef m fill:#eef4f8,stroke:#0b5d8f,color:#222222;
+  class A,B,C,I q;
+  class D,E,F,G,H m;

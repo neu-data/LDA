@@ -1,0 +1,23 @@
+%% D4. Specifying time, random effects and residual correlation
+%% A guide to reasoning, not an automatic rule for choosing a model.
+flowchart TD
+  A["Few fixed occasions shared by all, and the shape of change unknown?"] -->|Yes| T1["Time as a factor in the mean model; estimand = contrast at chosen visits"]
+  A -->|"No: many or irregular times"| T2["Continuous time: linear, polynomial, piecewise or spline (Module 9), using actual times"]
+  T1 --> C["Centre time where the intercept and group effects are meaningful"]
+  T2 --> C
+  C --> R["Random effects: do individuals plausibly differ in level? in rate of change?"]
+  R --> R1["Random intercept"]
+  R --> R2["Random intercept and slope on actual time"]
+  R1 --> S["Correlation left after the random effects? Closely spaced visits suggest serial correlation"]
+  R2 --> S
+  S --> S1["Independent residuals"]
+  S --> S2["AR(1) or exponential in actual time; heterogeneous variances"]
+  S --> S3["Unstructured covariance without random effects (few occasions, many subjects)"]
+  S1 --> V["Compare the implied marginal covariance V = Z G Z^T + R with the observed covariance; REML comparisons need the same fixed effects (Module 5)"]
+  S2 --> V
+  S3 --> V
+  V --> W["Prefer the simplest adequate model and check that conclusions are stable"]
+  classDef q fill:#ffffff,stroke:#555555,color:#222222;
+  classDef m fill:#eef4f8,stroke:#0b5d8f,color:#222222;
+  class A,C,R,S,V q;
+  class T1,T2,R1,R2,S1,S2,S3,W m;

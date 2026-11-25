@@ -1,0 +1,208 @@
+---
+title: "Module 8. Generalized linear mixed models"
+subtitle: "Practical assessment"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+clear <- load_clear() |>
+  arrange(id, week) |>
+  mutate(any_itch = as.integer(severity >= 1),   # mild, moderate or severe
+         age45 = (age - 45) / 10)
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Task brief
+
+The investigators of the CLEAR trial (placebo vs active topical treatment, 200 participants, visits at weeks 0, 2, 4, 6, 8 and 12) want a secondary analysis of a different binary endpoint: **any itch**, defined as severity mild, moderate or severe (`severity >= 1`), rather than the primary endpoint of moderate or severe itch used in the course notes. They ask two questions:
+
+1. Does the active treatment change how the odds of any itch evolve over 12 weeks **for an individual participant**?
+2. What proportion of participants would have any itch at week 12 **in the population** on each treatment, and what is the difference?
+
+Your analysis must be adjusted for age (centred at 45 years, per 10 years: `age45`) and sex, as prespecified in the (fictional) statistical analysis plan.
+
+## Data
+
+Use `load_clear()` and create the outcome as in the setup chunk above:
+
+```r
+clear <- load_clear() |>
+  arrange(id, week) |>
+  mutate(any_itch = as.integer(severity >= 1), age45 = (age - 45) / 10)
+```
+
+The variables are described in `data/dictionaries/data_dictionary.md`. Remember that dropout in CLEAR depends on the last observed severity.
+
+## Deliverables
+
+Submit a single rendered Quarto document (HTML) containing:
+
+1. **Exploration (brief).** Observed proportion with any itch by arm and week, with the number of participants seen, in a table or figure.
+2. **Model specification.** A logistic mixed model with fixed effects for week, arm, their interaction, `age45` and `sex`, and a random intercept for participant. State the model in an equation and explain every symbol.
+3. **Estimation check.** Fit the model with the Laplace approximation and with adaptive Gauss–Hermite quadrature, compare the results, and justify the fit you report.
+4. **Model checking.** DHARMa simulation-based residuals, with a short interpretation. If you use any check aggregated by participant, say how you simulated.
+5. **Conditional results.** The odds ratio for the additional weekly change on active treatment, with a 95% CI, interpreted as a subject-specific effect; the random-intercept SD and what it means.
+6. **Population-averaged results.** Population-averaged probabilities of any itch at week 12 in each arm (for a 45-year-old, or averaged over the observed age and sex distribution: state which), the risk difference with a 95% interval, and a description of how the interval was obtained.
+7. **GEE comparison.** A GEE analysis of the same mean model (exchangeable working correlation, robust SEs), and a short explanation, using the attenuation approximation, of why its odds ratios differ from the GLMM's.
+8. **Missing data.** Two or three sentences on whether the dropout mechanism threatens the GLMM and the GEE results.
+9. **Report paragraph.** A methods-and-results paragraph of at most 200 words, in the style of a journal article.
+
+## Marking guide (100 points)
+
+| Criterion | Points | Full marks require |
+|---|---|---|
+| 1. Exploration | 8 | Correct proportions by arm and week; numbers seen at each visit shown; dropout noted |
+| 2. Model specification | 10 | Correct equation; all symbols defined; conditional nature of coefficients stated; correct R formula with `(1 | id)` |
+| 3. Estimation check | 10 | Laplace and AGQ (`nAGQ` ≥ 10) both fitted; differences in the random-intercept SD and fixed effects described; AGQ chosen for reporting with reason |
+| 4. Model checking | 10 | DHARMa residuals plotted and tested; interpretation consistent with the output; no overclaiming from a single test; correct simulation setting for any grouped check |
+| 5. Conditional results | 15 | Correct odds ratio and CI; "for a given participant" interpretation; random-intercept SD interpreted (for example ratio of odds one SD apart, or latent ICC) |
+| 6. Population-averaged results | 20 | Probabilities obtained by integrating over the random intercept (not by plugging in $b = 0$); covariate values stated; risk difference with a valid interval method (simulation from the joint sampling distribution of fixed effects and SD, or parametric bootstrap); correct interpretation |
+| 7. GEE comparison | 12 | Correct GEE fit (`id = factor(id)`, sorted data); comparison with attenuation factor computed from the estimated SD; explanation that the two estimate different parameters |
+| 8. Missing data | 5 | GLMM valid under MAR if correctly specified; standard GEE requires MCAR and may be biased; IPW-GEE mentioned as an option |
+| 9. Report paragraph | 10 | Accurate numbers with CIs; states model, estimation method, which effects are conditional and which marginal; within word limit |
+
+**Common deductions.** Presenting `emmeans(..., type = "response")` probabilities from the GLMM as population proportions (−6). Using a character `id` in `geeglm` (−4). Calling the GEE–GLMM difference "bias" (−4). Reporting only odds ratios without absolute probabilities (−4). Laplace-only fit without justification (−3).
+
+## Model solution (for instructors)
+
+### 1. Exploration
+
+```{r}
+#| label: sol-explore
+clear |>
+  group_by(arm, week) |>
+  summarise(n_seen = n(), prop_any_itch = round(mean(any_itch), 3)) |>
+  pivot_wider(names_from = arm, values_from = c(n_seen, prop_any_itch))
+```
+
+The proportion with any itch is high at baseline in both arms and falls over time, more on active treatment. The number of participants seen falls from 100 per arm at week 0 to about 80 at week 12; because dropout depends on severity, the later observed proportions are from a selected group.
+
+### 2–3. Model and estimation check
+
+$$
+\operatorname{logit} P(Y_{ij} = 1 \mid b_{0i}) = \beta_0 + \beta_1 t_{ij} + \beta_2 \text{Active}_i + \beta_3 t_{ij}\text{Active}_i + \beta_4 \text{age45}_i + \beta_5 \text{Female}_i + b_{0i}, \qquad b_{0i} \sim N(0, \tau_0^2)
+$$
+
+with $Y_{ij}$ = any itch for participant $i$ at occasion $j$, $t_{ij}$ the week, and all coefficients conditional on the participant's random intercept $b_{0i}$.
+
+```{r}
+#| label: sol-fit
+f_pa <- any_itch ~ week * arm + age45 + sex + (1 | id)
+m_lap <- glmer(f_pa, data = clear, family = binomial, nAGQ = 1)
+m_agq <- glmer(f_pa, data = clear, family = binomial, nAGQ = 25)
+m_a10 <- glmer(f_pa, data = clear, family = binomial, nAGQ = 10)
+cmp <- rbind(laplace = c(fixef(m_lap), sd = unname(attr(VarCorr(m_lap)$id, "stddev"))),
+             agq10 = c(fixef(m_a10), sd = unname(attr(VarCorr(m_a10)$id, "stddev"))),
+             agq25 = c(fixef(m_agq), sd = unname(attr(VarCorr(m_agq)$id, "stddev"))))
+round(cmp, 4)
+```
+
+```{r}
+#| label: sol-fit-values
+#| include: false
+fa <- fixef(m_agq); sa <- sqrt(diag(as.matrix(vcov(m_agq))))
+sig <- unname(attr(VarCorr(m_agq)$id, "stddev"))
+```
+
+The Laplace approximation gives a random-intercept SD of `r f2(cmp["laplace", "sd"], 3)` against `r f2(cmp["agq25", "sd"], 3)` with 25 quadrature points; 10 and 25 points agree, so the AGQ fit is reported.
+
+### 4. Model checking
+
+```{r}
+#| label: sol-dharma
+#| fig-width: 9
+#| fig-height: 4.2
+res <- simulateResiduals(m_agq, n = 1000, seed = 1)
+plot(res, quantreg = FALSE)
+testDispersion(res, plot = FALSE)
+```
+
+The scaled residuals are close to uniform and show no pattern against the predictions; the dispersion test does not suggest misspecification. (These checks are observation-level, so DHARMa's default conditional simulation is appropriate; a check aggregated by participant would use `simulateREs = "unconditional"`.)
+
+### 5. Conditional results
+
+```{r}
+#| label: sol-or
+ft <- fixef_table(m_agq, exponentiate = TRUE); ft
+```
+
+For a given participant, the odds of any itch are multiplied by `r f2(ft$estimate[2], 3)` per week on placebo, and by a further `r f2(ft$estimate[ft$term == "week:armActive"], 3)` per week on active treatment (95% CI `r f2(ft$lower[ft$term == "week:armActive"], 3)` to `r f2(ft$upper[ft$term == "week:armActive"], 3)`). The random-intercept SD is `r f2(sig)`: participants one SD apart differ in their odds of any itch by a factor of about `r round(exp(sig), 1)` at every visit (latent ICC `r f2(sig^2 / (sig^2 + pi^2 / 3))`).
+
+Because the data are simulated, the truth is known: the binary outcome "any itch" follows a logistic random-intercept model with intercept 2.5 (the negative of the first cut-point) for a 45-year-old man, week slope −0.06, extra active slope −0.16, age 0.20, female 0.30 and SD 2.0. Students cannot know this and it is not part of the marking.
+
+```{r}
+#| label: sol-truth
+round(cbind(truth = c(2.5, -0.06, 0, 0.20, 0.30, -0.16), estimate = fa, se = sa), 3)
+```
+
+In this dataset the placebo week slope (`r f2(fa['week'], 3)`) and the interaction (`r f2(fa['week:armActive'], 3)`) are each about `r f2(abs(fa['week'] + 0.06) / sa['week'], 1)` and `r f2(abs(fa['week:armActive'] + 0.16) / sa['week:armActive'], 1)` standard errors from their true values, in opposite directions. Discrepancies of this size occur by chance in single trials; the lesson for instructors is that students' conclusions must follow their own estimates, which here do not show a clear treatment effect on the weekly change for this endpoint.
+
+### 6. Population-averaged results
+
+Population-averaged probabilities are computed by integrating over the random intercept with Gauss–Hermite quadrature and then averaging over the observed age and sex distribution (each participant's baseline covariates, with arm set to each value in turn). Intervals come from 4,000 draws from the joint approximate sampling distribution of $(\tau_0, \boldsymbol\beta)$.
+
+```{r}
+#| label: sol-marginal
+gauss_hermite <- function(n) {
+  i <- seq_len(n - 1)
+  J <- matrix(0, n, n); J[cbind(i, i + 1)] <- J[cbind(i + 1, i)] <- sqrt(i / 2)
+  e <- eigen(J, symmetric = TRUE)
+  list(x = e$values, w = sqrt(pi) * e$vectors[1, ]^2)
+}
+gh <- gauss_hermite(30)
+marginal_p <- function(eta, sigma)
+  sapply(eta, function(e) sum(gh$w / sqrt(pi) * plogis(e + sqrt(2) * sigma * gh$x)))
+
+base <- distinct(clear, id, age45, sex)
+X_arm <- function(a) model.matrix(~ week * arm + age45 + sex,
+  transform(base, week = 12, arm = factor(a, levels = c("Placebo", "Active"))))
+Xpl <- X_arm("Placebo"); Xac <- X_arm("Active")
+pop_p <- function(beta, s) c(placebo = mean(marginal_p(Xpl %*% beta, s)),
+                             active = mean(marginal_p(Xac %*% beta, s)))
+V_joint <- 2 * solve(m_agq@optinfo$derivs$Hessian)
+set.seed(8)
+draws <- MASS::mvrnorm(4000, c(getME(m_agq, "theta"), fa), V_joint)
+pd <- t(apply(draws, 1, function(d) pop_p(d[-1], abs(d[1]))))
+est <- pop_p(fa, sig)
+res_tab <- rbind(
+  placebo = c(est["placebo"], quantile(pd[, "placebo"], c(0.025, 0.975))),
+  active = c(est["active"], quantile(pd[, "active"], c(0.025, 0.975))),
+  risk_difference = c(est["active"] - est["placebo"],
+                      quantile(pd[, "active"] - pd[, "placebo"], c(0.025, 0.975))))
+round(res_tab, 3)
+```
+
+```{r}
+#| label: sol-marginal-values
+#| include: false
+rt <- res_tab
+```
+
+At week 12, an estimated `r f2(rt["placebo", 1])` (95% interval `r f2(rt["placebo", 2])` to `r f2(rt["placebo", 3])`) of the population would have any itch on placebo and `r f2(rt["active", 1])` (`r f2(rt["active", 2])` to `r f2(rt["active", 3])`) on active treatment, a risk difference of `r f2(rt["risk_difference", 1])` (`r f2(rt["risk_difference", 2])` to `r f2(rt["risk_difference", 3])`). The columns of the table are the estimate and the 2.5th and 97.5th percentiles of the draws. Note that this week-12 difference includes the chance baseline difference between arms (`armActive` = `r f2(fa['armActive'], 2)` on the log-odds scale) as well as the difference in change, whose odds ratio has a confidence interval including 1. Good answers point this out rather than reading the week-12 risk difference as proof of a treatment effect on the course of itch.
+
+### 7. GEE comparison
+
+```{r}
+#| label: sol-gee
+gee_pa <- geeglm(any_itch ~ week * arm + age45 + sex, id = factor(id), waves = visit,
+                 data = clear, family = binomial, corstr = "exchangeable")
+atten <- 1 / sqrt(1 + 0.346 * sig^2)
+round(cbind(glmm = fa, approx_marginal = fa * atten, gee = coef(gee_pa)), 4)
+```
+
+The attenuation factor is `r f2(atten, 3)`. The GLMM interaction `r f2(fa["week:armActive"], 4)` corresponds to an approximate marginal value of `r f2(fa["week:armActive"] * atten, 4)`, against the GEE estimate `r f2(coef(gee_pa)["week:armActive"], 4)`. The GLMM describes change within a participant, GEE the change in the population proportion; with a large between-participant SD the two differ substantially, and neither is biased relative to its own target.
+
+### 8. Missing data
+
+Dropout depended on the last observed severity, which is MAR given the observed outcomes. The likelihood-based GLMM is valid under MAR if the model is correctly specified. Standard GEE requires MCAR and may be biased (most likely towards an overly fast decline in placebo); inverse-probability-weighted GEE (Module 7) or the GLMM-based marginal probabilities are preferable.
+
+### 9. Report paragraph (model answer)
+
+Any itch (mild or worse) was analysed with a logistic mixed model with week, arm, their interaction, age and sex as fixed effects and a random intercept for each participant, fitted by adaptive Gauss–Hermite quadrature (25 points); results were stable across 10 and 25 points, while the Laplace approximation underestimated the random-intercept SD. For a given participant, the odds of any itch decreased by a further factor of `r f2(ft$estimate[ft$term == "week:armActive"], 3)` per week on active treatment compared with placebo (95% CI `r f2(ft$lower[ft$term == "week:armActive"], 3)` to `r f2(ft$upper[ft$term == "week:armActive"], 3)`); the between-participant SD of the log-odds was `r f2(sig)`. Population-averaged probabilities, obtained by integrating over the random intercepts and averaging over the observed covariates, were `r f2(rt["placebo", 1])` on placebo and `r f2(rt["active", 1])` on active treatment at week 12 (risk difference `r f2(rt["risk_difference", 1])`, 95% interval `r f2(rt["risk_difference", 2])` to `r f2(rt["risk_difference", 3])`). The week-12 difference partly reflects a chance baseline imbalance; the evidence for a treatment effect on the change in any itch was weak. Simulation-based residuals showed no evidence of misfit. The analysis is valid if dropout is missing at random.

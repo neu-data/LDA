@@ -1,0 +1,232 @@
+---
+title: "Module 4. Linear mixed-effects models"
+subtitle: "Practical assessment"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+```{r}
+#| label: helpers
+#| include: false
+f0 <- function(x) formatC(x, format = "f", digits = 0)
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.callout-note title="For instructors"}
+Sections 1 to 4 are the participant brief. Section 5 is the marking guide and Section 6 the executed model solution. Remove Sections 5 and 6 before giving the document to participants. The data are the standard course file `data/walk_long.csv`, loaded with `load_walk()`.
+:::
+
+# Task brief
+
+The WALK trial aimed to lower blood pressure by increasing physical activity. Average daily step count (`steps`, thousands of steps per day, measured over the week before each visit) was recorded at every visit. The trial team now asks a secondary question:
+
+> Do the standard and enhanced walking programmes increase daily step count over 12 months compared with usual care, and how much do participants differ in their activity trajectories?
+
+You will plan, fit, check and report a linear mixed-effects model for `steps`. Work in a Quarto document that renders without errors. Use only the course packages loaded by `R/setup.R` and `control = lmer_ctrl` in every `lmer()` call.
+
+# The data
+
+Use `walk <- load_walk()`. The variables you need are `id`, `arm`, `visit_f` (scheduled month as a factor), `month` (actual months since randomisation) and `steps`. All `r n_distinct(walk$id)` participants and all `r nrow(walk)` observations should be used unless you justify an exclusion. Dropout in WALK depends on the most recent observed SBP and on arm (Module 1 and the data dictionary).
+
+# Tasks
+
+1. **Explore.** Plot individual step trajectories for a sample of participants and the observed mean step count by arm and scheduled visit. Describe the shape of the mean trajectories in two or three sentences.
+2. **Specify.** State the estimand for the primary comparison. Write the equation of a model with categorical scheduled visit by arm for the mean and a correlated random intercept and random slope on actual time, explaining every symbol, including the distributions of the random effects and residuals.
+3. **Random effects.** Fit a random-intercept model and the random-slope model (both with categorical time by arm). Compare them with an appropriate test and interpret the variance components of the chosen model. Compute the ICC from the random-intercept model and explain why it does not describe the random-slope model.
+4. **Primary estimate.** Using `emmeans`, estimate the difference in mean change in steps from baseline to month 12 for each programme compared with usual care, with 95% confidence intervals. Refit the model with `nlme::lme()` and show that the two packages agree.
+5. **Time.** Fit the same model with a linear term in actual time instead of categorical visit. Compare the two mean models using the correct estimation method, and explain, with reference to your plot from task 1, which one you would use for the primary estimate and why.
+6. **Checks.** Produce and comment on basic residual plots (residuals against fitted values, Q-Q plots of residuals and of predicted random effects).
+7. **Individuals.** Compare participants' separate least-squares slopes with their predicted (BLUP) slopes from a random-slope model with linear time. Explain the pattern.
+8. **Report.** Write a methods and results paragraph (no more than 200 words) for a paper, with numbers taken from your output by inline R.
+9. **Reflect.** In no more than 100 words, say whether the missing-at-random assumption is plausible for this outcome, given how dropout arose.
+
+# Deliverables
+
+- A rendered HTML file and its `.qmd` source.
+- All code visible, all numbers in the text produced by inline R.
+- Figures with axis labels and units.
+
+# Marking guide (for instructors)
+
+Total 100 points.
+
+| Task | Criterion | Points |
+|---|---|---|
+| 1 | Spaghetti plot of a sample and mean plot by arm and visit; correct description: rise in the programme arms over the first three months (most of it by month 1 in EP), then a plateau; little change in UC | 8 |
+| 2 | Estimand stated as difference in mean change (thousands of steps/day) from baseline to month 12, programme minus UC (3). Equation correct with categorical visit indicators and interactions (4), random intercept and slope with $G$ and $\sigma^2$, distributions and independence stated (4), every symbol explained (2) | 13 |
+| 3 | Both models fitted (2); REML LR test with same fixed effects and boundary-corrected p-value, or justified alternative (4); variance components interpreted in units (4); ICC computed correctly (2) and explanation that the random-slope model implies time-varying correlation (2) | 14 |
+| 4 | Correct `emmeans` contrasts with explicit adjustment choice (6); estimates and CIs reported in units with direction (4); `lme` fit with matching estimates, degrees-of-freedom difference noted (4) | 14 |
+| 5 | Linear-time model fitted (2); comparison by ML (refit) with LR test or AIC (4); argument that a straight line misrepresents the fast rise and plateau, so categorical time is preferred for the month-12 estimand (4) | 10 |
+| 6 | Three plots produced (3); sensible comments including the granularity of steps values, the shrinkage artefact in residuals versus fitted, and no serious violations (4) | 7 |
+| 7 | OLS and BLUP slopes computed correctly, including arm-specific terms (4); plot or summary by number of visits (2); explanation of shrinkage and why few-visit participants shrink most (4) | 10 |
+| 8 | Paragraph states model, estimation, population, missing-data assumption, estimates with CIs in units, variance components; all from inline R; within length (12) | 12 |
+| 9 | Recognises that dropout depended on observed SBP (not steps); MAR given the observed steps history is plausible only to the extent that SBP history is reflected in steps; suggests including SBP in a joint or auxiliary model, or a sensitivity analysis (Module 10) | 7 |
+| All | Document renders, code readable, no hand-typed model numbers | 5 |
+
+*Common errors to penalise:* reporting `armSP`/`armEP` as treatment effects; leaving the default Dunnett adjustment unstated; comparing mean models with REML likelihoods; describing $\hat\tau$ as a standard error; analysing completers only; forgetting the arm-specific slope terms when computing BLUP slopes.
+
+*Acceptable alternatives:* using scheduled time in the random slope with a justification (minor deduction only if actual time is ignored without comment); reporting Dunnett-adjusted intervals if stated; adding baseline covariates as a secondary analysis.
+
+# Model solution (for instructors)
+
+## Task 1. Exploration
+
+```{r}
+#| label: sol-explore
+#| fig-height: 3.8
+plot_spaghetti(walk, month, steps, id, group = arm, n_show = 45) +
+  labs(x = "Months since randomisation", y = "Daily steps (thousands)")
+plot_observed_means(walk, month_sched, steps, arm) +
+  labs(x = "Scheduled month", y = "Mean daily steps (thousands)")
+obs_means <- walk |> group_by(arm, month_sched) |> summarise(mean = mean(steps), n = n())
+obs_means |> tidyr::pivot_wider(id_cols = arm, names_from = month_sched, values_from = mean)
+```
+
+Observed mean step counts are similar at baseline. In the programme arms they rise over the first three months, most steeply in the first month, and then stay roughly level to month 12; in usual care they change little. Individual trajectories vary widely in level and fluctuate from visit to visit.
+
+## Task 2. Estimand and model
+
+The estimand is the difference between each programme and usual care in mean change in daily steps (thousands/day) from baseline to month 12, in all randomised participants, assuming data are missing at random. With $V_{kij}$ the indicator that occasion $j$ of participant $i$ is scheduled visit $k$ ($k = 2, \dots, 6$),
+
+$$
+y_{ij} = \beta_0 + \sum_{k=2}^{6}\gamma_k V_{kij} + \beta_{\text{SP}}\text{SP}_i + \beta_{\text{EP}}\text{EP}_i
++ \sum_{k=2}^{6}\left(\delta^{\text{SP}}_k V_{kij}\text{SP}_i + \delta^{\text{EP}}_k V_{kij}\text{EP}_i\right)
++ b_{0i} + b_{1i}t_{ij} + \varepsilon_{ij},
+$$
+
+with $(b_{0i}, b_{1i})^\top \sim N(\mathbf{0}, G)$, $G$ having elements $\tau_0^2$, $\tau_1^2$, $\tau_{01}$, and $\varepsilon_{ij} \sim N(0, \sigma^2)$ independent of the random effects and across participants. $y_{ij}$ is daily steps, $t_{ij}$ actual time, $\gamma_k$ the mean change to visit $k$ in UC, and $\delta_6^{\text{SP}}$, $\delta_6^{\text{EP}}$ the estimands.
+
+## Task 3. Random effects
+
+```{r}
+#| label: sol-re
+s_ri <- lmer(steps ~ visit_f * arm + (1 | id), data = walk, control = lmer_ctrl)
+s_rs <- lmer(steps ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+anova(s_ri, s_rs, refit = FALSE)
+lrt <- lr_test(s_ri, s_rs)
+p_boundary_mixture(lrt$chisq, df_mix = c(1, 2))
+VarCorr(s_rs)
+icc_lmer(s_ri)
+cov_to_cor(implied_cov_lmer(s_rs, c(0, 1, 3, 6, 9, 12)))
+```
+
+```{r}
+#| label: sol-re-values
+#| include: false
+vrs <- as.data.frame(VarCorr(s_rs))
+icc_s <- icc_lmer(s_ri)
+cr_s <- cov2cor(implied_cov_lmer(s_rs, c(0, 1, 3, 6, 9, 12)))
+```
+
+The random-slope model is preferred (LR statistic `r f1(lrt$chisq)`, boundary-corrected `r fmt_p(p_boundary_mixture(lrt$chisq, df_mix = c(1, 2)))`). Participants' step counts at month 0 vary with an SD of `r f2(vrs$sdcor[1])` thousand steps/day; slopes vary with an SD of `r f3(vrs$sdcor[2])` thousand steps/day per month; the intercept-slope correlation is `r f2(vrs$sdcor[3])`; and single weekly measurements vary around a participant's own line with an SD of `r f2(vrs$sdcor[4])`. The random-intercept ICC is `r f2(icc_s)`: about `r round(100 * icc_s)`% of the variation around the mean trajectories is between participants. In the random-slope model the implied correlations depend on the times (for example `r f2(cr_s[1, 2])` for months 0 and 1 and `r f2(cr_s[1, 6])` for months 0 and 12), so no single ICC applies.
+
+## Task 4. Primary estimate
+
+```{r}
+#| label: sol-primary
+emm_s <- emmeans(s_rs, ~ visit_f | arm)
+chg_s <- contrast(emm_s, list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+dmc_s <- contrast(chg_s, "trt.vs.ctrl", by = NULL, adjust = "none")
+summary(chg_s, infer = TRUE)
+summary(dmc_s, infer = TRUE)
+s_lme <- lme(steps ~ visit_f * arm, random = ~ 1 + month | id, data = walk, method = "REML")
+max(abs(fixef(s_rs) - nlme::fixef(s_lme)))
+summary(contrast(contrast(emmeans(s_lme, ~ visit_f | arm), list(chg12 = c(-1, 0, 0, 0, 0, 1))),
+                 "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+```
+
+```{r}
+#| label: sol-primary-values
+#| include: false
+cs <- summary(chg_s, infer = TRUE); ds <- summary(dmc_s, infer = TRUE)
+truth <- readRDS(here("data", "walk_truth.rds"))
+inc <- truth$steps_inc * (1 - exp(-12))
+td <- c(SP = unname(inc["SP"] - inc["UC"]), EP = unname(inc["EP"] - inc["UC"]))
+```
+
+Compared with usual care, mean daily steps increased from baseline to month 12 by an additional `r fmt_ci(ds$estimate[1], ds$lower.CL[1], ds$upper.CL[1], 2)` thousand with the standard programme and `r fmt_ci(ds$estimate[2], ds$lower.CL[2], ds$upper.CL[2], 2)` thousand with the enhanced programme (`lmer`, Satterthwaite df, unadjusted). `lme` gives the same estimates and standard errors, with containment degrees of freedom.
+
+*Comparison with the truth (possible only because the data are simulated; not expected from participants).* The steps data were generated with mean increases at month 12 of about `r f1(inc["UC"])`, `r f1(inc["SP"])` and `r f1(inc["EP"])` thousand steps/day in UC, SP and EP, so the true differences are `r f1(td["SP"])` and `r f1(td["EP"])`. The estimates are `r f2(ds$estimate[1])` and `r f2(ds$estimate[2])`, and both 95% intervals `r if (ds$lower.CL[1] < td["SP"] & ds$upper.CL[1] > td["SP"] & ds$lower.CL[2] < td["EP"] & ds$upper.CL[2] > td["EP"]) "contain the true values" else "do not both contain the true values"`.
+
+## Task 5. Coding time
+
+```{r}
+#| label: sol-time
+s_lin <- lmer(steps ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+anova(s_lin, s_rs)   # refits both with ML: different fixed effects
+d_lin <- summary(contrast(contrast(emmeans(s_lin, ~ month | arm, at = list(month = c(0, 12))),
+                                   list(chg12 = c(-1, 1))), "trt.vs.ctrl", by = NULL,
+                          adjust = "none"), infer = TRUE)
+d_lin
+```
+
+```{r}
+#| label: sol-time-values
+#| include: false
+at <- anova(s_lin, s_rs)
+```
+
+The categorical-time model fits much better (ML refit: $\chi^2$ = `r f1(at$Chisq[2])` on `r at$Df[2]` df, `r fmt_p(at[["Pr(>Chisq)"]][2])`; AIC `r f0(at$AIC[2])` against `r f0(at$AIC[1])`). Step counts rise over the first three months and then plateau, which a straight line cannot represent: the linear model's month-12 differences (`r f2(d_lin$estimate[1])` and `r f2(d_lin$estimate[2])`) rest on a wrong shape. Categorical time is used for the primary estimate.
+
+## Task 6. Checks
+
+```{r}
+#| label: sol-checks
+#| fig-height: 5.5
+#| fig-width: 7.5
+dd <- data.frame(fitted = fitted(s_rs), resid = resid(s_rs))
+re <- ranef(s_rs)$id
+p1 <- ggplot(dd, aes(fitted, resid)) + geom_point(alpha = 0.25, size = 0.8) +
+  geom_hline(yintercept = 0, colour = "#888888") +
+  geom_smooth(se = FALSE, method = "loess", formula = y ~ x, colour = course_colours["orange"]) +
+  labs(x = "Fitted (thousand steps/day)", y = "Conditional residual")
+p2 <- ggplot(dd, aes(sample = resid)) + stat_qq(alpha = 0.3, size = 0.8) +
+  stat_qq_line(colour = "#888888") + labs(x = "Normal quantile", y = "Residual")
+p3 <- ggplot(re, aes(sample = `(Intercept)`)) + stat_qq(alpha = 0.4, size = 0.8) +
+  stat_qq_line(colour = "#888888") + labs(x = "Normal quantile", y = "Predicted b0i")
+p4 <- ggplot(re, aes(sample = month)) + stat_qq(alpha = 0.4, size = 0.8) +
+  stat_qq_line(colour = "#888888") + labs(x = "Normal quantile", y = "Predicted b1i")
+(p1 | p2) / (p3 | p4)
+```
+
+The residuals show no fanning; any upward tilt of the smoother against fitted values is the shrinkage artefact discussed in the notes. Step counts are recorded to one decimal place, which gives a slightly granular pattern. The Q-Q plots are close to straight, so there is no evidence of a serious problem. Full diagnostics are in Module 11.
+
+## Task 7. Individuals
+
+```{r}
+#| label: sol-blup
+ols <- coef(lme4::lmList(steps ~ month | id, data = walk)) |>
+  tibble::rownames_to_column("id") |> select(id, ols_slope = month)
+sh <- count(walk, id, arm, name = "n_obs") |>
+  left_join(ols, by = "id") |>
+  left_join(coef(s_lin)$id |> tibble::rownames_to_column("id"), by = "id") |>
+  mutate(blup_slope = month + (arm == "SP") * `month:armSP` + (arm == "EP") * `month:armEP`,
+         n_group = cut(n_obs, c(0, 3, 5, 6), labels = c("2-3 visits", "4-5 visits", "6 visits")))
+sh_sum <- sh |> group_by(n_group) |>
+  summarise(n = n(), sd_ols = sd(ols_slope, na.rm = TRUE), sd_blup = sd(blup_slope))
+sh_sum
+```
+
+Separate least-squares slopes vary far more than the BLUP slopes (SD `r f2(sh_sum$sd_ols[3])` against `r f2(sh_sum$sd_blup[3])` thousand steps/day per month for participants with six visits, and `r f2(sh_sum$sd_ols[1])` against `r f2(sh_sum$sd_blup[1])` with two or three visits). Individual slopes are estimated from few noisy weekly averages, so the model shrinks them toward the arm mean, most strongly for participants with few visits.
+
+## Task 8. Report
+
+::: {.callout-tip title="Reporting example"}
+Daily step count was analysed with a linear mixed model with fixed effects for scheduled visit (factor), arm and their interaction and a correlated random intercept and slope on actual time, fitted by REML (`lme4`, Satterthwaite degrees of freedom). All `r n_distinct(walk$id)` participants and `r nrow(walk)` measurements contributed, assuming data missing at random. Compared with usual care, mean daily steps increased from baseline to month 12 by an additional `r f2(ds$estimate[1])` thousand (95% CI `r f2(ds$lower.CL[1])` to `r f2(ds$upper.CL[1])`) with the standard programme and `r f2(ds$estimate[2])` thousand (`r f2(ds$lower.CL[2])` to `r f2(ds$upper.CL[2])`) with the enhanced programme. Mean change in usual care was `r f2(cs$estimate[1])` thousand steps/day. Participants differed considerably in habitual activity (SD of random intercepts `r f2(vrs$sdcor[1])` thousand steps/day; residual SD `r f2(vrs$sdcor[4])`).
+:::
+
+## Task 9. Reflection
+
+Dropout depended on the last observed SBP and on arm, not directly on steps. Analysing steps alone, MAR requires that dropout depends only on observed steps and arm. Because SBP and activity are correlated, observed steps carry some, but not all, of the information that drove dropout, so MAR for this outcome is an approximation. Including observed SBP as an auxiliary variable (for example in multiple imputation or a joint model) or running a sensitivity analysis would address this (Module 10).

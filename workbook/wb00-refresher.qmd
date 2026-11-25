@@ -1,0 +1,150 @@
+---
+title: "Module 0. Foundations refresher: R and regression"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk_base <- load_walk("baseline")
+```
+
+These exercises practise the R workflow and the regression skills that the rest of the course builds on. All of them use the WALK baseline file, which has one row per participant, apart from the last independent exercise, which looks ahead to repeated measurements. Work through the guided exercises in order: each gives partly completed code with blanks (`___`) to fill in and questions to answer in words. The independent exercises give a task with no scaffolding. Write your answers in full sentences, with units and confidence intervals, as you would in a report.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Project, data and first summaries (LO 0.1)
+
+a. Open `LDA_course.Rproj`. Run the setup chunk above. What does `here::here("data", "walk_baseline.csv")` return on your computer? Why is this better than typing the full path?
+b. Create the derived variables used throughout the course and summarise baseline SBP by sex.
+
+```{r}
+#| eval: false
+walk_base <- walk_base |>
+  mutate(
+    age10  = (age - ___) / 10,
+    bmi_c  = bmi - ___,
+    hyp150 = as.integer(sbp0 >= ___)
+  )
+
+walk_base |>
+  group_by(___) |>
+  summarise(n = n(), mean_sbp0 = mean(___), sd_sbp0 = sd(sbp0),
+            pct_150 = 100 * mean(hyp150))
+```
+
+c. List the five participants with the highest baseline SBP in the enhanced programme (EP), showing `id`, `age`, `sex`, `bmi` and `sbp0`. Use `filter()`, `select()` and `arrange()`.
+d. Draw a histogram of baseline SBP with a separate panel for each arm (`facet_wrap(~ arm)`). Label the axes with units. Do the three distributions look similar? Why would you expect that?
+
+### Exercise 2. Linear regression and categorical predictors (LO 0.2)
+
+a. Fit the linear regression of baseline SBP on centred age (per 10 years), sex and centred BMI.
+
+```{r}
+#| eval: false
+m_lin <- lm(sbp0 ~ ___ + ___ + ___, data = walk_base)
+summary(m_lin)
+confint(___)
+```
+
+b. Write one sentence for each of the four coefficients (including the intercept), giving the estimate, its 95% confidence interval and its units, and saying what it is adjusted for.
+c. What does the p-value for `age10` tell you, and what does it not tell you?
+d. What proportion of the variance in baseline SBP is explained? Does a low $R^2$ mean the BMI coefficient is unreliable?
+e. Fit `lm(sbp0 ~ clinic, data = walk_base)`. Which clinic is the reference? What does the coefficient for clinic 8 mean? Refit with clinic 5 as the reference using `relevel(clinic, ref = "___")` and confirm that the fitted clinic means are unchanged.
+
+### Exercise 3. A continuous-by-categorical interaction (LO 0.3)
+
+The question is whether the association between BMI and baseline SBP differs between men and women.
+
+a. Fit the interaction model, adjusting for age.
+
+```{r}
+#| eval: false
+m_bmi_sex <- lm(sbp0 ~ ___ * ___ + age10, data = walk_base)
+summary(m_bmi_sex)
+```
+
+b. Write out the fitted mean for men and for women separately (substitute 0 and 1 for the female indicator). What is the BMI slope in each sex?
+c. Interpret the `sexFemale` coefficient precisely. At what BMI does it apply?
+d. Interpret the interaction coefficient and its confidence interval. Is there evidence that the BMI slope differs by sex?
+e. Refit the model with uncentred BMI (`bmi * sex`). Which coefficients change and which stay the same? Explain why.
+f. Use `emtrends(m_bmi_sex, ~ sex, var = "bmi_c")` to obtain each sex's BMI slope with a confidence interval.
+
+### Exercise 4. Residual checks (LO 0.4)
+
+a. Using `m_lin` from Exercise 2, draw a residual-versus-fitted plot and a normal Q–Q plot of standardised residuals.
+
+```{r}
+#| eval: false
+diag_df <- data.frame(fitted = fitted(m_lin), resid = resid(m_lin),
+                      std_resid = rstandard(m_lin))
+ggplot(diag_df, aes(___, ___)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE)
+
+ggplot(diag_df, aes(sample = ___)) + stat_qq() + stat_qq_line()
+```
+
+b. Name the assumption(s) each plot checks, and describe what you see.
+c. Which assumption of the model can neither plot check? How would you judge it instead?
+d. Simulate a variable whose variance grows with its mean (for example `y_het <- 100 + 2 * walk_base$bmi_c + rnorm(360, 0, 0.5 * (walk_base$bmi - 18))`, after `set.seed(1)`), regress it on `bmi_c` and draw the residual-versus-fitted plot. What pattern do you see, and which assumption does it violate?
+
+### Exercise 5. Logistic regression for dropout (LO 0.2)
+
+In WALK, `dropout` is `TRUE` if a participant's last attended visit was before month 12. Does the chance of dropping out depend on baseline SBP or arm?
+
+a. Create `sbp0_10 = (sbp0 - 150) / 10` and fit the logistic regression.
+
+```{r}
+#| eval: false
+walk_base <- walk_base |> mutate(sbp0_10 = ___)
+m_drop <- glm(dropout ~ sbp0_10 + arm, family = ___, data = walk_base)
+summary(m_drop)
+exp(cbind(OR = coef(m_drop), confint(m_drop)))
+```
+
+b. Interpret the odds ratio for `sbp0_10` in words, including its units and interval.
+c. Interpret the odds ratios for SP and EP compared with usual care.
+d. Estimate the probability of dropout, with a 95% confidence interval, for a usual-care participant with baseline SBP 130 mmHg and for one with 170 mmHg. Compute the interval on the log-odds scale and transform it with `plogis()`.
+e. Why might dropout that depends on SBP matter for the longitudinal analysis of SBP in later modules?
+
+### Exercise 6. Confidence and prediction intervals (LO 0.5)
+
+a. Using `m_lin`, compute the 95% confidence interval for the mean SBP and the 95% prediction interval for a new participant, for 70-year-old women with BMI 29 and BMI 35.
+
+```{r}
+#| eval: false
+new_women <- data.frame(age10 = ___, bmi_c = c(___, ___),
+                        sex = factor("Female", levels = c("Male", "Female")))
+predict(m_lin, new_women, interval = "___")
+predict(m_lin, new_women, interval = "___")
+```
+
+b. Explain to a clinician, in two sentences, what each interval means.
+c. Which interval would shrink substantially if WALK had 3,600 participants instead of 360? Which would not, and why?
+d. Plot both intervals against BMI (19 to 40 kg/m²) for 70-year-old women.
+
+## Independent exercises
+
+### Exercise 7. Daily steps and blood pressure (LO 0.2, 0.4)
+
+Baseline daily steps (`steps0`, thousands per day) were recorded for every participant. Estimate the association between baseline steps and baseline SBP, adjusted for age, sex and BMI. Centre steps at 6,000 per day. Check the model with residual plots. Write a reporting paragraph of the kind used in the notes. Because the data are simulated, the true between-person association is −1.5 mmHg per 1,000 steps/day (see the data dictionary): is your estimate compatible with it?
+
+### Exercise 8. Does the steps association differ by sex? (LO 0.3)
+
+Add a steps-by-sex interaction to the model of Exercise 7. Interpret every coefficient, say what the main effect of steps now means, and state whether there is evidence that the association differs between men and women.
+
+### Exercise 9. Steps and the odds of SBP ≥ 150 (LO 0.2, 0.5)
+
+Fit a logistic regression for `hyp150` with centred steps, age, sex and BMI. Report the odds ratio per 1,000 steps/day. Then estimate the predicted probability of SBP ≥ 150, with 95% confidence intervals, for a 60-year-old woman with BMI 29 who walks 4,000 steps per day and one who walks 10,000 steps per day. Comment on what these probabilities do and do not tell you about an individual woman.
+
+### Exercise 10. A first look at repeated measurements (bridge to Module 1)
+
+Load the long-format data with `walk <- load_walk()`. Compare the sex difference in SBP estimated from baseline only (`lm(sbp0 ~ sex, data = walk_base)`) with that from all visits treated as independent rows (`lm(sbp ~ sex, data = walk)`). Compare the standard errors. Explain why the second standard error is misleading, and in which direction.

@@ -1,0 +1,28 @@
+execute:
+  echo: true
+  warning: true
+  message: false
+  freeze: false
+
+knitr:
+  opts_chunk:
+    comment: "#>"
+    fig.align: center
+    dpi: 150
+    fig.width: 7
+    fig.height: 4.3
+    out.width: "90%"
+
+format:
+  html:
+    theme: default
+    css: ../assets/course.css
+    minimal: false
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    html-math-method: mathml
+    embed-resources: true
+    code-overflow: wrap
+    df-print: default
+lang: en-GB

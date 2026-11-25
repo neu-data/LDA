@@ -1,0 +1,214 @@
+---
+title: "Module 12. Study planning, reporting and reproducibility"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This answer key gives complete, executed solutions to the Module 12 workbook, with model answers and marking notes. The simulations use 100 trials each and take a few minutes in total.
+
+```{r}
+#| label: helpers
+s_tt <- function(times) sum((times - mean(times))^2)
+var_slope_diff <- function(n_per_arm, times, sd_slope, sd_resid) {
+  2 * (sd_slope^2 + sd_resid^2 / s_tt(times)) / n_per_arm
+}
+n_formula <- function(power, times, delta, sd_slope, sd_resid, alpha = 0.05) {
+  ceiling(2 * (qnorm(1 - alpha / 2) + qnorm(power))^2 *
+            (sd_slope^2 + sd_resid^2 / s_tt(times)) / delta^2)
+}
+```
+
+## Guided exercises
+
+### Exercise G1. Choosing a schedule (LO 12.1, 12.2)
+
+```{r}
+#| label: g1
+sch <- list(A = c(0, 6, 12, 18, 24), B = c(0, 1, 3, 6, 24), C = c(0, 1, 2, 22, 24))
+g1 <- data.frame(schedule = names(sch),
+                 S_tt = sapply(sch, s_tt),
+                 se = sapply(sch, function(t) sqrt(var_slope_diff(60, t, 0.3, 6))))
+g1
+```
+
+**Answers.** (i) Schedule C has the largest spread ($S_{tt} =$ `r g1$S_tt[3]`) and the smallest SE (`r round(g1$se[3], 4)`), so it is best for a linear slope; A has $S_{tt} =$ `r g1$S_tt[1]` and SE `r round(g1$se[1], 4)`. The gain is modest because $\tau_1^2 = 0.09$ dominates $\sigma^2/S_{tt}$ for all three. (ii) Schedule B: it front-loads visits at months 1, 3 and 6, where change is expected, and keeps the month-24 visit that defines the estimand. (iii) Schedule C: with no visits between months 2 and 22, a straight line is fitted through two clusters of points and any curvature in between is invisible; it also loses everything if participants drop out between month 2 and month 22.
+
+*Marking notes.* For (ii) the argument must connect the schedule to both the expected timing of change and the estimand.
+
+### Exercise G2. The sample-size formula and its sensitivity (LO 12.2)
+
+```{r}
+#| label: g2a
+n80 <- n_formula(0.8, c(0, 3, 6, 9, 12), -0.5, 0.4, 6)
+n90 <- n_formula(0.9, c(0, 3, 6, 9, 12), -0.5, 0.4, 6)
+c(n80 = n80, n90 = n90)
+```
+
+```{r}
+#| label: g2b
+grid <- expand.grid(sd_slope = c(0.2, 0.3, 0.4, 0.5, 0.6), sd_resid = c(4, 6, 8))
+grid$n90 <- mapply(function(a, b) n_formula(0.9, c(0, 3, 6, 9, 12), -0.5, a, b),
+                   grid$sd_slope, grid$sd_resid)
+g2 <- tidyr::pivot_wider(grid, names_from = sd_resid, values_from = n90,
+                         names_prefix = "sigma_")
+g2
+```
+
+```{r}
+#| label: g2c
+wide <- load_walk("wide")
+rho <- cor(wide$sbp_m0, wide$sbp_m12, use = "complete.obs")
+c(rho = rho, change = 2 * (1 - rho), ancova = 1 - rho^2)
+```
+
+**Answers.** With these planning values, `r n80` per arm give 80% power and `r n90` give 90%. (i) Apart from $\Delta$, which enters squared and so matters most of all, both variance parameters matter. Over these ranges the residual SD has the larger effect: at $\tau_1 = 0.4$, $n$ rises from `r g2$sigma_4[3]` to `r g2$sigma_8[3]` as $\sigma$ goes from 4 to 8, whereas at $\sigma = 6$ it rises from `r g2$sigma_6[1]` to `r g2$sigma_6[5]` as $\tau_1$ goes from 0.2 to 0.6. With only five visits over 12 months, $\sigma^2/S_{tt} = 36/90 = 0.4$ is larger than $\tau_1^2 = 0.16$, so the residual term dominates; with many more visits the balance shifts towards $\tau_1^2$. (ii) Each participant's slope is estimated from their own measurements, so their level (random intercept) cancels out; in a balanced complete design, $\tau_0$ affects comparisons of levels, not of slopes. For WALK, $\rho =$ `r round(rho, 2)`, so the change score has relative variance `r round(2 * (1 - rho), 2)` and ANCOVA `r round(1 - rho^2, 2)`.
+
+*Marking notes.* Accept "$\Delta$" as the most important value if justified (it enters squared). The key point is the comparison of the two terms $\tau_1^2$ and $\sigma^2/S_{tt}$.
+
+### Exercise G3. Power by simulation with a Monte Carlo SE (LO 12.3)
+
+```{r}
+#| label: g3
+pw <- power_two_arm(n_sims = 100, seed = 12, n_per_arm = 40)
+pw
+se_f <- sqrt(var_slope_diff(40, c(0, 3, 6, 9, 12), 0.4, 6))
+p_formula <- pnorm(0.5 / se_f - qnorm(0.975))
+ci_mc <- pw[["power"]] + c(-1.96, 1.96) * pw[["mcse"]]
+c(formula = p_formula, lower = ci_mc[1], upper = ci_mc[2])
+n_needed <- ceiling(pw[["power"]] * (1 - pw[["power"]]) / 0.01^2)
+```
+
+**Answers.** The simulated power is `r pw[["power"]]` (MCSE `r round(pw[["mcse"]], 3)`; 95% Monte Carlo interval `r round(ci_mc[1], 2)` to `r round(min(1, ci_mc[2]), 2)`), against the formula value `r round(p_formula, 3)`. (i) $n_{\text{sim}} = p(1-p)/0.01^2 \approx$ `r n_needed`. (ii) "With 40 participants per arm, simulation of 100 trials from the planning model gave an estimated power of `r round(pw[["power"]], 2)` (Monte Carlo SE `r round(pw[["mcse"]], 3)`) to detect a difference in mean slopes of 0.5 mmHg/month at the two-sided 5% level."
+
+*Marking notes.* The MCSE must be reported. Note that with 100 trials the simulated and formula values may differ by a few percentage points.
+
+### Exercise G4. Type I error check (LO 12.3)
+
+```{r}
+#| label: g4
+t1 <- power_two_arm(n_sims = 100, seed = 13, n_per_arm = 40, delta = 0)
+t1
+p_tail <- pbinom(round(100 * t1[["power"]]) - 1, 100, 0.05, lower.tail = FALSE)
+# a larger check (about two minutes)
+t1_big <- power_two_arm(n_sims = 500, seed = 14, n_per_arm = 40, delta = 0)
+t1_big
+```
+
+**Answers.** (i) The rejection rate is `r t1[["power"]]` with 100 simulated trials. Under a true rate of 0.05 the MCSE would be $\sqrt{0.05 \times 0.95/100} =$ `r round(sqrt(0.05 * 0.95 / 100), 3)`, so values from about 0.01 to 0.09 would be unremarkable. A value of `r t1[["power"]]` or more has probability `r round(p_tail, 3)` under a 5% rate, so it is a warning sign worth following up rather than proof of a problem. A larger simulation with 500 trials gives `r t1_big[["power"]]` (MCSE `r round(t1_big[["mcse"]], 3)`), consistent with 5%: the first result was Monte Carlo error. This is exactly why the MCSE, and enough simulated trials, matter. (ii) It checks that the analysis in the simulation is valid; a test with inflated type I error would also have inflated "power", making the sample size look adequate when it is not.
+
+### Exercise G5. An estimand for CLEAR (LO 12.4)
+
+| Attribute | CLEAR (model answer) |
+|---|---|
+| Treatment conditions | Assignment to active topical treatment versus assignment to placebo |
+| Population | Adults with the chronic itchy skin condition meeting the trial's eligibility criteria |
+| Variable | Moderate or severe itch (severity ≥ 2) at week 12 |
+| Intercurrent events and strategies | Stopping treatment early: treatment policy (outcome used regardless). Rescue antihistamines: treatment policy for the primary estimand; a composite strategy (rescue counted as moderate/severe itch) as a supplementary estimand |
+| Population-level summary | Marginal (population-average) odds ratio, or difference in proportions, at week 12 |
+
+The marginal summary matches a GEE (Module 7) or marginal predictions from a GLMM averaged over the random effects (Module 8). A conditional (subject-specific) odds ratio from a GLMM is a different summary and is larger in magnitude.
+
+*Marking notes.* Accept a conditional summary if it is labelled as such and matched to a GLMM. Credit distinguishing intercurrent events from missing data.
+
+### Exercise G6. A reproducibility audit (LO 12.6)
+
+```{r}
+#| label: g6a
+writeLines(capture.output(sessionInfo()), here("outputs", "ak12_session_info.txt"))
+```
+
+**Answers.** (b) Problems: `setwd()` with an absolute path that works on one computer only; a data file name suggesting hand editing ("FINAL_v3_edited") with no record of what was changed; a hard-coded correction with no source, date or log entry; `read.csv()` without control of types (and `visit_f` and the factor levels of `arm` are never created); a package loaded in the middle of the script; and no control argument, so results depend on the default optimiser. Rewritten:
+
+```r
+source(here::here("R", "setup.R"))           # packages, lmer_ctrl, helpers
+walk <- load_walk()                          # reads data/walk_long.csv with types
+# Correction of W117 month-12 SBP from the source document (log entry 014)
+walk <- walk |>
+  mutate(sbp = ifelse(id == "W117" & month_sched == 12, 152, sbp))
+m <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+          control = lmer_ctrl)
+```
+
+(c) (i) `renv::init()`; (ii) `renv::snapshot()`; (iii) `renv::restore()`. The lockfile `renv.lock` is committed to version control.
+
+*Marking notes.* At least four problems for full marks. The data correction should be made in code and recorded in the analysis log.
+
+## Independent exercises
+
+### Exercise I1. Power for a front-loaded design with dropout (LO 12.3)
+
+```{r}
+#| label: i1
+i1 <- bind_rows(lapply(c(40, 55, 70), function(n) {
+  pw <- power_two_arm(n_sims = 100, seed = 1000 + n, n_per_arm = n,
+                      times = c(0, 1, 3, 6, 9, 12), dropout = 0.15)
+  data.frame(n_per_arm = n, power = pw[["power"]], mcse = pw[["mcse"]])
+}))
+i1
+```
+
+**Model answer.** Power is `r paste0(round(i1$power, 2), " (MCSE ", round(i1$mcse, 3), ")", collapse = ", ")` for `r paste(i1$n_per_arm, collapse = ", ")` per arm. A sample size in the range where power first exceeds 0.8 would be chosen provisionally; because each estimate has an MCSE of about 0.04, the chosen design point should be confirmed with at least 1,000 simulated trials, and the planning values varied. `sim_two_arm()` differs from WALK in several ways: linear mean trajectories (WALK change is early and then levels off), no serial correlation, two arms rather than three, dropout completely at random (WALK dropout depends on observed SBP) and an analysis of slopes rather than of change at month 12.
+
+*Marking notes.* Any two valid differences from WALK. Penalise a choice of $n$ without reference to the MCSE.
+
+### Exercise I2. Analysis-plan sections for CLEAR (LO 12.4)
+
+**Model answer (abridged).**
+
+*6.2 Estimand.* As in Exercise G5: treatment policy for stopping treatment and for rescue medication; marginal odds ratio for moderate-or-severe itch at week 12, active versus placebo.
+
+*6.3 Analysis methods.* Primary analysis: GEE with a logit link, exchangeable working correlation and robust standard errors, mean model `itch ~ week_f * arm` (scheduled week as a factor), fitted with `geepack::geeglm(itch ~ week_f * arm, id = id, family = binomial, corstr = "exchangeable")`; the week-12 marginal odds ratio is obtained from the model contrast with emmeans. Supporting analysis: logistic GLMM `glmer(itch ~ week * arm + (1 | id), family = binomial, nAGQ = 25)` giving a conditional odds ratio per week. Checks: fitted against observed proportions by week and arm; DHARMa residuals for the GLMM, with participant-level tests using unconditional simulation. Fitting problems: if the GLMM does not converge, rescale week (per 4 weeks) and compare optimisers with `allFit()`; if separation occurs in any analysis, report the cross-tabulation and use a penalised estimate (Firth or a weakly informative prior).
+
+*6.4 Missing data.* Dropout is expected to depend on the last observed severity (MAR). Unweighted GEE requires MCAR, so the primary GEE will use multiple imputation under MAR (imputation model including arm, week and previous severity, 50 imputations) or inverse-probability weighting; the likelihood-based GLMM is valid under MAR and is reported alongside. Sensitivity analysis: delta-adjusted imputation that increases the log-odds of itch after dropout in the active arm.
+
+*Marking notes.* The key points are: the estimand states marginal or conditional; the model is given as syntax; the fitting-problem rules are ordered; and the MCAR limitation of unweighted GEE is addressed.
+
+### Exercise I3. Reporting the DIARY analysis (LO 12.5)
+
+```{r}
+#| label: i3
+diary <- load_diary()
+m_nb <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                family = nbinom2, data = diary)
+ft <- fixef_table(m_nb, exponentiate = TRUE)
+ft
+sd_b <- sqrt(VarCorr(m_nb)$cond$id[1])
+rr <- ft[ft$term == "armActive:post", ]
+```
+
+**Model answer.**
+
+*Methods.* The number of migraine days in each 28-day diary period was analysed with a negative binomial generalized linear mixed model (log link, quadratic variance, glmmTMB [@brooks2017]) including arm, post-baseline period (periods 1 to 6 versus baseline) and their interaction, the log number of completed diary days as an offset, and a random intercept for each participant. The treatment effect is the conditional (subject-specific) rate ratio for the arm-by-period interaction. Model fit was checked with simulation-based residuals (DHARMa [@hartig2026]); a Poisson model was overdispersed and was not used. Dropout was assumed to be missing at random; all observed periods were used.
+
+*Results.* The analysis included `r nrow(diary)` diary periods from `r dplyr::n_distinct(diary$id)` participants. After baseline, the rate of migraine days in the active arm relative to placebo was multiplied by `r fmt_ci(rr$estimate, rr$lower, rr$upper, 2)` (rate ratio with 95% CI; `r fmt_p(rr$p)`). The between-participant SD of the log rate was `r round(sd_b, 2)`.
+
+*Marking notes.* Every number must come from inline R. The rate ratio must be described as conditional.
+
+### Exercise I4. Critique a report (LO 12.5)
+
+**Model answer.** Missing: the outcome's units and time point; the estimand (change to which month, which comparison); the model specification (mean model, how time was modelled, random effects or covariance structure, estimation method, software); the effect estimate with a confidence interval (only a p-value is given); the number of participants and observations used; the missing-data assumption ("handled by the model" means valid under MAR, which should be stated) and any sensitivity analysis; and the diagnostic checks.
+
+```{r}
+#| label: i4
+m_pri <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+chg <- contrast(emmeans(m_pri, ~ visit_f | arm), list(change12 = c(-1, 0, 0, 0, 0, 1)))
+d <- summary(contrast(chg, method = "trt.vs.ctrl", by = NULL, adjust = "none"),
+             infer = TRUE)
+d
+```
+
+*Rewritten.* Systolic blood pressure (SBP) at months 0, 1, 3, 6, 9 and 12 was analysed with a linear mixed-effects model with scheduled visit, arm and their interaction as fixed effects and a random intercept and slope on actual time for each participant (REML, lme4 and lmerTest, Satterthwaite degrees of freedom), using all `r nrow(walk)` observed measurements from `r dplyr::n_distinct(walk$id)` participants under the assumption that missing data were missing at random. The difference in mean change in SBP from baseline to month 12, standard programme minus usual care, was `r fmt_ci(d$estimate[1], d$lower.CL[1], d$upper.CL[1])` mmHg (`r fmt_p(d$p.value[1])`).
+
+*Marking notes.* Full marks require at least five omissions and a rewritten passage with an estimate and CI.

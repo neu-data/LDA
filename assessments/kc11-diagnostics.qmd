@@ -1,0 +1,180 @@
+---
+title: "Module 11. Diagnostics and troubleshooting"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk  <- load_walk()
+diary <- load_diary()
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This knowledge check has 13 questions, each mapped to a Module 11 learning outcome. Answer all questions before looking at the final section, which is for instructors.
+
+# Questions
+
+## Question 1 (LO 11.1)
+
+Which statement about residuals from a linear mixed model is correct?
+
+a. Marginal residuals estimate the residual error $\varepsilon_{ij}$.
+b. Conditional residuals are $y_{ij} - \mathbf{x}_{ij}^\top\hat{\boldsymbol\beta}$.
+c. Marginal residuals are deviations from the population-average (fixed-effects) mean, so their averages by visit and arm check the mean model directly.
+d. Conditional residuals of the same participant are independent.
+
+## Question 2 (LO 11.1)
+
+For the WALK primary model, the lag-1 correlations of residuals within participants are:
+
+```{r}
+#| label: q2
+m_pri <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+G <- as.matrix(VarCorr(m_pri)$id); s2 <- sigma(m_pri)^2
+r <- walk$sbp - predict(m_pri, re.form = NA); rc <- numeric(nrow(walk))
+for (g in unique(walk$id)) {
+  rows <- which(walk$id == g); Z <- cbind(1, walk$month[rows])
+  rc[rows] <- forwardsolve(t(chol(Z %*% G %*% t(Z) + diag(s2, length(rows)))), r[rows])
+}
+walk |> mutate(cond = resid(m_pri), chol = rc) |> arrange(id, month) |>
+  group_by(id) |> mutate(l_cond = lag(cond), l_chol = lag(chol)) |> ungroup() |>
+  summarise(conditional = cor(cond, l_cond, use = "complete.obs"),
+            cholesky_scaled = cor(chol, l_chol, use = "complete.obs"))
+```
+
+Explain in two or three sentences why the two values have different signs, and which one tells you about the covariance model.
+
+## Question 3 (LO 11.1)
+
+```{r}
+#| label: q3
+#| include: false
+loo <- readRDS(here("outputs", "models", "m11_loo.rds")) |>
+  mutate(shift = fixef(m_pri)["visit_f12:armEP"] - ep12) |>
+  arrange(desc(abs(shift)))
+se12 <- sqrt(vcov(m_pri)["visit_f12:armEP", "visit_f12:armEP"])
+```
+
+True or false, with a justification: "When participant `r loo$id[1]` is omitted, the EP − UC difference in mean change at month 12 moves by `r f2(abs(loo$shift[1]))` mmHg. The estimate's standard error is `r f2(se12)` mmHg, so `r loo$id[1]` should be removed from the primary analysis."
+
+## Question 4 (LO 11.1)
+
+Why is influence in longitudinal data assessed by leaving out participants rather than single observations?
+
+## Question 5 (LO 11.2)
+
+In a random-intercept model, $\hat\tau_0 = 12$ mmHg and $\hat\sigma = 6$ mmHg. What is the shrinkage factor $\lambda_i$ for a participant with one observation, and for one with six? What does this imply for a Q–Q plot of the BLUPs?
+
+## Question 6 (LO 11.2)
+
+True or false, with a justification: "Because the predicted random slopes in WALK look normal, we can conclude that the true random slopes are normally distributed, and this is essential for valid inference on the treatment effect."
+
+## Question 7 (LO 11.3)
+
+DHARMa tests for two models of the DIARY counts:
+
+```{r}
+#| label: q7
+m_pois <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                  family = poisson, data = diary)
+m_nb <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                family = nbinom2, data = diary)
+sp <- simulateResiduals(m_pois, n = 500, seed = 7)
+sn <- simulateResiduals(m_nb, n = 500, seed = 7)
+q7 <- data.frame(model = c("Poisson", "NB"),
+  dispersion = c(testDispersion(sp, plot = FALSE)$statistic,
+                 testDispersion(sn, plot = FALSE)$statistic),
+  zero_ratio = c(testZeroInflation(sp, plot = FALSE)$statistic,
+                 testZeroInflation(sn, plot = FALSE)$statistic),
+  zero_p = c(testZeroInflation(sp, plot = FALSE)$p.value,
+             testZeroInflation(sn, plot = FALSE)$p.value))
+q7
+```
+
+A colleague proposes a zero-inflated Poisson model because the Poisson model has "too many zeros". What do you advise, and why?
+
+## Question 8 (LO 11.3)
+
+When DHARMa residuals are aggregated by participant to check a GLMM, which simulation setting should be used?
+
+a. The default (conditional on the fitted random effects), because it is more precise.
+b. `simulateREs = "unconditional"`, because conditional simulations cannot reproduce the between-participant spread and reject correct models.
+c. Either; the setting makes no difference to participant-level tests.
+d. Neither; participant-level tests are not possible for GLMMs.
+
+## Question 9 (LO 11.3)
+
+What is the main diagnostic question for a GEE analysis, and how would you check it?
+
+## Question 10 (LO 11.4)
+
+A logistic model gives the output below for the interaction `active:post`. What has happened, and what should be reported instead?
+
+```{r}
+#| label: q10
+set.seed(1106)
+sep <- expand.grid(visit = 0:3, id = 1:40) |>
+  mutate(active = as.integer(id > 20), post = as.integer(visit > 0))
+b <- rnorm(40, 0, 0.5)
+sep$event <- rbinom(nrow(sep), 1, plogis(-2 + b[sep$id] - 3 * sep$active * sep$post))
+sep$event[sep$active == 1 & sep$post == 1] <- 0
+round(coef(summary(glm(event ~ active * post, family = binomial, data = sep))), 3)
+```
+
+## Question 11 (LO 11.4)
+
+`lmer()` warns: "Model is nearly unidentifiable: very large eigenvalue. Rescale variables?" for a model with time in days and age in years. Put these responses in a sensible order and say which one you would **not** do: (a) refit with time in months and age per 10 years and compare estimates; (b) raise the gradient tolerance so the warning disappears; (c) look at the variance estimates for zero variances or correlations of ±1; (d) refit with `allFit()` and compare log-likelihoods and estimates.
+
+## Question 12 (LO 11.5)
+
+After fitting the pre-specified primary model, an analyst tries four covariance structures and reports the one with the smallest p-value for the treatment effect, arguing that "each structure is defensible". Explain the problem and describe a principled alternative.
+
+## Question 13 (LO 11.6)
+
+Name four fields that every analysis-log entry should contain, and explain why the "status" field (pre-specified, data-driven but blind to comparison, post hoc) matters.
+
+# Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+lag_vals <- walk |> mutate(cond = resid(m_pri), chol = rc) |> arrange(id, month) |>
+  group_by(id) |> mutate(l_cond = lag(cond), l_chol = lag(chol)) |> ungroup() |>
+  summarise(conditional = cor(cond, l_cond, use = "complete.obs"),
+            cholesky_scaled = cor(chol, l_chol, use = "complete.obs"))
+lam1 <- 144 / (144 + 36 / 1); lam6 <- 144 / (144 + 36 / 6)
+```
+
+**Q1.** c. Marginal residuals ($y - X\hat\beta$) are deviations from the fixed-effects mean, so their averages by visit and arm show directly whether the mean model fits. (a) and (b) swap the definitions; (d) is false because the fitted random effects induce negative correlation between a participant's conditional residuals.
+
+**Q2.** The conditional lag-1 correlation (`r f2(lag_vals$conditional)`) is negative because each participant's random intercept and slope are fitted through their few points, forcing residuals to alternate in sign. The Cholesky-scaled marginal residuals (`r f2(lag_vals$cholesky_scaled)`) are decorrelated using the fitted covariance, so remaining correlation indicates covariance misspecification; the small positive value suggests slight residual serial correlation.
+
+**Q3.** False. The shift is about `r round(100 * abs(loo$shift[1]) / se12)`% of a standard error, which is small; and influence is never by itself a reason to remove a participant. Check the data and, if a participant is genuinely influential, report a sensitivity analysis.
+
+**Q4.** A participant's observations are correlated and enter the model together through the random effects. Removing one observation leaves the others (and the BLUP) to pull the fit in the same direction, understating influence. The participant is also the unit of randomisation and of independent information.
+
+**Q5.** $\lambda_i = 144/(144 + 36/n_i)$: `r f2(lam1)` for one observation and `r f2(lam6)` for six. BLUPs are shrunk towards zero, more so for participants with few observations, so their spread is smaller than $\tau_0$ and their distribution is pulled towards the assumed normal; a Q–Q plot is weak evidence about the true distribution.
+
+**Q6.** False on both counts. BLUP plots are weak evidence because of shrinkage, and the simulation in the notes showed that fixed-effect estimates and their coverage are fairly insensitive to non-normal random effects. Normality matters more for individual predictions.
+
+**Q7.** The Poisson model is overdispersed (dispersion `r f2(q7$dispersion[1])`) and predicts too few zeros (ratio `r f2(q7$zero_ratio[1])`). The negative binomial model has dispersion `r f2(q7$dispersion[2])` and zero ratio `r f2(q7$zero_ratio[2])` (`r fmt_p(q7$zero_p[2])`): once overdispersion is modelled the zeros are as expected. Advise the negative binomial GLMM, not zero inflation.
+
+**Q8.** b. The notes showed that with conditional simulation the participant-level dispersion test rejected a correctly specified model in all 20 simulated datasets.
+
+**Q9.** Whether the mean model is correct (GEE does not depend on the working correlation for validity, given robust SEs). Compare fitted and observed means or proportions by visit and group, plot residuals by visit, and compare with a more flexible mean model (for example time as a factor), using QIC as one piece of evidence. Remember that unweighted GEE assumes MCAR.
+
+**Q10.** Complete separation: there are no events in the active arm after baseline, so the maximum-likelihood estimate is $-\infty$; the coefficient of about −16 and its huge SE are where the optimiser stopped. Report the cross-tabulation and a penalised estimate (Firth's method [@heinze2002] or a weakly informative prior in `glmmTMB`), noting its dependence on the penalty.
+
+**Q11.** Order: (c), (a), (d). Do not do (b): changing the tolerance hides the warning without checking anything.
+
+**Q12.** Choosing among analyses by their p-values inflates the type I error well above the nominal level, even if every option is defensible. Pre-specify the covariance model and the rules for changing it in the SAP, make diagnostic choices blind to the treatment comparison, report the primary model as planned, and present other structures as sensitivity analyses.
+
+**Q13.** Any four of: date and analyst; script or commit; category; status; what was observed; decision; reason; alternatives considered; effect on the primary estimate; where reported; reviewer. The status field separates pre-planned decisions from those made after seeing data, so readers can judge the risk that a decision was influenced by the results; post hoc decisions must be reported as such.

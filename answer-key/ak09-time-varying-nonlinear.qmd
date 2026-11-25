@@ -1,0 +1,337 @@
+---
+title: "Module 9. Time-varying predictors and nonlinear change"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+kidney <- load_kidney()
+truth  <- readRDS(here("data", "walk_truth.rds"))
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+Complete solutions to the Module 9 workbook, with executed output. Marking notes list acceptable alternatives and common errors.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Within-person and between-person associations
+
+(a) Proportion of participants with more than one distinct value of each variable:
+
+```{r}
+#| label: ex1a
+walk |>
+  group_by(id) |>
+  summarise(across(c(arm, age, sex, bmi, steps, sbp, month), n_distinct)) |>
+  summarise(across(-id, ~ mean(. > 1)))
+```
+
+Arm, age, sex and BMI never vary within a participant (proportion 0): they are time-invariant. Steps, SBP and month vary for nearly every participant; the few exceptions are participants seen only at baseline.
+
+(b)–(c)
+
+```{r}
+#| label: ex1bc
+walk <- walk |>
+  group_by(id) |>
+  mutate(steps_pm = mean(steps)) |>
+  ungroup() |>
+  mutate(steps_wc = steps - steps_pm,
+         steps_gm = steps_pm - mean(steps_pm[!duplicated(id)]),
+         age10 = (age - 60) / 10, bmi_c = bmi - 29)
+m_naive <- lmer(sbp ~ steps + visit_f * arm + (1 + month | id),
+                data = walk, control = lmer_ctrl)
+m_wb    <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + (1 + month | id),
+                data = walk, control = lmer_ctrl)
+m_adj   <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + age10 + sex + bmi_c +
+                  (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+(d)
+
+```{r}
+#| label: ex1d
+bind_rows(
+  fixef_table(m_naive) |> filter(term == "steps") |> mutate(model = "naive"),
+  fixef_table(m_wb) |> filter(term %in% c("steps_wc", "steps_gm")) |> mutate(model = "centred"),
+  fixef_table(m_adj) |> filter(term %in% c("steps_wc", "steps_gm")) |> mutate(model = "adjusted"))
+```
+
+```{r}
+#| label: ex1-values
+#| include: false
+nv <- fixef(m_naive)["steps"]
+w1 <- fixef(m_wb)["steps_wc"]; b1 <- fixef(m_wb)["steps_gm"]
+w2 <- fixef(m_adj)["steps_wc"]; b2 <- fixef(m_adj)["steps_gm"]
+```
+
+1. The naive coefficient (`r f2(nv)`) lies between the within-person (`r f2(w1)`) and between-person (`r f2(b1)`) estimates. A single coefficient uses both sources of variation and returns a weighted blend of the two associations.
+2. The between-person coefficient changes (`r f2(b1)` to `r f2(b2)`) because BMI confounds the comparison of different people: heavier participants walk less and have higher SBP. The within-person coefficient hardly changes (`r f2(w1)` to `r f2(w2)`): a comparison of a participant with themselves cannot be confounded by characteristics that are constant within the participant.
+3. Within: "At visits when a participant walked 1,000 steps a day more than their own average, their SBP was on average `r f2(abs(w2))` mmHg lower." Between: "Participants whose average step count was 1,000 steps a day higher had, on average, `r f2(abs(b2))` mmHg lower SBP, after adjustment for age, sex and BMI." (Truth, known only because the data are simulated: `r truth$beta_steps_within` and `r truth$beta_steps_between`.)
+
+(e)
+
+```{r}
+#| label: ex1e
+m_ctx <- lmer(sbp ~ steps + steps_gm + visit_f * arm + age10 + sex + bmi_c +
+                (1 + month | id), data = walk, control = lmer_ctrl)
+c(contextual = unname(fixef(m_ctx)["steps_gm"]), between_minus_within = unname(b2 - w2))
+```
+
+The `steps_gm` coefficient is now the **contextual effect**, `r f2(fixef(m_ctx)["steps_gm"])`, identical to the between minus the within estimate.
+
+*Marking notes.* Accept person means computed with `ave()` or a join. A common error is centring `steps` at the grand mean, which does not separate the levels. Another is computing person means before filtering rows that the model will drop (not an issue here because WALK has no missing steps on attended visits). Answers should not describe either association as a causal effect.
+
+### Exercise 2. The treatment effect with and without steps
+
+```{r}
+#| label: ex2
+m_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+                  control = lmer_ctrl)
+m_steps   <- lmer(sbp ~ steps_wc + visit_f * arm + (1 + month | id), data = walk,
+                  control = lmer_ctrl)
+diff_change <- function(m) {
+  e  <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+  ch <- contrast(e, list(change = c(-1, 1)), by = "arm")
+  summary(contrast(ch, "trt.vs.ctrl", by = NULL), infer = TRUE, adjust = "none")
+}
+d0 <- as.data.frame(diff_change(m_primary)); d0
+d1 <- as.data.frame(diff_change(m_steps)); d1
+```
+
+1. Both estimates move towards zero: SP from `r f2(d0$estimate[1])` to `r f2(d1$estimate[1])` (`r f2(d1$estimate[1] - d0$estimate[1])` mmHg) and EP from `r f2(d0$estimate[2])` to `r f2(d1$estimate[2])` (`r f2(d1$estimate[2] - d0$estimate[2])` mmHg). In the simulation the parts of the effects acting through extra walking are about 0.6 (SP) and 1.1 mmHg (EP).
+2. The primary model estimates the total effect of randomisation to a programme, the trial's question. The adjusted model estimates something like a direct effect: the programme effect other than through increased walking.
+3. Randomisation balances arms, not step counts. Anything that affects both steps and SBP within an arm (illness, medication changes, stress, a high SBP reading that prompts advice to walk) confounds the steps-adjusted comparison.
+
+*Marking notes.* Full credit requires the word "mediator" (or equivalent) and the statement that the primary analysis should not be adjusted for post-randomisation variables.
+
+### Exercise 3. Choosing the time scale
+
+```{r}
+#| label: ex3a
+walk |>
+  mutate(dev = month - month_sched) |>
+  group_by(month_sched) |>
+  summarise(mean_dev = mean(dev), sd_dev = sd(dev))
+```
+
+```{r}
+#| label: ex3b
+m_actual <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_sched  <- lmer(sbp ~ month_sched * arm + (1 + month_sched | id), data = walk,
+                 control = lmer_ctrl)
+m_visit  <- lmer(sbp ~ I(visit - 1) * arm + (1 + I(visit - 1) | id), data = walk,
+                 control = lmer_ctrl)
+sapply(list(actual = m_actual, scheduled = m_sched, visit = m_visit),
+       function(m) fixef(m)[6])
+```
+
+```{r}
+#| label: ex3c
+kidney <- kidney |>
+  group_by(id) |> arrange(years, .by_group = TRUE) |>
+  mutate(visit_no = row_number() - 1) |> ungroup()
+mk_years <- lmer(egfr ~ years + (1 + years | id), data = kidney, control = lmer_ctrl)
+mk_visit <- lmer(egfr ~ visit_no + (1 + visit_no | id), data = kidney, control = lmer_ctrl)
+c(per_year = unname(fixef(mk_years)[2]), per_visit = unname(fixef(mk_visit)[2]))
+```
+
+1. The deviations are small (mean close to zero, SD at most about half a month) and unrelated to SBP, so placing each measurement at its scheduled time loses little. They would differ if deviations were large or systematic, for example if month-12 visits were often delayed to month 14, or if delays differed by arm or by health status.
+2. A "visit" is not a fixed amount of time: in WALK it is 1 month early and 3 months later; in KIDNEY it varies from weeks to over a year and is shorter for patients with low eGFR. The per-visit slope therefore mixes the rate of change with the visit schedule.
+
+### Exercise 4. Curved trajectories
+
+```{r}
+#| label: ex4a
+walk <- walk |> mutate(month_p3 = pmax(month - 3, 0))
+fit_ml <- function(f) lmer(f, data = walk, control = lmer_ctrl, REML = FALSE)
+m_lin  <- fit_ml(sbp ~ month * arm + (1 + month | id))
+m_quad <- fit_ml(sbp ~ (month + I(month^2)) * arm + (1 + month | id))
+m_pw   <- fit_ml(sbp ~ (month + month_p3) * arm + (1 + month | id))
+m_ns   <- fit_ml(sbp ~ splines::ns(month, df = 3) * arm + (1 + month | id))
+ic <- data.frame(AIC = AIC(m_lin, m_quad, m_pw, m_ns)$AIC,
+                 BIC = BIC(m_lin, m_quad, m_pw, m_ns)$BIC,
+                 row.names = c("linear", "quadratic", "piecewise", "spline"))
+ic
+```
+
+```{r}
+#| label: ex4b
+b <- fixef(m_pw)
+sp_before <- b["month"] + b["month:armSP"]
+sp_after  <- sp_before + b["month_p3"] + b["month_p3:armSP"]
+c(before = unname(sp_before), after = unname(sp_after))
+```
+
+```{r}
+#| label: ex4c
+#| fig-cap: "Fitted mean SBP trajectories from four models (WALK)."
+#| fig-width: 9
+#| fig-height: 3.6
+nd <- expand.grid(month = seq(0, 12, 0.1),
+                  arm = factor(c("UC", "SP", "EP"), levels = c("UC", "SP", "EP"))) |>
+  mutate(month_p3 = pmax(month - 3, 0))
+mods <- list(Linear = m_lin, Quadratic = m_quad, Piecewise = m_pw, Spline = m_ns)
+bind_rows(lapply(names(mods), function(nm)
+  nd |> mutate(fit = predict(mods[[nm]], newdata = nd, re.form = NA), model = nm))) |>
+  mutate(model = factor(model, levels = names(mods))) |>
+  ggplot(aes(month, fit, colour = arm)) + geom_line() + facet_wrap(~ model, nrow = 1) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Month", y = "Mean SBP (mmHg)")
+```
+
+1. AIC prefers the `r rownames(ic)[which.min(ic$AIC)]` model, BIC the `r rownames(ic)[which.min(ic$BIC)]` model (BIC penalises the extra spline parameters more heavily).
+2. A quadratic is symmetric about its minimum, so after the fall it must rise again: the fitted SBP turns upwards in the last months although the true curve has levelled off.
+3. A knot chosen after looking at the data adapts the model to noise; the fit then looks better than it is and standard errors and AIC comparisons are too optimistic.
+
+In the standard programme SBP falls by `r f2(abs(sp_before))` mmHg per month during months 0–3 and by `r f2(abs(sp_after))` mmHg per month after month 3.
+
+*Marking notes.* Students who fit with REML and compare AIC should lose marks: the fixed effects differ. Accept `poly(month, 2)` for the quadratic.
+
+### Exercise 5. A generalized additive mixed model
+
+```{r}
+#| label: ex5a
+g_walk <- gamm(sbp ~ arm + s(month, by = arm, k = 5),
+               random = list(id = ~ 1 + month), data = walk, method = "REML")
+summary(g_walk$gam)
+```
+
+```{r}
+#| label: ex5b
+ndg <- expand.grid(month = c(0, 12),
+                   arm = factor(c("UC", "SP", "EP"), levels = c("UC", "SP", "EP")))
+Xp  <- predict(g_walk$gam, newdata = ndg, type = "lpmatrix")
+L   <- (Xp[6, ] - Xp[5, ]) - (Xp[2, ] - Xp[1, ])
+est <- sum(L * coef(g_walk$gam))
+se  <- sqrt(drop(t(L) %*% vcov(g_walk$gam) %*% L))
+c(est = est, lower = est - 1.96 * se, upper = est + 1.96 * se)
+```
+
+```{r}
+#| label: ex5c
+#| fig-show: hide
+gam.check(g_walk$gam)
+```
+
+```{r}
+#| label: ex5-values
+#| include: false
+edf <- summary(g_walk$gam)$s.table[, "edf"]
+```
+
+1. All edf exceed 1 (UC `r f2(edf[1])`, SP `r f2(edf[2])`, EP `r f2(edf[3])`), so each trajectory is curved, most strongly in EP. The UC smooth is only weakly distinguishable from flat.
+2. The smooths are centred to average zero over the data, so `armEP` is the average difference between EP and usual care over follow-up, not at baseline.
+3. The k-index is above 1 with large p-values: no evidence that `k = 5` is too small. With visits clustered at six scheduled times a larger `k` would add little.
+
+The EP versus UC difference in mean change at month 12 is `r f2(est)` mmHg (95% CI `r f2(est - 1.96 * se)` to `r f2(est + 1.96 * se)`), consistent with the categorical-time estimate.
+
+## Independent exercises
+
+### Exercise 6. Nonlinear eGFR decline in KIDNEY
+
+```{r}
+#| label: ex6
+kidney <- kidney |> mutate(age10 = (age - 60) / 10, years_p2 = pmax(years - 2, 0),
+                           dm = factor(diabetes, levels = 0:1, labels = c("No", "Yes")))
+fk <- function(f) lmer(f, data = kidney, control = lmer_ctrl, REML = FALSE)
+k_lin  <- fk(egfr ~ years * dm + age10 + (1 + years | id))
+k_quad <- fk(egfr ~ (years + I(years^2)) * dm + age10 + (1 + years | id))
+k_pw   <- fk(egfr ~ (years + years_p2) * dm + age10 + (1 + years | id))
+AIC(k_lin, k_quad, k_pw)
+k_gam <- gamm(egfr ~ dm + age10 + s(years, by = dm, k = 6),
+              random = list(id = ~ 1 + years), data = kidney, method = "REML")
+summary(k_gam$gam)$s.table
+```
+
+```{r}
+#| label: ex6-plot
+#| fig-cap: "Mean eGFR at age 60 by diabetes status from four models (KIDNEY)."
+#| fig-width: 9
+#| fig-height: 3.6
+ndk <- expand.grid(years = seq(0, 5, 0.05), dm = factor(c("No", "Yes")), age10 = 0) |>
+  mutate(years_p2 = pmax(years - 2, 0))
+kmods <- list(Linear = k_lin, Quadratic = k_quad, Piecewise = k_pw)
+pk <- bind_rows(
+  lapply(names(kmods), function(nm)
+    ndk |> mutate(fit = predict(kmods[[nm]], newdata = ndk, re.form = NA), model = nm)),
+  ndk |> mutate(fit = predict(k_gam$gam, newdata = ndk), model = "GAMM")) |>
+  mutate(model = factor(model, levels = c(names(kmods), "GAMM")))
+ggplot(pk, aes(years, fit, colour = dm)) + geom_line(linewidth = 0.8) +
+  facet_wrap(~ model, nrow = 1) +
+  scale_colour_manual(values = c(No = "#0072B2", Yes = "#D55E00"), name = "Diabetes") +
+  labs(x = "Years since entry", y = "Mean eGFR (mL/min/1.73m²)")
+loss <- pk |> filter(model == "Quadratic", years %in% c(0, 5)) |>
+  group_by(dm) |> summarise(loss = fit[years == 5] - fit[years == 0])
+loss
+```
+
+```{r}
+#| label: ex6-values
+#| include: false
+aic_k <- AIC(k_lin, k_quad, k_pw)
+```
+
+The quadratic and piecewise models fit almost equally well (AIC `r f1(aic_k$AIC[2])` and `r f1(aic_k$AIC[3])`), both better than the linear model (`r f1(aic_k$AIC[1])`). We prefer the quadratic because its smoothly accelerating decline matches the GAMM curves, and it has no arbitrary corner at 2 years. From the quadratic model the mean loss of eGFR over 5 years at age 60 is `r f1(abs(loss$loss[1]))` units without diabetes and `r f1(abs(loss$loss[2]))` with diabetes. (The data were simulated from a quadratic model; in real data the GAMM would be a useful check of any parametric shape.)
+
+*Marking notes.* Credit any sensible preferred model with a justification. Students should note that measurements stop at kidney failure and visits are more frequent at low eGFR (Module 10), and that late estimates rest on fewer patients.
+
+### Exercise 7. Lagged steps and reverse causation
+
+```{r}
+#| label: ex7
+walk <- walk |> arrange(id, visit) |> group_by(id) |>
+  mutate(steps_wc_lag = lag(steps_wc)) |> ungroup()
+m_lag <- lmer(sbp ~ steps_wc + steps_wc_lag + steps_gm + visit_f * arm + age10 + sex +
+                bmi_c + (1 + month | id), data = walk, control = lmer_ctrl)
+fixef_table(m_lag) |> filter(grepl("steps", term))
+```
+
+```{r}
+#| label: ex7-values
+#| include: false
+lg <- fixef_table(m_lag) |> filter(grepl("steps", term))
+```
+
+The current within-person deviation remains associated with SBP (`r f2(lg$estimate[1])` mmHg per 1,000 steps/day), while the deviation at the previous visit has a coefficient of `r f2(lg$estimate[2])` (95% CI `r f2(lg$lower[2])` to `r f2(lg$upper[2])`). In the simulation steps affect only the concurrent SBP, so a lagged coefficient near zero is expected. The model uses only visits with a previous visit (baseline rows are dropped).
+
+Lagging does not solve reverse causation: if a high SBP at visit $j-2$ led to advice to walk more, steps at visit $j-1$ are influenced by earlier SBP, and because SBP is serially correlated, earlier SBP also predicts SBP at visit $j$. The lagged steps are then confounded by the SBP history. Adjusting for previous SBP creates other problems when previous SBP is itself affected by earlier steps (Module 13).
+
+### Exercise 8. Does the within-person association differ by arm?
+
+```{r}
+#| label: ex8
+m_main <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + age10 + sex + bmi_c +
+                 (1 + month | id), data = walk, control = lmer_ctrl, REML = FALSE)
+m_int  <- lmer(sbp ~ steps_wc * arm + steps_gm + visit_f * arm + age10 + sex + bmi_c +
+                 (1 + month | id), data = walk, control = lmer_ctrl, REML = FALSE)
+lr_test(m_main, m_int)
+m_rs <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + age10 + sex + bmi_c +
+               (1 + month + steps_wc | id), data = walk, control = lmer_ctrl)
+VarCorr(m_rs)
+```
+
+```{r}
+#| label: ex8-values
+#| include: false
+lt <- lr_test(m_main, m_int)
+```
+
+The likelihood-ratio test of the interaction gives $\chi^2$ = `r f2(lt$chisq)` on `r lt$df` df (`r fmt_p(lt$p)`), so there is no evidence that the within-person association differs by arm (in the simulation it does not). A random slope for `steps_wc` would allow the association to vary between participants. `lmer()` reports a singular fit: the estimated covariance matrix of the random effects is on the boundary (a correlation of ±1 or a variance of zero), meaning the data contain little information about this extra variation; the simpler model is preferred.
+
+### Exercise 9. Reporting
+
+A model answer:
+
+> Daily step count (thousands/day) was split into each participant's mean over their visits (between-person component) and the deviation of each visit from that mean (within-person component), and both were added to the primary linear mixed model for SBP, adjusted for age, sex and BMI. At visits when participants walked 1,000 steps a day more than their own average, SBP was `r f2(abs(w2))` mmHg lower (95% CI `r f2(-fixef_table(m_adj)$upper[2])` to `r f2(-fixef_table(m_adj)$lower[2])`). Participants with a 1,000 steps/day higher average step count had `r f2(abs(b2))` mmHg lower SBP. These are observational associations within a randomised trial; they may reflect time-varying confounding or reverse causation and should not be interpreted as the effect of increasing walking.
+
+*Marking notes.* Penalise causal verbs ("lowered", "reduced") and missing confidence intervals. Check that the CI is taken from the correct row of `fixef_table(m_adj)` (row 2 is `steps_wc`).

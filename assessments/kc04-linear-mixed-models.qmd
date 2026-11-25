@@ -1,0 +1,131 @@
+---
+title: "Module 4. Linear mixed-effects models"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+```{r}
+#| label: helpers
+#| include: false
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Answer all 13 questions. Each question lists the learning outcome it assesses. Answers and explanations are in the final section, for instructors.
+
+## Questions
+
+**Question 1** (LO 4.1). In the model $y_{ij} = \beta_0 + \beta_1 t_{ij} + b_{0i} + b_{1i}t_{ij} + \varepsilon_{ij}$, what does $b_{1i}$ represent?
+
+a. The mean rate of change in the population.
+b. The difference between participant $i$'s rate of change and the mean rate of change.
+c. The residual error of participant $i$ at time $t_{ij}$.
+d. The standard error of participant $i$'s slope.
+
+**Question 2** (LO 4.1). True or false, with a one-sentence justification: "In a linear mixed model, the random effects $\mathbf{b}_i$ and the residuals $\varepsilon_{ij}$ are assumed to be normally distributed and independent of each other."
+
+**Question 3** (LO 4.2). The output below is from a random-intercept model for WALK.
+
+```{r}
+#| label: q3
+m_ri <- lmer(sbp ~ month * arm + (1 | id), data = walk, control = lmer_ctrl)
+VarCorr(m_ri)
+```
+
+Compute the intraclass correlation and interpret it in one sentence.
+
+**Question 4** (LO 4.2). True or false, with justification: "A random-slope model implies the same correlation between every pair of measurement occasions."
+
+**Question 5** (LO 4.2). The implied correlation matrix of the WALK linear-time reference model at the scheduled times is shown below.
+
+```{r}
+#| label: q5
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+cov_to_cor(implied_cov_lmer(m_lin, c(0, 1, 3, 6, 9, 12)))
+```
+
+Describe the pattern and explain which part of the model produces it.
+
+**Question 6** (LO 4.3). A model is fitted with `month12 = month - 12` in place of `month`, otherwise unchanged. Which statement is correct?
+
+a. The arm-by-time interaction coefficients change.
+b. The arm main effects become the differences between arms at month 12.
+c. The log-likelihood changes because the data have changed.
+d. The residual variance changes.
+
+**Question 7** (LO 4.3). Give one advantage and one disadvantage of treating scheduled visit as a categorical variable in the mean model compared with a linear term in time.
+
+**Question 8** (LO 4.4). The output below is from the primary WALK model.
+
+```{r}
+#| label: q8
+m_cat <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+chg12 <- contrast(emmeans(m_cat, ~ visit_f | arm), list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+summary(contrast(chg12, "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+```
+
+Write one sentence reporting the result for the enhanced programme, as you would in a paper.
+
+**Question 9** (LO 4.4). In the same model, a colleague reports the coefficient `armEP` (`r f2(fixef(m_cat)["armEP"])`, p = `r f2(coef(summary(m_cat))["armEP", 5])`) as "the treatment effect of the enhanced programme, which was not significant". What is wrong?
+
+**Question 10** (LO 4.4). `lmer()` and `nlme::lme()` fitted to the same model and data give identical estimates and standard errors but different degrees of freedom for the month-12 contrast. Why?
+
+**Question 11** (LO 4.5). You want to test whether a quadratic term in time improves on a linear-time mean model. Which estimation method should the two fits use, and why?
+
+a. REML, because it gives unbiased variance components.
+b. ML, because REML likelihoods of models with different fixed effects are not comparable.
+c. Either, because the random effects are the same.
+d. REML for one and ML for the other.
+
+**Question 12** (LO 4.5). True or false, with justification: "In a study with 12 participants, ML estimates of the between-participant variance tend to be too small."
+
+**Question 13** (LO 4.6). A participant with only two visits has a least-squares slope of −4.0 mmHg/month, but their BLUP slope is −0.5 mmHg/month, close to their arm's mean. Explain why, and say whether the BLUP or the least-squares slope is the better prediction of their true rate of change.
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+vc <- as.data.frame(VarCorr(m_ri))
+icc <- icc_lmer(m_ri)
+cr <- cov2cor(implied_cov_lmer(m_lin, c(0, 1, 3, 6, 9, 12)))
+ds <- summary(contrast(chg12, "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+```
+
+**Q1: b.** $b_{1i}$ is participant $i$'s random slope, their deviation from the mean slope $\beta_1$. Option d confuses a random effect with a standard error.
+
+**Q2: True.** The standard LMM assumes $\mathbf{b}_i \sim N(\mathbf{0}, G)$ and $\varepsilon_{ij} \sim N(0, \sigma^2)$, independent of each other and of the covariates. (Accept "true, though fixed-effect estimates are fairly insensitive to non-normal random effects".)
+
+**Q3.** ICC = `r f1(vc$vcov[1])` / (`r f1(vc$vcov[1])` + `r f1(vc$vcov[2])`) = `r f2(icc)`. About `r round(100 * icc)`% of the variance in SBP around the arm-specific mean lines is between participants; equivalently, the model implies a correlation of `r f2(icc)` between any two measurements of the same participant. Penalise use of standard deviations instead of variances.
+
+**Q4: False.** The implied variance $\tau_0^2 + 2\tau_{01}t + \tau_1^2t^2 + \sigma^2$ and covariance depend on the times, so the correlation varies with the pair of times. Only the random-intercept model implies a constant correlation.
+
+**Q5.** Correlations are highest between adjacent visits (`r f2(cr[1, 2])` for months 0 and 1) and decline with distance (`r f2(cr[1, 6])` for months 0 and 12). The random slopes produce this: because participants' slopes differ, each participant's deviation from the mean line changes over time, so measurements far apart share less of it than measurements close together. A random-intercept model would give the same value everywhere.
+
+**Q6: b.** Centring moves the origin of time; the model, likelihood, slopes and residual variance are unchanged. The arm main effects now refer to month 12.
+
+**Q7.** Advantage: no assumption about the shape of the mean trajectory, so the estimand at a visit cannot be biased by a wrong shape (WALK's means level off after month 6). Disadvantage: more parameters, it ignores actual times in the mean, and it cannot interpolate between visits or summarise change as a rate. Accept other correct points (lower power for a truly linear trend).
+
+**Q8.** Compared with usual care, mean SBP fell by an additional `r f1(-ds$estimate[2])` mmHg from baseline to month 12 with the enhanced programme (95% CI `r f1(-ds$upper.CL[2])` to `r f1(-ds$lower.CL[2])` mmHg; `r fmt_p(ds$p.value[2])`). Accept the estimate written as `r f1(ds$estimate[2])` (`r f1(ds$lower.CL[2])` to `r f1(ds$upper.CL[2])`) with a clear statement of direction.
+
+**Q9.** With baseline as the reference visit, `armEP` is the difference between EP and UC at baseline, which randomisation makes close to zero. The treatment effect at month 12 is `visit_f12:armEP` (`r f2(fixef(m_cat)["visit_f12:armEP"])`), or the `emmeans` contrast in Q8.
+
+**Q10.** Both maximise the same REML criterion, so estimates and SEs agree. `lmerTest` uses the Satterthwaite approximation for degrees of freedom, whereas `lme` uses a containment rule based on the levels at which terms vary. With many participants both are large and the intervals are almost identical.
+
+**Q11: b.** The REML likelihood is the likelihood of residual contrasts, which depend on the fixed-effects design; with different fixed effects the likelihoods refer to different data. `anova()` on `lmer` fits refits by ML automatically.
+
+**Q12: True.** ML ignores the degrees of freedom used to estimate the fixed effects, so with few participants the between-participant variance is underestimated (in the notes' simulation with 16 participants, ML was about 13% too low on average and REML close to the truth). REML corrects this.
+
+**Q13.** With two visits, the least-squares slope is dominated by measurement noise and short-term fluctuation; its sampling variance is far larger than the between-participant variance of true slopes. The BLUP weights the participant's data by their precision relative to the population distribution, so it is shrunk strongly toward the arm mean. Under the model, the BLUP is the better predictor (smaller mean squared prediction error), although it should be reported with its uncertainty.

@@ -1,0 +1,9 @@
+/* Keep each decision diagram on one printed page */
+@media print {
+  .cell, figure, .mermaid, pre.mermaid-js { break-inside: avoid; page-break-inside: avoid; }
+  svg[id^="mermaid"], .mermaid svg, pre.mermaid-js svg {
+    max-height: 205mm !important; width: auto !important; max-width: 100% !important; height: auto !important;
+  }
+  h2 { break-before: page; }
+  h2:first-of-type { break-before: auto; }
+}

@@ -1,0 +1,166 @@
+---
+title: "Module 12. Study planning, reporting and reproducibility"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+These exercises practise planning and reporting a longitudinal study: choosing a schedule, predicting precision with formulas and by simulation, writing estimands and analysis-plan sections, reporting results, and organising a reproducible project. Code chunks contain blanks (`___`) and are set to `eval: false`. Simulations with `power_two_arm()` take about 10 to 20 seconds per 100 simulated trials; keep `n_sims` at 100 in the exercises.
+
+You will need these planning functions from the notes. Run this chunk first.
+
+```{r}
+#| label: helpers
+s_tt <- function(times) sum((times - mean(times))^2)
+var_slope_diff <- function(n_per_arm, times, sd_slope, sd_resid) {
+  2 * (sd_slope^2 + sd_resid^2 / s_tt(times)) / n_per_arm
+}
+n_formula <- function(power, times, delta, sd_slope, sd_resid, alpha = 0.05) {
+  ceiling(2 * (qnorm(1 - alpha / 2) + qnorm(power))^2 *
+            (sd_slope^2 + sd_resid^2 / s_tt(times)) / delta^2)
+}
+```
+
+## Guided exercises
+
+### Exercise G1. Choosing a schedule (LO 12.1, 12.2)
+
+A trial will follow participants for 24 months. The budget allows five visits per participant, including baseline. Three schedules are proposed: (A) 0, 6, 12, 18, 24; (B) 0, 1, 3, 6, 24; (C) 0, 1, 2, 22, 24.
+
+(a) Compute $S_{tt}$ and the SE of the difference in mean slopes for each schedule, with 60 participants per arm, $\tau_1 = 0.3$ and $\sigma = 6$.
+
+```{r}
+#| eval: false
+sch <- list(A = c(0, 6, 12, 18, 24), B = c(0, 1, 3, 6, 24), C = ___)
+data.frame(schedule = names(sch),
+           S_tt = sapply(sch, ___),
+           se = sapply(sch, function(t) sqrt(var_slope_diff(___, t, 0.3, 6))))
+```
+
+(b) Questions. (i) Which schedule is best for a linear slope? (ii) Which would you choose if the treatment is expected to act within the first three months and the primary estimand is the difference in mean change at month 24? (iii) Which schedule is most exposed to bias if change is not linear?
+
+### Exercise G2. The sample-size formula and its sensitivity (LO 12.2)
+
+(a) For visits at 0, 3, 6, 9 and 12 months and $\Delta = -0.5$ mmHg/month, compute the number per arm for 80% and 90% power with $\tau_1 = 0.4$ and $\sigma = 6$.
+
+```{r}
+#| eval: false
+n_formula(power = ___, times = c(0, 3, 6, 9, 12), delta = -0.5,
+          sd_slope = 0.4, sd_resid = 6)
+```
+
+(b) Show how $n$ (90% power) changes over $\tau_1 \in \{0.2, 0.3, 0.4, 0.5, 0.6\}$ and $\sigma \in \{4, 6, 8\}$.
+
+```{r}
+#| eval: false
+grid <- expand.grid(sd_slope = c(0.2, 0.3, 0.4, 0.5, 0.6), sd_resid = c(4, 6, 8))
+grid$n90 <- mapply(function(a, b) n_formula(0.9, c(0, 3, 6, 9, 12), -0.5, a, b),
+                   grid$sd_slope, ___)
+tidyr::pivot_wider(grid, names_from = sd_resid, values_from = n90)
+```
+
+(c) Using `load_walk("wide")`, compute the correlation between baseline and month-12 SBP and the relative variance of a change-score analysis and of ANCOVA compared with analysing month 12 only.
+
+```{r}
+#| eval: false
+wide <- load_walk("wide")
+rho <- cor(wide$sbp_m0, wide$sbp_m12, use = ___)
+c(rho = rho, change = 2 * (1 - rho), ancova = ___)
+```
+
+(d) Questions. (i) Which planning value matters most for $n$, and why? (ii) Why does $\tau_0$ (the random-intercept SD) not appear in the formula?
+
+### Exercise G3. Power by simulation with a Monte Carlo SE (LO 12.3)
+
+(a) Estimate power for 40 participants per arm, visits at 0, 3, 6, 9, 12, $\Delta = -0.5$, no dropout, with 100 simulated trials.
+
+```{r}
+#| eval: false
+pw <- power_two_arm(n_sims = ___, seed = 12, n_per_arm = 40)
+pw
+```
+
+(b) Compare with the formula, and compute the 95% Monte Carlo interval for the power.
+
+```{r}
+#| eval: false
+se_f <- sqrt(var_slope_diff(40, c(0, 3, 6, 9, 12), 0.4, 6))
+pnorm(0.5 / se_f - qnorm(0.975))
+pw["power"] + c(-1.96, 1.96) * pw[___]
+```
+
+(c) Questions. (i) How many simulated trials would give an MCSE of 0.01 at this power? (ii) Report the result in one sentence suitable for a protocol.
+
+### Exercise G4. Type I error check (LO 12.3)
+
+(a) Repeat Exercise G3 with `delta = 0` and 100 simulated trials.
+
+```{r}
+#| eval: false
+power_two_arm(n_sims = 100, seed = 13, n_per_arm = 40, delta = ___)
+```
+
+(b) Questions. (i) Is the rejection rate consistent with 5%, given its MCSE? (ii) Why is this check worth doing before trusting a power simulation?
+
+### Exercise G5. An estimand for CLEAR (LO 12.4)
+
+Complete the table for the primary estimand of the CLEAR trial (binary outcome: moderate-or-severe itch at week 12; placebo versus active topical treatment). Two intercurrent events are expected: stopping the trial treatment early, and using rescue antihistamines.
+
+| Attribute | CLEAR |
+|---|---|
+| Treatment conditions | ___ |
+| Population | ___ |
+| Variable | ___ |
+| Intercurrent events and strategies | ___ |
+| Population-level summary (say whether conditional or marginal) | ___ |
+
+Question: which analysis from Modules 7 and 8 matches your population-level summary?
+
+### Exercise G6. A reproducibility audit (LO 12.6)
+
+(a) Run `sessionInfo()` and save its output to a text file in `outputs/` using a relative path built with `here()`.
+
+```{r}
+#| eval: false
+writeLines(capture.output(sessionInfo()), here(___, "my_session_info.txt"))
+```
+
+(b) Here is the start of a script written by a colleague. List every reproducibility problem you can find and rewrite the lines.
+
+```r
+setwd("C:/Users/anna/Desktop/walk project")
+walk <- read.csv("walk_long_FINAL_v3_edited.csv")
+walk$sbp[walk$id == "W117"] <- 152   # fixed this one
+library(lme4)
+m <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk)
+```
+
+(c) Write the three `renv` commands you would use (i) when starting the project, (ii) after installing a new package, (iii) on a new computer. Do not run them in the course project.
+
+## Independent exercises
+
+### Exercise I1. Power for a front-loaded design with dropout (LO 12.3)
+
+Using `sim_two_arm()` and `power_two_arm()`, estimate power for visits at 0, 1, 3, 6, 9 and 12 months with dropout probability 0.15 per post-baseline visit and $\Delta = -0.5$ mmHg/month, for 40, 55 and 70 participants per arm (100 simulated trials each). Report the power with Monte Carlo SEs, choose a sample size for 80% power, and say what you would do before finalising it. Discuss one way in which `sim_two_arm()` does not represent WALK.
+
+### Exercise I2. Analysis-plan sections for CLEAR (LO 12.4)
+
+Using `final-project/sap_template.md` and the WALK example in `admin/templates/walk_sap_example.md`, write sections 6.2 (estimand), 6.3 (analysis methods, including the response to fitting problems) and 6.4 (missing data) of a SAP for the CLEAR trial's binary outcome. Give the model as R syntax.
+
+### Exercise I3. Reporting the DIARY analysis (LO 12.5)
+
+Fit the negative binomial GLMM for DIARY from Module 11 (`migraine_days ~ arm * post + offset(log(days)) + (1 | id)`). Write a statistical methods paragraph and a results paragraph, using inline R for every number. Report the rate ratio for the active-by-post interaction with a 95% CI, the random-intercept SD, the number of participants and diary periods, and the diagnostic checks.
+
+### Exercise I4. Critique a report (LO 12.5)
+
+A paper reports: "Blood pressure was analysed using a mixed model. The programme significantly reduced blood pressure (p = 0.003). Missing data were handled by the model." List what is missing, with reference to the reporting checklist in the SAP template, and rewrite the passage using the WALK SP versus UC result.

@@ -1,0 +1,118 @@
+---
+title: "Module 6. Interpretation, contrasts and prediction"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Answer each question briefly. Some questions use output produced in this document. Answers with explanations are at the end, for instructors.
+
+## Questions
+
+**Q1 (LO 6.1).** In `lmer(sbp ~ month * arm + (1 + month | id))`, with `month` measured from randomisation, what does the coefficient `armEP` estimate?
+
+a. The overall effect of EP averaged over follow-up
+b. The EP − UC difference in mean SBP at month 0
+c. The EP − UC difference in slopes
+d. The EP − UC difference in mean change to month 12
+
+**Q2 (LO 6.1).** True or false, with a justification: centring time at month 12 changes the fitted values and the log-likelihood of the linear-time model.
+
+**Q3 (LO 6.1).** Use the output below. Which coefficient is the difference in mean change from baseline to month 9 for SP versus UC? What does `visit_f9` estimate?
+
+```{r}
+#| label: q3
+round(fixef(m_prim)[c("visit_f9", "armSP", "visit_f9:armSP")], 2)
+```
+
+**Q4 (LO 6.2).** Write the coefficient vector (in words, cell by cell) for the contrast "EP − SP difference in mean change from baseline to month 12".
+
+**Q5 (LO 6.2).** The output below shows EMMs and observed means at month 12. Explain why they differ, and which you would report as the estimated mean.
+
+```{r}
+#| label: q5
+emm <- emmeans(m_prim, ~ visit_f * arm)
+as.data.frame(summary(emm)) |> filter(visit_f == "12") |> select(arm, emmean) |>
+  left_join(walk |> filter(visit_f == "12") |> group_by(arm) |>
+              summarise(observed = mean(sbp), n = n()), by = "arm")
+```
+
+**Q6 (LO 6.2).** True or false, with a justification: if the 95% confidence intervals of the month-12 EMMs for SP and UC overlap, the difference between them is not statistically significant.
+
+**Q7 (LO 6.3).** A trial has two programmes compared with one control at month 12 (primary), plus comparisons at four earlier visits. Which comparisons would you adjust for multiplicity, and with what method?
+
+**Q8 (LO 6.3).** Interpret this output. Why is the Holm p-value for SP − UC equal to the unadjusted one?
+
+```{r}
+#| label: q8
+cells <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cw <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg <- function(a) cw(a, "12") - cw(a, "0")
+L <- list("SP - UC" = chg("SP") - chg("UC"), "EP - UC" = chg("EP") - chg("UC"))
+rbind(none = summary(contrast(emm, L))$p.value,
+      holm = summary(contrast(emm, L, adjust = "holm"))$p.value,
+      dunnett = summary(contrast(emm, L, adjust = "mvt"))$p.value)
+```
+
+**Q9 (LO 6.4).** What is the difference between `predict(m_prim)` and `predict(m_prim, re.form = NA)`? Which would you use for a figure of mean trajectories by arm?
+
+**Q10 (LO 6.4).** True or false, with a justification: in a linear mixed model, the average of subject-specific predicted trajectories over the population equals the population-average trajectory, but this is not true for a logistic mixed model.
+
+**Q11 (LO 6.5).** The estimated mean SBP in EP at month 12 has SE 1.32 mmHg. The between-participant variance at month 12 is 158 mmHg² and the residual variance 32 mmHg². Compute approximate 95% limits for (a) the mean and (b) a single measurement of a new participant, given an estimated mean of 137.2 mmHg.
+
+**Q12 (LO 6.5).** Why is a prediction interval for a participant who has attended six visits narrower than one for a new participant?
+
+**Q13 (LO 6.6).** Name three features of an honest figure of fitted trajectories for a longitudinal trial.
+
+**Q14 (LO 6.2, advanced).** Why is the constrained-baseline (cLDA) model appropriate for WALK but not for an observational comparison of smokers and non-smokers?
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+fp <- fixef(m_prim)
+q8 <- rbind(none = summary(contrast(emm, L))$p.value,
+            holm = summary(contrast(emm, L, adjust = "holm"))$p.value)
+q11_ci <- 137.2 + c(-1, 1) * 1.96 * 1.32
+q11_pi <- 137.2 + c(-1, 1) * 1.96 * sqrt(1.32^2 + 158 + 32)
+```
+
+**A1.** b. With an interaction, `armEP` is the EP − UC difference when `month` = 0.
+
+**A2.** False. Centring is a reparameterisation: fitted values and log-likelihood are unchanged (as long as the random slope uses the same centred variable or the model is otherwise equivalent); only the meaning of the intercept and arm coefficients changes.
+
+**A3.** `visit_f9:armSP` (`r round(fp["visit_f9:armSP"], 2)` mmHg) is the SP − UC difference in mean change to month 9. `visit_f9` (`r round(fp["visit_f9"], 2)`) is the change from baseline to month 9 in usual care only.
+
+**A4.** +1 for EP at month 12, −1 for EP at baseline, −1 for SP at month 12, +1 for SP at baseline, 0 for the other 14 cells. The weights sum to zero.
+
+**A5.** The observed means include only participants who attended at month 12. Dropout depended on earlier high SBP, so the attenders have lower SBP and the observed means are lower than the EMMs. The EMMs use all participants' data and are valid under MAR, so they are the estimates to report; the observed means can be shown for reference.
+
+**A6.** False. The difference has its own standard error, which accounts for both variances (and any covariance). Overlapping individual intervals are compatible with a significant difference; compute the contrast and its CI.
+
+**A7.** Adjust within the primary family only: the two programme-versus-control comparisons at month 12, with Dunnett (or Holm, or a prespecified fixed sequence). Report the earlier visits as secondary, descriptive estimates with unadjusted CIs, clearly labelled.
+
+**A8.** All p-values are well below 0.05, so both primary comparisons are significant under every method. Holm tests the smallest p-value (EP − UC) at $\alpha/2$; once it is rejected, the next (SP − UC) is tested at $\alpha/1$, so its adjusted p-value is $\max(2p_{(1)}, p_{(2)})$, which here equals the unadjusted SP − UC value (`r formatC(q8["none", 1], format = "e", digits = 2)`). Dunnett gives a slightly larger value for SP − UC because it adjusts each comparison for both.
+
+**A9.** `predict(m_prim)` adds each participant's BLUPs (subject-specific predictions); `re.form = NA` uses the fixed effects only (population-average). For mean trajectories by arm use the population-average predictions, best obtained as EMMs with CIs.
+
+**A10.** True. With an identity link, $E(\mathbf{x}^\top\boldsymbol\beta + \mathbf{z}^\top\mathbf{b}_i) = \mathbf{x}^\top\boldsymbol\beta$. With a logit link, the average of $\text{expit}(\mathbf{x}^\top\boldsymbol\beta + b_i)$ over $b_i$ is not $\text{expit}(\mathbf{x}^\top\boldsymbol\beta)$, so marginal effects are attenuated relative to conditional ones (Modules 7 and 8).
+
+**A11.** (a) $137.2 \pm 1.96 \times 1.32$ = `r round(q11_ci[1], 1)` to `r round(q11_ci[2], 1)` mmHg. (b) $137.2 \pm 1.96\sqrt{1.32^2 + 158 + 32}$ = `r round(q11_pi[1], 1)` to `r round(q11_pi[2], 1)` mmHg. The prediction interval is about ten times wider.
+
+**A12.** For an observed participant, much of their personal deviation (random intercept and slope) is known through their BLUPs; the interval uses the conditional variance of the BLUPs, which is much smaller than the full between-participant variance $\mathbf{z}^\top G\mathbf{z}$ used for a new participant. The residual variance remains in both.
+
+**A13.** Any three of: model-estimated means with intervals, and the kind of interval named; time on its real scale (unequal spacing visible); observed means overlaid for reference; a y-axis that is not cropped to exaggerate differences; labelled axes with units; consistent arm colours; no dual axes.
+
+**A14.** cLDA assumes that the groups have the same population mean at baseline. Randomisation guarantees this in WALK (baseline was measured before randomisation). Smokers and non-smokers differ systematically at baseline, so the constraint would be false and would bias the estimated differences in change.

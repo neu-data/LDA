@@ -1,0 +1,9 @@
+method,grp,var1,var2,type,value
+REML,id,(Intercept),NA,SD,12.372920575566575
+REML,id,month,NA,SD,0.54205727382527
+REML,id,(Intercept),month,correlation,-0.2346871916948761
+REML,Residual,NA,NA,SD,5.619593720021688
+ML,id,(Intercept),NA,SD,12.3216370889226
+ML,id,month,NA,SD,0.5394065502322857
+ML,id,(Intercept),month,correlation,-0.2349931482378267
+ML,Residual,NA,NA,SD,5.592198533815102

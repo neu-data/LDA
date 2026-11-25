@@ -1,0 +1,33 @@
+visits,follow_up,method,year,n_rep,bias,mcse
+Visits depend on last eGFR,Follow-up stops at kidney failure,Mixed model,1,100,0.08861663030303099,0.07361033387446748
+Visits depend on last eGFR,Follow-up stops at kidney failure,Mixed model,2,100,0.11195232359336593,0.07734865188488613
+Visits depend on last eGFR,Follow-up stops at kidney failure,Mixed model,3,100,0.14542136178691856,0.08234916581247166
+Visits depend on last eGFR,Follow-up stops at kidney failure,Mixed model,4,100,0.189023744883689,0.08906966362784857
+Visits depend on last eGFR,Follow-up stops at kidney failure,Naive window mean,1,100,-0.9483920575555014,0.11671360414352923
+Visits depend on last eGFR,Follow-up stops at kidney failure,Naive window mean,2,100,-0.7544898763309851,0.1153814499151907
+Visits depend on last eGFR,Follow-up stops at kidney failure,Naive window mean,3,100,-0.4844748398928732,0.1255667599808897
+Visits depend on last eGFR,Follow-up stops at kidney failure,Naive window mean,4,100,0.14363278814305416,0.11574316821534854
+Visits depend on last eGFR,No kidney failure,Mixed model,1,100,0.15139546103402857,0.07516251642364084
+Visits depend on last eGFR,No kidney failure,Mixed model,2,100,0.14018717465588013,0.08043545535628205
+Visits depend on last eGFR,No kidney failure,Mixed model,3,100,0.17560267004475222,0.08517709272398731
+Visits depend on last eGFR,No kidney failure,Mixed model,4,100,0.2576419472006435,0.08969152794213589
+Visits depend on last eGFR,No kidney failure,Naive window mean,1,100,-1.4092091047443125,0.12491430079573777
+Visits depend on last eGFR,No kidney failure,Naive window mean,2,100,-1.858767645869684,0.12731305984301278
+Visits depend on last eGFR,No kidney failure,Naive window mean,3,100,-2.587196482503648,0.1342062046262315
+Visits depend on last eGFR,No kidney failure,Naive window mean,4,100,-3.0857560566272197,0.13119109196814924
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Mixed model,1,100,0.12083018896133019,0.06383997337181714
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Mixed model,2,100,0.16014954048813534,0.06670637757136022
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Mixed model,3,100,0.20782858089048986,0.07061843928001987
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Mixed model,4,100,0.2638673101683962,0.07581887965534502
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Naive window mean,1,100,0.46557709039549044,0.08130422189273911
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Naive window mean,2,100,0.8574811627606006,0.1027789126186818
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Naive window mean,3,100,1.7132156352926589,0.10951159790526391
+Visits unrelated to eGFR,Follow-up stops at kidney failure,Naive window mean,4,100,2.4974759547760197,0.11771092898818973
+Visits unrelated to eGFR,No kidney failure,Mixed model,1,100,0.0059193897677655375,0.07748663035403854
+Visits unrelated to eGFR,No kidney failure,Mixed model,2,100,0.02340251721313244,0.08228848229328582
+Visits unrelated to eGFR,No kidney failure,Mixed model,3,100,0.056462569254388695,0.08725319337641949
+Visits unrelated to eGFR,No kidney failure,Mixed model,4,100,0.10509954589153082,0.09239347617767908
+Visits unrelated to eGFR,No kidney failure,Naive window mean,1,100,0.023460292487102807,0.09932072746684137
+Visits unrelated to eGFR,No kidney failure,Naive window mean,2,100,0.02810123701180707,0.09851963673177025
+Visits unrelated to eGFR,No kidney failure,Naive window mean,3,100,0.03629303168323297,0.12156919721681776
+Visits unrelated to eGFR,No kidney failure,Naive window mean,4,100,0.09303993869924682,0.11719721551031859

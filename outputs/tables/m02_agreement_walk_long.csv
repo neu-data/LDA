@@ -1,0 +1,9 @@
+check,value
+Rows in cleaned data,1897
+Rows in walk_long,1897
+Keys only in cleaned data,0
+Keys only in walk_long,0
+SBP values that differ (incl. missing),2
+Steps values that differ,0
+Rows where month differs,1068
+Largest month difference,0.02000000000000135

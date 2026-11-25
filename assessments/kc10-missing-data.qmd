@@ -1,0 +1,138 @@
+---
+title: "Module 10. Missing data and dropout"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+walk_b <- load_walk("baseline")
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This knowledge check has 13 questions. Each is mapped to a Module 10 learning outcome. Answer all questions before looking at the final section, which is for instructors.
+
+# Questions
+
+## Question 1 (LO 10.1)
+
+A participant's six scheduled visits have the pattern `OO.OO.` (O observed, `.` missing). Classify the missingness at each missing visit.
+
+## Question 2 (LO 10.1)
+
+Which of the following describes a missing covariate problem rather than missing outcome data?
+
+a. SBP was not recorded at month 6 for 51 participants.
+b. Baseline BMI was not recorded for 20 participants.
+c. 72 participants did not attend month 12.
+d. Some visits took place two weeks late.
+
+## Question 3 (LO 10.2)
+
+Classify each mechanism as MCAR, MAR or MNAR (the analysis includes SBP at all observed visits and arm):
+
+(a) A participant leaves because her recorded SBP at month 6 was 185 mmHg and her GP started medication.
+(b) A participant stops attending because he moves abroad for work.
+(c) A participant stops attending because she feels unwell from a rise in blood pressure since her last visit.
+
+## Question 4 (LO 10.2)
+
+```{r}
+#| label: q4
+wc <- load_walk("complete")
+risk <- wc |>
+  arrange(id, visit) |>
+  group_by(id) |>
+  mutate(last_sbp = sapply(seq_along(visit), function(k) sbp[max(which(observed[1:k]))])) |>
+  ungroup() |>
+  left_join(walk_b |> select(id, last_month_sched), by = "id") |>
+  group_by(id) |>
+  mutate(prev_sbp = lag(last_sbp), prev_sched = lag(month_sched)) |>
+  ungroup() |>
+  filter(visit > 1, prev_sched <= last_month_sched) |>
+  mutate(drop_now = as.integer(prev_sched == last_month_sched),
+         prev_sbp10 = (prev_sbp - 150) / 10)
+m_drop <- glm(drop_now ~ prev_sbp10 + arm, family = binomial, data = risk)
+fixef_table(m_drop, exponentiate = TRUE) |> mutate(across(where(is.numeric), ~ round(., 3)))
+```
+
+True or false, with justification: "This output shows that the WALK data are missing at random, so the mixed-model analysis is valid."
+
+## Question 5 (LO 10.3)
+
+List four conditions under which a likelihood-based linear mixed model fitted to all observed data gives valid inference about the mean trajectory.
+
+## Question 6 (LO 10.3)
+
+Why does the correctness of the covariance model matter more for a mixed-model analysis under MAR than for an analysis of complete data?
+
+## Question 7 (LO 10.3)
+
+True or false, with justification: "Restricting the mixed model to participants who completed the study is the safest analysis because it uses only real data."
+
+## Question 8 (LO 10.4)
+
+In a simulation in which dropout was completely at random, LOCF underestimated the EP versus usual care difference in mean change at month 12 by about 1.4 mmHg, while the mixed model was unbiased. Explain why LOCF is biased even under MCAR.
+
+## Question 9 (LO 10.5)
+
+A colleague imputes missing SBP in the WALK wide data with `mice(walk_w[, c("sbp_m0", ..., "sbp_m12", "age", "sex", "bmi")])`, without arm. What is the likely consequence for the estimated treatment effects?
+
+## Question 10 (LO 10.5)
+
+Five imputed data sets give the following estimates (SE) of the EP versus usual care difference: −8.9 (1.30), −9.4 (1.28), −8.6 (1.31), −9.1 (1.29), −8.8 (1.30). Compute the pooled estimate, the within-imputation variance, the between-imputation variance and the total variance.
+
+## Question 11 (LO 10.6)
+
+In a delta-adjustment analysis of WALK, the confidence interval for SP versus usual care first included zero at δ = 16 mmHg. Write two sentences interpreting this result for a clinical audience.
+
+## Question 12 (LO 10.6)
+
+Why might a delta adjustment be applied to dropouts in the programme arms only, and not to usual-care dropouts?
+
+## Question 13 (LO 10.7)
+
+In the KIDNEY cohort, patients with an eGFR below 30 are seen about every 3 months, others about every 6 months. Explain why averaging all eGFR values recorded in each year gives a biased estimate of the cohort's mean eGFR, and under what condition a mixed model is protected against this.
+
+# Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+or <- fixef_table(m_drop, exponentiate = TRUE)
+q <- c(-8.9, -9.4, -8.6, -9.1, -8.8); se <- c(1.30, 1.28, 1.31, 1.29, 1.30)
+p <- mice::pool.scalar(q, se^2)
+```
+
+**Q1.** Visit 3 is an intermittent missed visit (the participant returns at visits 4 and 5). Visit 6 is dropout (monotone): the participant is not seen again. Under the WALK definitions, missing the final visit counts as dropout.
+
+**Q2.** b. The others concern the outcome (a, c) or timing (d).
+
+**Q3.** (a) MAR: the reason (a recorded SBP of 185) is in the observed data. (b) MCAR: unrelated to blood pressure. (c) MNAR: depends on the unrecorded rise.
+
+**Q4.** False. The odds ratio of `r f2(or$estimate[2])` per 10 mmHg (95% CI `r f2(or$lower[2])` to `r f2(or$upper[2])`) shows that dropout depends on observed SBP, which is evidence against MCAR. It cannot show MAR: the same association would arise if dropout depended on unobserved current SBP, which is correlated with the last observed value. MAR is an assumption.
+
+**Q5.** (1) Data are MAR; (2) the parameters of the outcome model and the missingness model are separable (MAR + separability = ignorability); (3) the model for the joint distribution of the repeated outcomes (mean and covariance) is correctly specified; (4) the variables that drive missingness are included in the model. Inference uses the full likelihood (not GEE).
+
+**Q6.** Under MAR the missing values are effectively predicted from the observed ones through the model's implied conditional distribution, which depends on the covariance structure. A wrong covariance model gives wrong predictions and can bias the mean estimates. With complete data, a wrong covariance model affects mainly the standard errors.
+
+**Q7.** False. Completers are a selected group unless data are MCAR; if dropout depends on observed SBP (as in WALK), completer analysis is biased. It also discards information and is less precise.
+
+**Q8.** LOCF carries a participant's early value to month 12. In WALK the programme effect builds up over the first months, so early values understate it. Even if who drops out is random, carrying forward early values dilutes the difference between arms at month 12. LOCF also understates uncertainty.
+
+**Q9.** The imputation model assumes the same relationships between visits in all arms and no arm difference, so imputed values are drawn towards the common mean and the treatment effects are biased towards zero. Impute by arm or include arm and its interactions with the visits.
+
+**Q10.** Pooled estimate $\bar Q$ = `r f2(p$qbar)`. Within-imputation variance $\bar U$ = mean of SE² = `r f2(p$ubar)`. Between-imputation variance $B$ = variance of the estimates = `r f2(p$b)`. Total variance $T = \bar U + (1 + 1/5)B$ = `r f2(p$t)`, SE = `r f2(sqrt(p$t))`.
+
+**Q11.** Example: "The standard programme's benefit would no longer be statistically clear only if participants who left the programme had, at month 12, SBP about 16 mmHg higher than similar participants who stayed. Such a large difference, larger than the programme's effect itself, seems implausible, so the conclusion holds under plausible departures from the missing-at-random assumption."
+
+**Q12.** The departure from MAR that threatens the conclusion is that people who leave a programme lose its benefit (stop walking), so their SBP is higher than MAR predicts. Usual-care participants have no intervention to stop, so leaving is less likely to change their trajectory. Shifting all arms equally would mostly cancel in the comparison.
+
+**Q13.** Patients with low eGFR contribute more measurements per year, so they are over-represented in the average and pull it down (patients who reach kidney failure and leave have the opposite effect). A mixed model treats each patient as the unit and conditions on the patient's observed outcome history; it is protected if the timing of visits depends only on previously observed eGFR (and other variables in the model), not on unobserved current values, and if the model is correctly specified.

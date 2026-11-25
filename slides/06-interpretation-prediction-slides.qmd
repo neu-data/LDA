@@ -1,0 +1,421 @@
+---
+title: "Module 6. Interpretation, contrasts and prediction"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk  <- load_walk()
+sched <- c(0, 1, 3, 6, 9, 12)
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+emm <- emmeans(m_prim, ~ visit_f * arm)
+emm_tab <- as.data.frame(summary(emm)) |> mutate(month = as.numeric(as.character(visit_f)))
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg    <- function(a, v = "12") cell_w(a, v) - cell_w(a, "0")
+L <- list("SP - UC" = chg("SP") - chg("UC"), "EP - UC" = chg("EP") - chg("UC"),
+          "EP - SP" = chg("EP") - chg("SP"))
+dic <- summary(contrast(emm, L), infer = TRUE)
+cw  <- summary(contrast(emm, list(UC = chg("UC"), SP = chg("SP"), EP = chg("EP"))), infer = TRUE)
+fp  <- fixef(m_prim)
+G  <- as.matrix(VarCorr(m_prim)$id); s2 <- sigma(m_prim)^2
+pi_tab <- emm_tab |>
+  mutate(var_between = G[1, 1] + 2 * G[1, 2] * month + G[2, 2] * month^2,
+         se_newpt = sqrt(SE^2 + var_between + s2),
+         pi_lower = emmean - qnorm(0.975) * se_newpt,
+         pi_upper = emmean + qnorm(0.975) * se_newpt)
+ep12 <- filter(pi_tab, arm == "EP", month == 12)
+```
+
+# Reading coefficients
+
+## In an interaction model, a "main effect" is a simple effect
+
+```{r}
+#| echo: false
+walk$month12 <- walk$month - 12
+m_lin   <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_lin12 <- lmer(sbp ~ month12 * arm + (1 + month12 | id), data = walk, control = lmer_ctrl)
+data.frame(term = names(fixef(m_lin)), `time from 0` = fixef(m_lin),
+           `time from 12` = fixef(m_lin12), check.names = FALSE, row.names = NULL) |>
+  knitr::kable(digits = 2)
+```
+
+- `armSP` = difference **at time zero**. Centre time at 12 and it becomes the difference at month 12.
+- Same model, same log-likelihood; different questions.
+
+::: {.notes}
+Write the SP minus UC difference at time t on the board: beta2 + beta4 t. At t = 0 it is beta2. Centring moves the zero. Ask participants to verify 0.31 + 12 times -0.49 = -5.57. Stress that slopes and slope differences do not change. Point out that the month-12 difference in level from a linear-time model is not the estimand: the true trajectories are not linear.
+:::
+
+## In the primary model, the month-12 interaction is the difference in change
+
+```{r}
+#| echo: false
+data.frame(term = c("armSP", "visit_f12", "visit_f12:armSP", "visit_f12:armEP"),
+           meaning = c("SP - UC at baseline", "change to month 12 in UC only",
+                       "difference in change, SP - UC", "difference in change, EP - UC"),
+           estimate = fp[c("armSP", "visit_f12", "visit_f12:armSP", "visit_f12:armEP")]) |>
+  knitr::kable(digits = 2, row.names = FALSE)
+```
+
+::: {.notes}
+With treatment coding and a saturated cell-means model, the change in arm a to visit v is gamma_v plus the interaction, and in UC it is gamma_v alone. So the interaction is exactly the difference in change. This shortcut stops working once covariates interact with time or baseline is constrained, which is why we compute contrasts of EMMs instead.
+:::
+
+## Centre covariates so the intercept means something
+
+```{r}
+#| echo: false
+walk <- walk |> mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+m_adj     <- lmer(sbp ~ visit_f * arm + age10 + sex + bmi_c + (1 + month | id), data = walk, control = lmer_ctrl)
+m_adj_raw <- lmer(sbp ~ visit_f * arm + age + sex + bmi + (1 + month | id), data = walk, control = lmer_ctrl)
+rbind(centred = fixef(m_adj)[c("(Intercept)", "visit_f12:armEP")],
+      raw = fixef(m_adj_raw)[c("(Intercept)", "visit_f12:armEP")]) |> knitr::kable(digits = 2)
+```
+
+- Raw: intercept for a man aged 0 with BMI 0.
+- Centred (age 60, BMI 29): a sensible baseline value. Treatment terms unchanged.
+
+::: {.notes}
+The treatment terms are identical because the covariates do not interact with arm or time. Centring matters for interpretation of the intercept and of any term involved in an interaction.
+:::
+
+## Try it
+
+Workbook exercise 1: read the coefficients of the linear-time model with time centred at 6 months.
+
+::: {.notes}
+Ask participants to predict the new arm coefficients before fitting.
+:::
+
+# Estimated marginal means and contrasts
+
+## EMMs are model-based cell means for every arm and visit
+
+```{r}
+emm <- emmeans(m_prim, ~ visit_f * arm)
+```
+
+```{r}
+#| echo: false
+emm_tab |> filter(visit_f %in% c("0", "6", "12")) |>
+  select(arm, visit_f, emmean, SE, lower.CL, upper.CL) |> knitr::kable(digits = 1)
+```
+
+::: {.notes}
+Each EMM is x' beta-hat for one cell. Satterthwaite df are set in setup.R. Point out that the SE of a single mean is about 1.3 mmHg because between-person variation in level enters each mean.
+:::
+
+## EMMs are not observed means when dropout depends on the outcome
+
+```{r}
+#| echo: false
+walk |> group_by(arm, visit_f) |> summarise(observed = mean(sbp)) |>
+  left_join(emm_tab |> select(arm, visit_f, emmean), by = c("arm", "visit_f")) |>
+  filter(visit_f %in% c("0", "12")) |> mutate(difference = observed - emmean) |>
+  knitr::kable(digits = 2)
+```
+
+::: {.notes}
+At baseline they agree exactly. At month 12 the observed means are lower in every arm: participants with high blood pressure were more likely to drop out, so those attending are a selected group. The model uses the dropouts' earlier measurements (valid under MAR). Link back to Module 2.
+:::
+
+## A contrast is a vector of weights over the 18 cells
+
+```{r}
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg    <- function(a, v = "12") cell_w(a, v) - cell_w(a, "0")
+L <- list("SP - UC" = chg("SP") - chg("UC"),
+          "EP - UC" = chg("EP") - chg("UC"),
+          "EP - SP" = chg("EP") - chg("SP"))
+contrast(emm, L)
+```
+
+::: {.notes}
+Walk through the weights: +1 SP month 12, -1 SP baseline, -1 UC month 12, +1 UC baseline. Build the grid in the same order emmeans uses (visit fastest), and print the vector next to the grid when in doubt. Custom lists get no multiplicity adjustment by default.
+:::
+
+## The primary estimates
+
+```{r}
+#| echo: false
+data.frame(contrast = dic$contrast,
+           `estimate (95% CI)` = fmt_ci(dic$estimate, dic$lower.CL, dic$upper.CL),
+           p = fmt_p(dic$p.value), truth = c(-4.6, -8.1, -3.5), check.names = FALSE) |>
+  knitr::kable(col.names = c("Contrast", "Estimate (95% CI), mmHg", "p", "True value (simulated)"))
+```
+
+::: {.notes}
+Read the first row aloud as a sentence: the standard programme reduced SBP by 5.4 mmHg more than usual care over 12 months, 95% CI 2.6 to 8.2. The truth column exists only because WALK is simulated; the estimates are a little larger in magnitude but the intervals contain the true values.
+:::
+
+## The interaction-contrast approach gives the whole profile
+
+```{r}
+ic <- contrast(emm, interaction = c(visit_f = "trt.vs.ctrl1",
+                                    arm = "trt.vs.ctrl1"))
+```
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 3.8
+#| out-width: "75%"
+dic_time <- as.data.frame(summary(ic, infer = TRUE)) |>
+  mutate(month = as.numeric(sub(" - 0", "", visit_f_trt.vs.ctrl1)),
+         arm = sub(" - UC", "", arm_trt.vs.ctrl1)) |>
+  bind_rows(data.frame(month = 0, arm = c("SP", "EP"), estimate = 0, lower.CL = 0, upper.CL = 0)) |>
+  mutate(arm = factor(arm, levels = c("SP", "EP")))
+ggplot(dic_time, aes(month, estimate, colour = arm)) +
+  geom_hline(yintercept = 0, colour = "#9A9A9A") +
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL), position = position_dodge(width = 0.5), size = 0.3) +
+  geom_line(position = position_dodge(width = 0.5)) +
+  scale_colour_arm(labels = walk_arm_labels, name = NULL) + scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "Difference in mean change\nvs usual care (mmHg)")
+```
+
+::: {.notes}
+Each visit minus baseline, crossed with each arm minus UC. The month-12 values equal the custom contrasts. EP separates by month 1, SP more slowly; both effects are established by month 6.
+:::
+
+## Try it
+
+Workbook exercises 2 and 3: EMMs, custom contrasts and the interaction-contrast approach.
+
+::: {.notes}
+Encourage participants to print their coefficient vectors next to the grid.
+:::
+
+# Multiplicity
+
+## Define the family before adjusting
+
+- **Primary family**: SP vs UC and EP vs UC at month 12 (a claim of success if either is significant).
+- **Secondary**: EP vs SP; differences at months 1 to 9. Reported with unadjusted CIs, labelled.
+- Options: Bonferroni, Holm, Dunnett (`adjust = "mvt"`), fixed sequence.
+
+::: {.notes}
+The familywise error rate matters when any rejection in a family supports the same claim. Two programmes against a common control form such a family. Intermediate visits describe the shape of the effect rather than add new claims. Prespecify the family and method; ICH E9(R1) emphasises defining estimands and analyses in advance.
+:::
+
+## Adjustment changes p-values and interval widths, not estimates
+
+```{r}
+#| echo: false
+pr <- L[1:2]
+bind_rows(lapply(c(none = "none", holm = "holm", dunnett = "mvt"), function(a) {
+  s <- summary(contrast(emm, pr, adjust = a), infer = TRUE)
+  data.frame(contrast = s$contrast, estimate = s$estimate, lower = s$lower.CL,
+             upper = s$upper.CL, p = s$p.value)
+}), .id = "adjustment") |> knitr::kable(digits = 4)
+```
+
+::: {.notes}
+Holm leaves the SP p-value unchanged because EP, with the smaller p-value, is tested first at alpha/2 and SP then at alpha. emmeans shows Bonferroni intervals with Holm. Dunnett intervals are slightly narrower than Bonferroni because they use the positive correlation between the two comparisons through the shared UC arm. A fixed sequence (EP vs UC, then SP vs UC, then EP vs SP, each at 5 per cent) rejects all three here.
+:::
+
+## When not to adjust
+
+- One prespecified primary comparison.
+- Secondary estimates reported as estimates with CIs and clearly labelled.
+- Visit-by-visit profiles that describe the shape of an effect.
+- Model checks.
+
+::: {.notes}
+Over-adjustment destroys power for the questions that matter. Under-adjustment with many confirmatory claims inflates false positives. The remedy is prespecification and transparency, not a blanket rule.
+:::
+
+# Predictions
+
+## Population-average vs subject-specific predictions
+
+$$
+E(y_{ij}) = \mathbf{x}_{ij}^\top\boldsymbol\beta
+\qquad
+E(y_{ij}\mid\mathbf{b}_i) = \mathbf{x}_{ij}^\top\boldsymbol\beta + \mathbf{z}_{ij}^\top\mathbf{b}_i
+$$
+
+```{r}
+#| eval: false
+predict(m_prim, re.form = NA)   # population average (fixed effects only)
+predict(m_prim)                  # subject specific (adds BLUPs)
+```
+
+- Identity link: averaging subject-specific predictions over $\mathbf{b}_i$ gives the population average.
+
+::: {.notes}
+This equality is special to linear models. For logistic and Poisson mixed models it fails, which is the topic of Modules 7 and 8. Ask: which kind of prediction do we want for a treatment effect? The population average.
+:::
+
+## Subject-specific lines scatter around the population line
+
+```{r}
+#| echo: false
+#| fig-width: 9
+#| fig-height: 4.6
+grid <- walk |> distinct(id, arm) |> tidyr::crossing(visit_f = factor(sched, levels = sched)) |>
+  mutate(month = as.numeric(as.character(visit_f)))
+grid$pred_ss <- predict(m_prim, newdata = grid)
+grid$pred_pa <- predict(m_prim, newdata = grid, re.form = NA)
+set.seed(6)
+show_ids <- sample(unique(walk$id[walk$arm == "EP"]), 6)
+ggplot(filter(grid, id %in% show_ids), aes(month, pred_ss)) +
+  geom_line(aes(y = pred_pa), colour = "#6B6B6B", linewidth = 1.6) +
+  geom_line(colour = "#D55E00") +
+  geom_point(data = filter(walk, id %in% show_ids), aes(month, sbp), size = 1.5) +
+  facet_wrap(~ id, ncol = 3) + scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+```
+
+::: {.notes}
+Grey: population-average trajectory, identical for all six. Orange: subject-specific predictions, shifted and tilted by each participant's BLUPs and shrunk towards the grey line. Point to a participant with few visits and show stronger shrinkage.
+:::
+
+## Averages of `predict()` over observed rows reflect who stayed
+
+```{r}
+#| echo: false
+walk$pred_pa <- predict(m_prim, re.form = NA); walk$pred_ss <- predict(m_prim)
+pa_ss <- grid |> group_by(arm, visit_f) |> summarise(d = mean(pred_ss) - mean(pred_pa))
+walk |> filter(visit_f == "12") |> group_by(arm) |>
+  summarise(observed = mean(sbp), mean_subject_specific = mean(pred_ss),
+            population_average = mean(pred_pa)) |> knitr::kable(digits = 1)
+```
+
+- Over a complete grid of all participants the two agree to within `r signif(max(abs(pa_ss$d)), 1)` mmHg.
+
+::: {.notes}
+On the complete grid, BLUPs average out and the two coincide. On the observed rows at month 12, subject-specific predictions track the participants who remained, who had lower blood pressure. A common mistake is calling predict() without re.form = NA and averaging.
+:::
+
+## Try it
+
+Workbook exercise 4: population-average and subject-specific predictions.
+
+::: {.notes}
+Participants should reproduce the complete-grid comparison.
+:::
+
+# Confidence and prediction intervals
+
+## A CI is about the mean; a PI is about an individual measurement
+
+$$
+\text{new participant: } \operatorname{Var} = \mathbf{x}^\top\widehat{\operatorname{Var}}(\hat{\boldsymbol\beta})\mathbf{x} + \mathbf{z}^\top\hat G\mathbf{z} + \hat\sigma^2
+$$
+
+| EP, month 12 | Width (mmHg) | Range |
+|---|---|---|
+| 95% CI for the mean | `r round(ep12$upper.CL - ep12$lower.CL, 1)` | `r round(ep12$lower.CL, 1)` to `r round(ep12$upper.CL, 1)` |
+| 95% PI, new participant | `r round(ep12$pi_upper - ep12$pi_lower, 1)` | `r round(ep12$pi_lower, 1)` to `r round(ep12$pi_upper, 1)` |
+
+::: {.notes}
+Variance components at month 12: between-participant `r round(ep12$var_between, 1)`, residual `r round(s2, 1)`, squared SE of the mean only `r round(ep12$SE^2, 2)`. The PI is about ten times wider. For an existing participant, replace G by the conditional variance of the BLUPs and add the BLUP to the mean: the notes show 26 mmHg width with six visits and 34 with three. A simulation (draw beta, b and e) reproduces the analytic PI.
+:::
+
+## Showing both on one axis makes the difference obvious
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.2
+#| out-width: "75%"
+ggplot(filter(pi_tab, arm == "EP"), aes(month, emmean)) +
+  geom_ribbon(aes(ymin = pi_lower, ymax = pi_upper), fill = "#D55E00", alpha = 0.12) +
+  geom_ribbon(aes(ymin = lower.CL, ymax = upper.CL), fill = "#D55E00", alpha = 0.35) +
+  geom_line(colour = "#D55E00", linewidth = 0.8) + scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)",
+       caption = "Enhanced programme. Dark: 95% CI for the mean. Light: 95% PI for a new participant.")
+```
+
+::: {.notes}
+Ask: a patient starting the enhanced programme asks what their blood pressure will be at a year. Which band do you use? The light one, and you should say individual values range roughly from 110 to 164 mmHg. The dark band answers a policy question about the average.
+:::
+
+## Try it
+
+Workbook exercise 5: analytic and simulated prediction intervals.
+
+::: {.notes}
+The simulation takes a few seconds with 20,000 draws.
+:::
+
+# Presenting results
+
+## A good trajectory figure
+
+```{r}
+#| echo: false
+#| fig-width: 9
+#| fig-height: 4.6
+obs <- walk |> group_by(arm, month_sched) |> summarise(mean = mean(sbp))
+ggplot(emm_tab, aes(month, emmean, colour = arm, fill = arm)) +
+  geom_ribbon(aes(ymin = lower.CL, ymax = upper.CL), alpha = 0.15, colour = NA) +
+  geom_line(linewidth = 0.8) +
+  geom_point(data = obs, aes(month_sched, mean), shape = 1, size = 2) +
+  scale_colour_arm(labels = walk_arm_labels, name = NULL) +
+  scale_fill_arm(labels = walk_arm_labels, name = NULL) + scale_x_continuous(breaks = sched) +
+  labs(x = "Months since randomisation", y = "Systolic blood pressure (mmHg)",
+       caption = "Lines and bands: model-estimated means, 95% CIs. Circles: observed means.")
+```
+
+::: {.notes}
+Point out the choices: real time on the x-axis (unequal spacing visible), uncertainty named in the caption, observed means overlaid, consistent arm colours, a y-axis that spans the data without starting at zero. Ask what would be dishonest: equally spaced visits, unlabelled bands, a y-axis cropped to exaggerate, separate panels with different y-scales.
+:::
+
+## A results table for the primary outcome
+
+```{r}
+#| echo: false
+data.frame(Arm = walk_arm_labels,
+           `Mean change (95% CI)` = fmt_ci(cw$estimate, cw$lower.CL, cw$upper.CL),
+           `Difference vs UC (95% CI)` = c("Reference", fmt_ci(dic$estimate[1:2], dic$lower.CL[1:2], dic$upper.CL[1:2])),
+           p = c("", fmt_p(dic$p.value[1:2])), check.names = FALSE, row.names = NULL) |>
+  knitr::kable(align = "lccc")
+```
+
+::: {.notes}
+Estimates and intervals first, p-values second. Include the numbers contributing at baseline and month 12 in a real report (the notes show them). State the model in the table footnote.
+:::
+
+# Constrained baseline <span class="advanced-tag">ADVANCED</span>
+
+## cLDA: one common baseline mean, justified by randomisation
+
+```{r}
+walk <- walk |>
+  mutate(grp = ifelse(visit == 1, "base", paste(arm, visit_f, sep = "_")),
+         grp = relevel(factor(grp), ref = "base"))
+m_clda <- lmer(sbp ~ grp + (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+```{r}
+#| echo: false
+lv <- levels(walk$grp); gw <- function(g) as.numeric(lv == g)
+clda <- summary(contrast(emmeans(m_clda, ~ grp),
+  list("SP - UC" = gw("SP_12") - gw("UC_12"), "EP - UC" = gw("EP_12") - gw("UC_12"))), infer = TRUE)
+data.frame(contrast = clda$contrast, cLDA = clda$estimate, cLDA_SE = clda$SE,
+           unconstrained = dic$estimate[1:2], unconstrained_SE = dic$SE[1:2]) |> knitr::kable(digits = 2)
+```
+
+::: {.notes}
+Use only when baseline is measured before randomisation. The common baseline removes chance baseline imbalance from the estimated changes, giving an estimator close to baseline-adjusted ANCOVA that still uses participants with missing follow-up. Here the estimates move about 0.3 to 0.4 mmHg towards zero and the SEs shrink by about 6 per cent.
+:::
+
+## Summary
+
+- Main effects in interaction models are simple effects; centring changes the question, not the model.
+- Compute EMMs and explicit contrasts; the primary estimand is a difference in mean change.
+- Adjust for multiplicity within a prespecified primary family only.
+- Population-average and subject-specific predictions agree on average with an identity link.
+- CIs describe means; PIs describe individuals and are much wider.
+- Show model estimates with named uncertainty on honest axes.
+
+::: {.notes}
+Close by pointing to the practical assessment, which asks participants to produce a full set of results, a table and a figure from the covariate-adjusted model.
+:::

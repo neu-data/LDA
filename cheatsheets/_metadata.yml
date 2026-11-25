@@ -1,0 +1,23 @@
+execute:
+  echo: true
+  warning: false
+  message: false
+  freeze: false
+
+knitr:
+  opts_chunk:
+    comment: "#>"
+    results: hide
+    fig.show: hide
+
+format:
+  html:
+    theme: default
+    css: ../assets/cheatsheet.css
+    toc: false
+    number-sections: false
+    html-math-method: mathml
+    embed-resources: true
+    code-overflow: wrap
+    page-layout: full
+lang: en-GB

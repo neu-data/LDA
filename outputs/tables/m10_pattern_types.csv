@@ -1,0 +1,13 @@
+arm,type,n
+UC,Complete,76
+UC,Dropout only,23
+UC,Intermittent and dropout,2
+UC,Intermittent only,19
+SP,Complete,84
+SP,Dropout only,19
+SP,Intermittent and dropout,1
+SP,Intermittent only,16
+EP,Complete,78
+EP,Dropout only,24
+EP,Intermittent and dropout,3
+EP,Intermittent only,15

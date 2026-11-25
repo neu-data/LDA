@@ -1,0 +1,343 @@
+---
+title: "Module 7. Generalized estimating equations"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk  <- load_walk()  |> arrange(id, month)
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary() |> arrange(id, period)
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This answer key gives complete, executed solutions to the Module 7 workbook. Numbers in the model answers are computed in the document. Marking notes describe acceptable alternatives and common errors.
+
+```{r}
+#| label: helper
+sandwich_gee <- function(fit, correction = c("none", "MD")) {
+  correction <- match.arg(correction)
+  X <- model.matrix(fit); y <- fit$y; mu <- fitted(fit)
+  fam <- family(fit); eta <- fit$linear.predictors
+  w <- fit$prior.weights; if (is.null(w)) w <- rep(1, length(y))
+  alpha <- fit$geese$alpha
+  cl <- split(seq_along(y), fit$id)
+  p <- ncol(X); B <- matrix(0, p, p); parts <- vector("list", length(cl))
+  for (k in seq_along(cl)) {
+    r <- cl[[k]]; n <- length(r); R <- diag(n)
+    if (fit$corstr == "exchangeable" && n > 1) { R[] <- alpha; diag(R) <- 1 }
+    if (fit$corstr == "ar1" && n > 1) R <- alpha^abs(outer(1:n, 1:n, "-"))
+    A <- diag(sqrt(fam$variance(mu[r]) / w[r]), n)
+    Vinv <- solve(A %*% R %*% A)
+    D <- fam$mu.eta(eta[r]) * X[r, , drop = FALSE]
+    B <- B + t(D) %*% Vinv %*% D
+    parts[[k]] <- list(D = D, Vinv = Vinv, e = y[r] - mu[r])
+  }
+  Binv <- solve(B); M <- matrix(0, p, p)
+  for (pk in parts) {
+    e <- pk$e
+    if (correction == "MD") {
+      H <- pk$D %*% Binv %*% t(pk$D) %*% pk$Vinv
+      e <- solve(diag(nrow(H)) - H, e)
+    }
+    u <- t(pk$D) %*% pk$Vinv %*% e
+    M <- M + u %*% t(u)
+  }
+  V <- Binv %*% M %*% Binv
+  dimnames(V) <- list(colnames(X), colnames(X)); V
+}
+```
+
+## Guided exercises
+
+### Exercise 1. A GEE for WALK (LO 7.1, 7.4)
+
+```{r}
+#| label: ex1
+gee_walk <- geeglm(sbp ~ visit_f * arm, id = factor(id), waves = visit,
+                   data = walk, family = gaussian, corstr = "exchangeable")
+summary(gee_walk)
+emm_walk <- emmeans(gee_walk, ~ visit_f | arm)
+chg <- contrast(emm_walk, list(change_m12 = c(-1, 0, 0, 0, 0, 1)))
+d1 <- confint(contrast(chg, "trt.vs.ctrl", by = NULL), adjust = "none")
+d1
+```
+
+```{r}
+#| label: ex1-values
+#| include: false
+d1 <- as.data.frame(d1)
+```
+
+**(b)** The working correlation is $\hat\alpha$ = `r f2(gee_walk$geese$alpha)`, the scale is $\hat\phi$ = `r f2(gee_walk$geese$gamma, 1)` mmHg² and there are `r length(gee_walk$geese$clusz)` clusters. For a Gaussian GEE the scale is the variance of a single SBP reading around its population mean: the total (between- plus within-participant) variance, about (`r f2(sqrt(gee_walk$geese$gamma), 1)` mmHg)².
+
+**(c)** Difference in mean change at month 12: SP vs UC `r fmt_ci(d1$estimate[1], d1$lower.CL[1], d1$upper.CL[1], 2)` mmHg; EP vs UC `r fmt_ci(d1$estimate[2], d1$lower.CL[2], d1$upper.CL[2], 2)` mmHg.
+
+**(d)** They equal the interaction coefficients `visit_f12:armSP` (`r f2(coef(gee_walk)["visit_f12:armSP"])`) and `visit_f12:armEP` (`r f2(coef(gee_walk)["visit_f12:armEP"])`). In the cell-means parameterisation the change from baseline to month 12 in arm $a$ is $\gamma_{12} + (\gamma\alpha)_{12,a}$ and in UC it is $\gamma_{12}$, so the difference is the interaction.
+
+**(e)** In the population, the mean SBP fell by `r f2(-d1$estimate[2], 1)` mmHg more between baseline and month 12 under the enhanced programme than under usual care (95% CI `r f2(-d1$upper.CL[2], 1)` to `r f2(-d1$lower.CL[2], 1)` mmHg). It is a comparison of population means, not a statement about how much any individual's SBP changed.
+
+*Marking notes.* Accept `corstr = "unstructured"` with a remark about the geepack crash, or AR(1). Penalise `id = id` (character) and unsorted data. Using `adjust = "dunnettx"` (the emmeans default for `trt.vs.ctrl`) is acceptable if stated.
+
+### Exercise 2. Working correlations and two kinds of standard error (LO 7.2, 7.3)
+
+```{r}
+#| label: ex2
+cs <- c("independence", "exchangeable", "ar1")
+fits <- lapply(cs, function(s) geeglm(sbp ~ visit_f * arm, id = factor(id),
+                                      waves = visit, data = walk, corstr = s))
+names(fits) <- cs
+k <- "visit_f12:armEP"
+t2 <- data.frame(corstr = cs,
+                 estimate = sapply(fits, function(f) coef(f)[k]),
+                 se_robust = sapply(fits, function(f) sqrt(diag(vcov(f)))[k]),
+                 se_model = sapply(fits, function(f) sqrt(diag(f$geese$vbeta.naiv))[18]),
+                 row.names = NULL)
+t2
+t(sapply(fits, QIC))[, c("QIC", "CIC")]
+```
+
+```{r}
+#| label: ex2-values
+#| include: false
+q2 <- t(sapply(fits, QIC))
+```
+
+**(c)** Exchangeable (`r f2(t2$estimate[2])`) and AR(1) (`r f2(t2$estimate[3])`) give similar estimates because both use the strong within-participant correlation to weight observations in similar ways, and because GEE estimates are consistent whatever the working correlation: the choice affects weights, not the target. Independence has a larger robust SE (`r f2(t2$se_robust[1])` against `r f2(t2$se_robust[2])`) because it ignores the correlation and does not use a participant's earlier readings to sharpen the comparison at month 12: it is less efficient.
+
+**(d)** The independence model "believes" every reading is an independent draw with variance $\phi$, so it treats a change between two readings of the same person as if it were a difference between two different people, and its model-based SE (`r f2(t2$se_model[1])`) is far too large. The sandwich measures the true variability of each participant's contribution and recognises that within-participant changes are measured precisely.
+
+**(e)** QIC is smallest for `r names(which.min(q2[, "QIC"]))`, the least plausible structure for blood pressure readings with correlations around 0.8. QIC's quasi-likelihood term ignores the correlation, so it is a poor guide to the working correlation. Choose instead from the design and the empirical residual correlations, check agreement between model-based and robust SEs, prefer simple structures with few clusters, and prespecify. CIC (the penalty term alone) is smallest for `r names(which.min(q2[, "CIC"]))`.
+
+*Marking notes.* The key idea for full marks in (c) is "consistency does not depend on the working correlation; efficiency does". In (d), any answer explaining that ignoring positive within-person correlation overstates the variance of within-person contrasts is acceptable.
+
+### Exercise 3. A binary outcome: CLEAR (LO 7.1, 7.3, 7.4)
+
+```{r}
+#| label: ex3
+gee_clear <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+                    data = clear, family = binomial, corstr = "exchangeable")
+fixef_table(gee_clear, exponentiate = TRUE)
+emm3 <- emmeans(gee_clear, ~ arm | week, at = list(week = c(0, 12)), type = "response")
+emm3
+rd3 <- confint(contrast(regrid(emmeans(gee_clear, ~ arm | week, at = list(week = 12))),
+                        "revpairwise"))
+rd3
+data.frame(se_model = sqrt(diag(gee_clear$geese$vbeta.naiv)),
+           se_robust = sqrt(diag(vcov(gee_clear))),
+           se_md = sqrt(diag(sandwich_gee(gee_clear, "MD")))) |> round(4)
+```
+
+```{r}
+#| label: ex3-values
+#| include: false
+c3 <- coef(gee_clear); s3 <- sqrt(diag(vcov(gee_clear)))
+e3 <- as.data.frame(emm3); r3 <- as.data.frame(rd3)
+```
+
+**(b)** On placebo the population odds of moderate or severe itch are multiplied by `r f2(exp(c3["week"]), 3)` each week. On active treatment they are multiplied by a further `r f2(exp(c3["week:armActive"]), 3)` per week (the ratio of the weekly odds ratios). Assuming equal odds at baseline, the active-versus-placebo odds ratio at week 12 is $\exp(12 \times `r f2(c3["week:armActive"], 4)`)$ = `r f2(exp(12 * c3["week:armActive"]))` (95% CI `r f2(exp(12 * (c3[4] - 1.96 * s3[4])))` to `r f2(exp(12 * (c3[4] + 1.96 * s3[4])))`). Strictly, the model's odds ratio at week 12 also includes the small baseline term `armActive`: $\exp(`r f2(c3[3], 3)` + 12 \times `r f2(c3[4], 4)`)$ = `r f2(exp(c3[3] + 12 * c3[4]))`.
+
+**(c)** Proportions with itch: week 0, `r f2(e3$prob[1])` (placebo) and `r f2(e3$prob[2])` (active); week 12, `r f2(e3$prob[3])` and `r f2(e3$prob[4])`. Risk difference at week 12: `r fmt_ci(r3$estimate, r3$lower.CL, r3$upper.CL, 3)`.
+
+**(d)** The three SEs are close (for the interaction `r f2(sqrt(gee_clear$geese$vbeta.naiv[4, 4]), 4)`, `r f2(s3[4], 4)` and `r f2(sqrt(sandwich_gee(gee_clear, "MD")[4, 4]), 4)`). Agreement between model-based and robust SEs suggests that the exchangeable working correlation is close to the truth (CLEAR was generated with a random intercept only). The MD correction is small because 200 clusters is a large number.
+
+*Marking notes.* Common error: describing `exp(week:armActive)` as "the odds ratio for active treatment". It is a ratio of weekly odds ratios. Accept risk differences expressed per 100 people.
+
+### Exercise 4. A count outcome with exposure: DIARY (LO 7.4)
+
+```{r}
+#| label: ex4
+gee_diary <- geeglm(migraine_days ~ post * arm + offset(log(days)),
+                    id = factor(id), waves = period + 1, data = diary,
+                    family = poisson, corstr = "exchangeable")
+fixef_table(gee_diary, exponentiate = TRUE)
+emm4 <- emmeans(gee_diary, ~ arm | post, offset = log(28), type = "response")
+emm4
+```
+
+```{r}
+#| label: ex4-values
+#| include: false
+t4 <- fixef_table(gee_diary, exponentiate = TRUE); e4 <- as.data.frame(emm4)
+```
+
+**(b)** The treatment effect is `post:armActive`, a ratio of rate ratios: `r fmt_ci(t4$estimate[4], t4$lower[4], t4$upper[4], 2)`. The migraine rate falls from baseline to the treatment periods by a factor `r f2(t4$estimate[4])` more on active treatment than on placebo; the interval includes 1, so the data are also compatible with no effect.
+
+**(c)** Expected migraine days per 28 days: baseline `r f2(e4$rate[1], 1)` (placebo) and `r f2(e4$rate[2], 1)` (active); treatment periods `r f2(e4$rate[3], 1)` and `r f2(e4$rate[4], 1)`.
+
+**(d)** No. The scale $\hat\phi$ = `r f2(gee_diary$geese$gamma, 2)` says the variance is about `r f2(gee_diary$geese$gamma, 1)` times the Poisson variance. GEE uses the Poisson variance function only as a working variance; the scale absorbs overdispersion in the model-based variance, and the sandwich SE is valid whatever the true variance, provided the mean model is right and there are enough clusters.
+
+*Marking notes.* Penalise `days` entered as a covariate instead of an offset. Accept `period_f * arm` models with a correctly identified effect.
+
+### Exercise 5. How many clusters? (LO 7.5)
+
+```{r}
+#| label: ex5
+sim_one <- function(n_clusters) {
+  d <- expand.grid(time = 0:4, id = seq_len(n_clusters))
+  d$active <- as.integer(d$id > n_clusters / 2)
+  b0 <- rnorm(n_clusters, 0, 2); b1 <- rnorm(n_clusters, 0, 0.5)
+  d$y <- -0.5 * d$time - 0.5 * d$active * d$time +
+    b0[d$id] + b1[d$id] * d$time + rnorm(nrow(d), 0, 1.5)
+  fit <- geeglm(y ~ time * active, id = id, data = d, corstr = "exchangeable")
+  k <- "time:active"
+  c(est = unname(coef(fit)[k]), se_sw = sqrt(vcov(fit)[k, k]),
+    se_md = sqrt(sandwich_gee(fit, "MD")[k, k]))
+}
+set.seed(1)
+res <- bind_rows(lapply(c(10, 40), function(N)
+  data.frame(N = N, t(replicate(200, sim_one(N))))))
+s5 <- res |> group_by(N) |>
+  summarise(emp_sd = sd(est), se_sw = mean(se_sw), se_md = mean(se_md),
+            cover_sw = mean(abs(est + 0.5) <= 1.96 * se_sw),
+            cover_md = mean(abs(est + 0.5) <= 1.96 * se_md))
+s5
+mcse <- sqrt(0.95 * 0.05 / 200); mcse
+```
+
+```{r}
+#| label: ex5-values
+#| include: false
+s5 <- as.data.frame(s5)
+```
+
+**(c)** With 200 replications the Monte Carlo SE of a coverage near 0.95 is `r f2(mcse, 3)`, so only differences larger than about `r f2(2 * mcse, 2)` (two Monte Carlo SEs) should be taken seriously. With 10 clusters the sandwich SE averages `r f2(s5$se_sw[1], 3)` against an empirical SD of `r f2(s5$emp_sd[1], 3)`, and coverage is `r f2(s5$cover_sw[1], 3)`; with the MD correction it is `r f2(s5$cover_md[1], 3)`. With 40 clusters the coverages are `r f2(s5$cover_sw[2], 3)` and `r f2(s5$cover_md[2], 3)`.
+
+**(d)** With few clusters the sandwich SE underestimates the true sampling variability, so nominal 95% intervals cover the truth less often than 95%. The Mancl–DeRouen correction reduces or removes the problem, and the problem fades as the number of clusters grows.
+
+*Marking notes.* Results vary with the seed; with 200 replications some differences will be within Monte Carlo error, and good answers say so. The notes' 1,000-replication version gives the more precise picture.
+
+### Exercise 6. Weighted GEE for dropout in CLEAR (LO 7.6)
+
+```{r}
+#| label: ex6
+grid <- clear |> distinct(id, arm) |> crossing(visit = 1:6) |>
+  left_join(select(clear, id, visit, severity), by = c("id", "visit")) |>
+  group_by(id) |>
+  mutate(last_visit = max(visit[!is.na(severity)]), last_sev = severity) |>
+  tidyr::fill(last_sev, .direction = "down") |>
+  mutate(prev_sev = lag(last_sev)) |> ungroup()
+risk <- grid |> filter(visit >= 2, visit <= pmin(last_visit + 1, 6)) |>
+  mutate(stay = as.integer(visit <= last_visit))
+drop_model <- glm(stay ~ prev_sev + arm, family = binomial, data = risk)
+summary(drop_model)$coefficients
+risk <- risk |> mutate(p_stay = fitted(drop_model)) |>
+  group_by(id) |> mutate(cum_p = cumprod(p_stay)) |> ungroup()
+clear_w <- clear |> left_join(select(risk, id, visit, cum_p), by = c("id", "visit")) |>
+  mutate(cum_p = ifelse(visit == 1, 1, cum_p), ipw = 1 / cum_p)
+summary(clear_w$ipw)
+gee_unw <- geeglm(itch ~ week * arm, id = factor(id), data = clear_w,
+                  family = binomial, corstr = "independence")
+gee_ipw <- geeglm(itch ~ week * arm, id = factor(id), data = clear_w,
+                  family = binomial, corstr = "independence", weights = ipw)
+cbind(unweighted = coef(gee_unw), ipw = coef(gee_ipw),
+      se_unw = sqrt(diag(vcov(gee_unw))), se_ipw = sqrt(diag(vcov(gee_ipw))))
+```
+
+The warning "non-integer #successes" comes from the starting values of the weighted binomial fit and is harmless.
+
+**(d)** Weighting moves the placebo week slope from `r f2(coef(gee_unw)["week"], 3)` to `r f2(coef(gee_ipw)["week"], 3)`, that is, towards a slower decline. This is the expected direction: people with severe itch were more likely to drop out, so the unweighted analysis is based increasingly on people with less itch and overstates the decline. Weighting gives the remaining participants with severe itch more influence. The change is smaller than one standard error, so the data alone do not prove the bias; the notes' 20,000-participant simulation does.
+
+**(e)** With observation-level weights, a non-independence working correlation mixes observations with different probabilities of being observed, and the weighted estimating equations can then be biased even with correct weights. The SEs are approximate because the sandwich treats the weights as known constants, ignoring that they were estimated from the same data; a bootstrap that re-estimates the dropout model in each resample accounts for this.
+
+*Marking notes.* A common error is to weight by the visit-specific probability rather than its cumulative product. Accept stabilised weights (numerator from a model with arm only) if explained.
+
+## Independent exercises
+
+### Exercise 7. The character-identifier trap
+
+```{r}
+#| label: ex7
+gee_bad <- geeglm(itch ~ week * arm, id = id, waves = visit, data = clear,
+                  family = binomial, corstr = "exchangeable")
+coef(summary(gee_bad))
+c(clusters_bad = length(gee_bad$geese$clusz),
+  clusters_good = length(gee_clear$geese$clusz))
+```
+
+`geeglm` converts the identifier to numbers; character identifiers such as `"C001"` become `NA` ("NAs introduced by coercion"). As the cluster count shows, the whole dataset (`r gee_bad$geese$clusz[1]` rows) is then treated as one cluster. A sandwich built from a single cluster is meaningless, which is why the standard errors are absurdly small or `NaN`, and the "exchangeable" correlation (`r f2(gee_bad$geese$alpha, 4)`) is an average over all pairs of rows in the dataset. Rule: always pass `id = factor(id)` (or an integer) and sort by participant and time.
+
+*Marking notes.* Full marks require noticing the single cluster (or equivalent) and stating the rule.
+
+### Exercise 8. Categorical time in CLEAR
+
+```{r}
+#| label: ex8
+gee_cat <- geeglm(itch ~ week_f * arm, id = factor(id), waves = visit,
+                  data = clear, family = binomial, corstr = "exchangeable")
+rd8 <- confint(contrast(regrid(emmeans(gee_cat, ~ arm | week_f, at = list(week_f = "12"))),
+                        "revpairwise"))
+rd8
+```
+
+```{r}
+#| label: ex8-values
+#| include: false
+r8 <- as.data.frame(rd8)
+```
+
+The categorical-time model gives a week-12 risk difference of `r fmt_ci(r8$estimate, r8$lower.CL, r8$upper.CL, 3)`, against `r fmt_ci(r3$estimate, r3$lower.CL, r3$upper.CL, 3)` from the linear-in-week model. The categorical model makes no assumption about the shape of the curve but estimates the week-12 difference mainly from week-12 data, so its interval is wider. The linear model borrows strength from all weeks and is more precise, but is biased if the logit is not linear. For a trial whose estimand is the week-12 difference, a categorical-time model is the safer prespecified choice (it is the analogue of the WALK primary model); the linear model is a reasonable secondary analysis.
+
+*Marking notes.* Either choice is acceptable with a justification that weighs robustness against precision.
+
+### Exercise 9. Clinics as clusters
+
+```{r}
+#| label: ex9
+walk_c <- walk |> arrange(clinic, id, month)
+gee_clin <- geeglm(sbp ~ visit_f * arm, id = clinic, data = walk_c,
+                   corstr = "independence")
+gee_pid  <- geeglm(sbp ~ visit_f * arm, id = factor(id), data = walk,
+                   corstr = "independence")
+k <- "visit_f12:armEP"
+data.frame(cluster = c("clinic (8)", "participant (360)"),
+           estimate = c(coef(gee_clin)[k], coef(gee_pid)[k]),
+           se_sandwich = c(sqrt(vcov(gee_clin)[k, k]), sqrt(vcov(gee_pid)[k, k])),
+           se_md = c(sqrt(sandwich_gee(gee_clin, "MD")[k, k]),
+                     sqrt(sandwich_gee(gee_pid, "MD")[k, k])))
+```
+
+```{r}
+#| label: ex9-values
+#| include: false
+se_c <- sqrt(vcov(gee_clin)[k, k]); se_cmd <- sqrt(sandwich_gee(gee_clin, "MD")[k, k])
+se_p <- sqrt(vcov(gee_pid)[k, k]); se_pmd <- sqrt(sandwich_gee(gee_pid, "MD")[k, k])
+```
+
+With the independence working correlation the point estimates are identical (the clustering does not affect the estimate under independence). With 8 clinic clusters the sandwich SE is `r f2(se_c)` and the Mancl–DeRouen SE `r f2(se_cmd)`, a relative increase of `r round(100 * (se_cmd / se_c - 1))`%; with 360 participant clusters they are `r f2(se_p)` and `r f2(se_pmd)` (an increase of `r round(100 * (se_pmd / se_p - 1), 1)`%). With 8 clusters the uncorrected sandwich is unreliable, and even the corrected one should be combined with a $t$ reference distribution on few degrees of freedom. Clinic-level clustering is a minor source of correlation for the treatment comparison in WALK because participants (not clinics) were randomised and both arms appear in every clinic; the dominant correlation is between repeated readings of the same participant, which the clinic-level sandwich does capture (participants are nested in clinics), but at the cost of estimating it from only 8 units.
+
+*Marking notes.* Credit any answer that notes the instability of the 8-cluster sandwich and the need for small-sample corrections. Do not penalise answers that argue for participant-level clustering with a sensitivity analysis.
+
+### Exercise 10. Overdispersion and the model-based SE in DIARY
+
+```{r}
+#| label: ex10
+gee_ind <- geeglm(migraine_days ~ post * arm + offset(log(days)),
+                  id = factor(id), data = diary, family = poisson,
+                  corstr = "independence")
+glm_p <- glm(migraine_days ~ post * arm + offset(log(days)), data = diary,
+             family = poisson)
+k <- "post:armActive"
+c(robust = sqrt(vcov(gee_ind)[k, k]),
+  model_based = sqrt(gee_ind$geese$vbeta.naiv[4, 4]),
+  glm_poisson = sqrt(vcov(glm_p)[k, k]),
+  scale = gee_ind$geese$gamma)
+```
+
+```{r}
+#| label: ex10-values
+#| include: false
+s10 <- c(robust = sqrt(vcov(gee_ind)[k, k]), model = sqrt(gee_ind$geese$vbeta.naiv[4, 4]),
+         glm = sqrt(vcov(glm_p)[k, k]), phi = unname(gee_ind$geese$gamma))
+```
+
+The ordinary Poisson GLM SE (`r f2(s10["glm"], 4)`) assumes both independence and Poisson variance, and is far too small. The GEE model-based SE (`r f2(s10["model"], 4)`) is the GLM SE multiplied by $\sqrt{\hat\phi}$ = `r f2(sqrt(s10["phi"]))`: it corrects for overdispersion but still assumes independence. The robust SE (`r f2(s10["robust"], 4)`) also accounts for the correlation within participants. For this within-participant contrast (change from baseline compared between arms), positive correlation means the model-based SE overstates the variance, so the robust SE is smaller than the model-based one; for between-participant comparisons the direction would typically be the opposite.
+
+*Marking notes.* Full marks require separating the two corrections: overdispersion (scale) and within-participant correlation (sandwich).

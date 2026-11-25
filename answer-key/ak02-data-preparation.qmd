@@ -1,0 +1,516 @@
+---
+title: "Module 2. Preparing and exploring longitudinal data in R"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+This answer key gives complete, executed solutions to the Module 2 workbook, model answers to the written questions and marking notes.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+```{r}
+#| label: load-other
+baseline <- load_walk("baseline")
+wide     <- load_walk("wide")
+sched_months <- c(0, 1, 3, 6, 9, 12)
+```
+
+## Guided exercises
+
+### Exercise 1. Reshaping between wide and long (LO 2.1)
+
+```{r}
+#| label: ex1a
+long_from_wide <- wide |>
+  pivot_longer(cols = starts_with("sbp_m"),
+               names_to = "month_sched", names_prefix = "sbp_m",
+               names_transform = list(month_sched = as.numeric),
+               values_to = "sbp")
+nrow(long_from_wide)
+sum(is.na(long_from_wide$sbp))
+```
+
+```{r}
+#| label: ex1b
+check <- long_from_wide |>
+  filter(!is.na(sbp)) |>
+  full_join(walk |> select(id, month_sched, sbp_long = sbp),
+            by = c("id", "month_sched"))
+nrow(check)
+sum(is.na(check$sbp) | is.na(check$sbp_long) | check$sbp != check$sbp_long)
+```
+
+```{r}
+#| label: ex1c
+steps_wide <- walk |>
+  select(id, arm, month_sched, steps) |>
+  pivot_wider(names_from = month_sched, values_from = steps,
+              names_prefix = "steps_m")
+dim(steps_wide)
+head(steps_wide, 3)
+```
+
+```{r}
+#| label: ex1c-wrong
+steps_wrong <- walk |>
+  select(id, arm, month_sched, month, steps) |>
+  pivot_wider(names_from = month_sched, values_from = steps,
+              names_prefix = "steps_m")
+dim(steps_wrong)
+```
+
+**Answers.**
+
+1. `r nrow(long_from_wide)` rows: `r nrow(wide)` participants × 6 scheduled visits. Of these, `r sum(is.na(long_from_wide$sbp))` are `NA` (visits not attended), leaving `r sum(!is.na(long_from_wide$sbp))`, the number of rows in `walk_long.csv`. The join in (b) finds no disagreements.
+2. With `month` kept, every row has a unique combination of `id` and `month`, so `pivot_wider()` cannot collapse a participant's visits into one row. The result has `r nrow(steps_wrong)` rows (one per visit) instead of `r nrow(steps_wide)`, mostly filled with `NA`.
+3. Each wide column corresponds to one scheduled visit, and the column name holds the time. Actual times differ between participants, so they cannot be column names. To keep them you need a second set of columns (`month_m0`, ..., `month_m12`), or better, keep the data in long format.
+
+*Marking notes.* Accept `names_transform = list(month_sched = as.integer)` or `parse_number()`. A common error is leaving `month_sched` as text, which sorts `"12"` before `"3"`.
+
+### Exercise 2. Joining and validating (LO 2.2)
+
+```{r}
+#| label: ex2a
+walk_joined <- walk |>
+  left_join(baseline |> select(id, rand_date, sbp0, dropout),
+            by = "id", relationship = "many-to-one")
+c(before = nrow(walk), after = nrow(walk_joined))
+nrow(anti_join(walk, baseline, by = "id"))
+nrow(anti_join(baseline, walk, by = "id"))
+```
+
+```{r}
+#| label: ex2b
+walk_bad <- walk |> mutate(id = if_else(id == "W004", "w004", id))
+joined_bad <- walk_bad |>
+  left_join(baseline |> select(id, rand_date), by = "id")
+sum(is.na(joined_bad$rand_date))
+anti_join(walk_bad, baseline, by = "id") |> distinct(id)
+```
+
+```{r}
+#| label: ex2c
+names(left_join(walk, baseline, by = "id")) |> grep(pattern = "\\.x|\\.y", value = TRUE)
+```
+
+**Answers.**
+
+1. The row count is unchanged (`r nrow(walk_joined)`), so no visit was duplicated. No visit lacks a baseline record, and every randomised participant has at least one visit.
+2. Neither: a left join with an unmatched key runs silently and fills the new columns with `NA`. Here `r sum(is.na(joined_bad$rand_date))` rows (all of W004's visits) have a missing `rand_date`. Without `anti_join()` you would notice only by counting `NA` values in the joined columns, or later, when actual time could not be computed. Adding `unmatched = "error"` to the join makes it stop.
+3. Shared variables other than `id` are duplicated with suffixes (`clinic.x`, `clinic.y`, `arm.x`, `arm.y` and so on). Code that refers to `arm` then fails, or worse, uses the wrong copy. Select the new columns only, or join by all shared columns.
+
+### Exercise 3. Cleaning the raw export, part 1 (LO 2.3)
+
+```{r}
+#| label: ex3a
+raw <- read_csv(here("data", "walk_visits_raw.csv"),
+                col_types = cols(.default = col_character()))
+step2 <- raw |>
+  mutate(id          = toupper(trimws(participant)),
+         month_sched = as.numeric(sub("^M", "", visit_label)),
+         visit       = match(month_sched, sched_months),
+         visit_date  = as.Date(visit_date, format = "%Y-%m-%d"),
+         sbp         = parse_double(sbp_mmhg),
+         steps       = parse_double(steps_k)) |>
+  select(id, visit, month_sched, visit_date, sbp, steps)
+stopifnot(all(grepl("^W[0-9]{3}$", step2$id)), !anyNA(step2$visit))
+```
+
+```{r}
+#| label: ex3b
+n_exact <- sum(duplicated(step2))
+n_exact
+step3 <- distinct(step2)
+nrow(step3)
+```
+
+```{r}
+#| label: ex3c
+conflicts <- step3 |>
+  add_count(id, visit, name = "n_records") |>
+  filter(n_records > 1)
+conflicts
+
+step4 <- step3 |>
+  group_by(id, visit) |>
+  mutate(conflict_flag = n() > 1) |>
+  arrange(visit_date, .by_group = TRUE) |>
+  slice(1) |>
+  ungroup()
+nrow(step4)
+```
+
+**Answers.**
+
+1. Duplicates are found by comparing values. `w004` and `W004` are different strings, so a copy of a record that differs only in the case of the ID would not be detected, and the participant would appear to have two different records.
+2. `r n_exact` exact duplicate rows and `r n_distinct(paste(conflicts$id, conflicts$visit))` conflicting visits (`r nrow(conflicts)` records). After resolving them, `r nrow(step4)` rows remain.
+3. A rule chosen after seeing which version of each record benefits which arm is part of the analysis, not of the data management, and it can push the estimated treatment effect in the direction the analyst prefers. Prespecifying the rule (in the data management or statistical analysis plan, before unblinding) means that the result cannot depend on the analyst's expectations. Even when the effect is tiny, as here, the principle protects the credibility of the trial.
+
+*Marking notes.* Full marks for question 3 require the idea that the choice could bias the treatment comparison and that the safeguard is prespecification or blinded review. Accept other prespecified rules (closest to target date, average) if they are justified and applied without reference to outcomes.
+
+### Exercise 4. Cleaning the raw export, part 2 (LO 2.3)
+
+```{r}
+#| label: ex4a
+step5 <- step4 |>
+  left_join(baseline |> select(id, rand_date), by = "id",
+            relationship = "many-to-one") |>
+  mutate(days     = as.numeric(visit_date - rand_date),
+         month    = round(days / 30.44, 2),
+         dev_days = as.numeric(visit_date - (rand_date + round(month_sched * 30.44))))
+range(step5$days)
+```
+
+```{r}
+#| label: ex4b
+step6 <- step5 |>
+  mutate(sbp_flag = case_when(is.na(sbp) ~ "blank",
+                              sbp < 70 | sbp > 250 ~ "implausible",
+                              TRUE ~ "ok"),
+         sbp_raw = sbp,
+         sbp = if_else(sbp_flag == "implausible", NA_real_, sbp))
+step6 |> filter(sbp_flag != "ok")
+```
+
+```{r}
+#| label: ex4c
+window_days <- c(`0` = 0, `1` = 7, `3` = 14, `6` = 28, `9` = 28, `12` = 28)
+walk_clean <- step6 |>
+  mutate(out_of_window = abs(dev_days) > window_days[as.character(month_sched)])
+walk_clean |> count(month_sched, out_of_window) |>
+  pivot_wider(names_from = out_of_window, values_from = n, values_fill = 0)
+```
+
+```{r}
+#| label: ex4d
+agreement <- walk_clean |>
+  full_join(walk |> select(id, visit, month_ref = month, sbp_ref = sbp),
+            by = c("id", "visit"))
+sum(is.na(agreement$month_ref)); sum(is.na(agreement$month))
+agreement |> filter(is.na(sbp) | sbp != sbp_ref) |>
+  select(id, visit, sbp, sbp_raw, sbp_ref)
+table(round(agreement$month - agreement$month_ref, 2))
+```
+
+```{r}
+#| label: ex4-log
+bad <- walk_clean |> filter(sbp_flag == "implausible")
+cleaning_log <- tibble(
+  step = c("Rows read", "Exact duplicate rows removed",
+           "Visits with conflicting records (earliest kept)",
+           "Rows after de-duplication", "Blank SBP values",
+           "Implausible SBP values set to missing",
+           "Out-of-window visits (kept, flagged)"),
+  n = c(nrow(raw), n_exact, n_distinct(paste(conflicts$id, conflicts$visit)),
+        nrow(walk_clean), sum(walk_clean$sbp_flag == "blank"),
+        nrow(bad), sum(walk_clean$out_of_window)))
+knitr::kable(cleaning_log)
+```
+
+**Answers.**
+
+1. One blank value (W345, baseline) and one implausible value (`r bad$id`, month `r bad$month_sched`, recorded as `r bad$sbp_raw` mmHg). The blank is a missing value at an attended visit and is left missing, with a query to the clinic. The value `r bad$sbp_raw` is impossible for a living adult and is almost certainly `r bad$sbp_raw / 10` typed with an extra zero, but the WALK plan does not allow corrections by assumption, so it is set to missing, the raw value is kept, and a query is raised. If the clinic confirms `r bad$sbp_raw / 10`, the source data are corrected.
+2. `r sum(walk_clean$out_of_window)` visits are out of window. They should be kept and flagged. They are genuine measurements taken at a different time. Excluding them would create extra missing data, and the course models place each measurement at its actual time. A sensitivity analysis excluding them is reasonable.
+3. The raw visit dates were created as the randomisation date plus `round(month * 30.44)` days, so they are rounded to whole days. Recomputing `month` from a whole-day date cannot recover the original two-decimal value, and differences of up to `r round(max(abs(agreement$month - agreement$month_ref)), 2)` months (under one day) result. They are harmless. The recomputed `month` is the correct time for the recorded date.
+4. See the cleaning log above.
+
+*Marking notes.* Accept "correct to `r bad$sbp_raw / 10`" only if the participant explicitly states it as a documented rule (for example "obvious transcription errors are corrected and logged") and keeps the raw value. Deduct if the participant deletes the row entirely: the visit was attended and steps were measured.
+
+### Exercise 5. Missing visits, summaries and flow (LO 2.3, LO 2.4)
+
+```{r}
+#| label: ex5a
+grid <- baseline |>
+  select(id, arm) |>
+  crossing(visit = 1:6) |>
+  mutate(month_sched = sched_months[visit]) |>
+  left_join(walk |> select(id, visit, sbp), by = c("id", "visit")) |>
+  mutate(observed = !is.na(sbp)) |>
+  group_by(id) |>
+  mutate(last_seen = max(visit[observed]),
+         miss_type = case_when(observed ~ "observed",
+                               visit < last_seen ~ "intermittent",
+                               TRUE ~ "after dropout")) |>
+  ungroup()
+count(grid, arm, miss_type) |>
+  pivot_wider(names_from = miss_type, values_from = n)
+```
+
+```{r}
+#| label: ex5b
+visit_flow(walk, id, month_sched, arm) |>
+  left_join(count(baseline, arm, name = "randomised"), by = "arm") |>
+  mutate(cell = sprintf("%d (%.0f%%)", n_seen, 100 * n_seen / randomised)) |>
+  select(arm, month_sched, cell) |>
+  pivot_wider(names_from = arm, values_from = cell)
+```
+
+```{r}
+#| label: ex5c
+mean_sd <- function(x) sprintf("%.1f (%.1f)", mean(x), sd(x))
+baseline |>
+  group_by(arm) |>
+  summarise(n = as.character(n()), Age = mean_sd(age),
+            `Female, n (%)` = sprintf("%d (%.0f%%)", sum(sex == "Female"),
+                                      100 * mean(sex == "Female")),
+            BMI = mean_sd(bmi), `SBP, mmHg` = mean_sd(sbp0),
+            `Steps, 1000/day` = mean_sd(steps0)) |>
+  pivot_longer(-arm, names_to = "Characteristic") |>
+  pivot_wider(names_from = arm, values_from = value) |>
+  knitr::kable()
+
+walk |>
+  group_by(arm, month_sched) |>
+  summarise(n = n(), mean = round(mean(sbp), 1), sd = round(sd(sbp), 1)) |>
+  print(n = 18)
+```
+
+```{r}
+#| label: ex5-numbers
+#| include: false
+n_miss <- sum(!grid$observed)
+n_drop <- sum(grid$miss_type == "after dropout")
+```
+
+**Answers.**
+
+1. The long file contains only attended visits. A participant who was randomised but never seen, or a visit that nobody attended, has no row and would be missing from a grid built from the data. The randomisation list and the protocol schedule define what should exist.
+2. `r n_miss` of `r nrow(grid)` scheduled visits (`r round(100 * n_miss / nrow(grid), 1)`%) are missing, of which `r n_drop` (`r round(100 * n_drop / n_miss)`% of the missing visits) follow dropout.
+3. In a randomised trial any baseline difference between arms is due to chance by construction, so a test only checks the randomisation and its p-value has no useful interpretation. What matters is whether sex is prognostic for SBP. If it is, adjust for it (prespecified), whatever the size of the baseline difference.
+
+### Exercise 6. Exploratory plots (LO 2.5)
+
+```{r}
+#| label: ex6-lab
+walk_lab <- walk |>
+  mutate(arm_lab = factor(walk_arm_labels[as.character(arm)],
+                          levels = walk_arm_labels))
+```
+
+```{r}
+#| label: ex6a
+#| fig-cap: "All participants (top) and a random subset of 30 (bottom)."
+#| fig-height: 7
+#| fig-width: 9
+p1 <- plot_spaghetti(walk_lab, month, sbp, id, group = arm_lab, alpha = 0.15) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+p2 <- plot_spaghetti(walk_lab, month, sbp, id, group = arm_lab, n_show = 30,
+                     seed = 2, alpha = 0.7) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+p1 / p2
+```
+
+```{r}
+#| label: ex6b
+#| fig-cap: "Individual trajectories for four random participants per arm."
+#| fig-width: 9
+#| fig-height: 6
+set.seed(4)
+panel_ids <- baseline |> group_by(arm) |> slice_sample(n = 4) |> pull(id)
+walk_lab |>
+  filter(id %in% panel_ids) |>
+  ggplot(aes(month, sbp, colour = arm)) +
+  geom_line() + geom_point(size = 1.2) +
+  facet_wrap(~ id, ncol = 4) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+```
+
+```{r}
+#| label: ex6c
+#| fig-cap: "Observed mean SBP by arm and scheduled visit, 95% CI."
+plot_observed_means(walk_lab, month_sched, sbp, arm_lab) +
+  scale_x_continuous(breaks = sched_months) +
+  labs(x = "Scheduled month", y = "Observed mean SBP (mmHg)")
+```
+
+```{r}
+#| label: ex6d
+#| fig-cap: "Missingness map ordered by last attended visit."
+#| fig-width: 9
+#| fig-height: 5
+plot_missing_map(grid, id, visit, observed, order_by = last_seen) +
+  facet_wrap(~ arm, scales = "free_y", labeller = as_labeller(walk_arm_labels)) +
+  scale_x_discrete(labels = sched_months) +
+  labs(x = "Scheduled month")
+```
+
+```{r}
+#| label: ex6e
+#| fig-cap: "Mean SBP by dropout pattern (scheduled month of last attended visit)."
+#| fig-width: 9
+#| fig-height: 4.5
+walk |>
+  left_join(baseline |> select(id, last_month_sched), by = "id") |>
+  group_by(arm, last_month_sched, month_sched) |>
+  summarise(mean_sbp = mean(sbp), n = n()) |>
+  ggplot(aes(month_sched, mean_sbp, colour = factor(last_month_sched))) +
+  geom_line() + geom_point(aes(size = n)) +
+  facet_wrap(~ arm, labeller = as_labeller(walk_arm_labels)) +
+  scale_size_area(max_size = 3, guide = "none") +
+  scale_colour_manual(values = c("#D55E00", "#E69F00", "#56B4E9", "#009E73",
+                                 "#CC79A7", "#222222"),
+                      name = "Last seen (month)") +
+  scale_x_continuous(breaks = sched_months) +
+  labs(x = "Scheduled month", y = "Mean observed SBP (mmHg)")
+```
+
+```{r}
+#| label: ex6-numbers
+#| include: false
+pat0 <- walk |> left_join(baseline |> select(id, last_month_sched), by = "id") |>
+  filter(month_sched == 0) |>
+  group_by(early = last_month_sched <= 3) |>
+  summarise(m = mean(sbp), n = n())
+```
+
+**Answers.**
+
+1. Mostly in level. The spread between participants at any visit (tens of mmHg) is much larger than the change over time within the arms (a few mmHg on average). Individual lines also fluctuate from visit to visit.
+2. All arms show a fall over the first three months, largest in the enhanced programme and smallest in usual care, followed by a plateau (with a slight rise in usual care). Change is not linear in time.
+3. Mainly monotone dropout (the staircase at the bottom of each panel) with a smaller number of scattered intermittent missed visits.
+4. Participants who leave early tend to start higher: at baseline, those last seen at month 3 or earlier had mean SBP `r round(pat0$m[pat0$early], 1)` mmHg (n = `r pat0$n[pat0$early]`) against `r round(pat0$m[!pat0$early], 1)` mmHg (n = `r pat0$n[!pat0$early]`) for the others. Caution is needed because most patterns contain fewer than ten participants per arm, so their means are noisy, and each pattern's profile covers only the visits before dropout.
+
+*Marking notes.* Any reasonable choice of colours or subset size is acceptable if the subset is random with a fixed seed. Deduct for plotting individual trajectories against scheduled time without comment, or for hand-picking participants.
+
+## Independent exercises
+
+### Exercise 7. How much does the duplicate rule matter? (LO 2.3)
+
+```{r}
+#| label: ex7
+conf_rows <- step3 |>
+  semi_join(conflicts, by = c("id", "visit")) |>
+  left_join(baseline |> select(id, arm, rand_date), by = "id") |>
+  mutate(dev = abs(as.numeric(visit_date - (rand_date + round(month_sched * 30.44)))))
+rules <- conf_rows |>
+  group_by(id, arm, visit) |>
+  summarise(earliest = sbp[which.min(visit_date)],
+            closest  = sbp[which.min(dev)],
+            average  = mean(sbp))
+rules
+```
+
+```{r}
+#| label: ex7-means
+alt_means <- function(rule) {
+  step3 |>
+    anti_join(conflicts, by = c("id", "visit")) |>
+    bind_rows(rules |> ungroup() |> transmute(id, visit, sbp = .data[[rule]])) |>
+    left_join(baseline |> select(id, arm), by = "id") |>
+    semi_join(rules, by = c("arm", "visit")) |>
+    group_by(arm, visit) |>
+    summarise(mean_sbp = mean(sbp, na.rm = TRUE), .groups = "drop") |>
+    mutate(rule = rule)
+}
+rule_means <- bind_rows(lapply(c("earliest", "closest", "average"), alt_means)) |>
+  pivot_wider(names_from = rule, values_from = mean_sbp)
+rule_means |> mutate(across(where(is.double), \(x) round(x, 2)))
+max_shift <- with(rule_means, max(abs(c(closest - earliest, average - earliest))))
+```
+
+**Model answer.** The rules disagree for some visits. For W255 the record closest to the target date is the later one, so "earliest" and "closest" keep different values, and averaging gives a third value. The arm means at the affected visits change by at most `r round(max_shift, 2)` mmHg, because only one or two of about 100 values per arm and visit are affected. A suitable data management plan statement: "When two records exist for the same participant and visit, the clinic will be asked to confirm the correct record. If the query cannot be resolved, the earliest-dated record will be used and the visit flagged. This rule is fixed before unblinding and will be applied without reference to treatment arm or outcome values." The rule must be fixed in advance because a choice made after seeing its consequence for the arm comparison could, deliberately or not, favour one arm.
+
+*Marking notes.* Accept any of the three rules if justified. The key marks are for showing the sensitivity, and for the explanation of prespecification.
+
+### Exercise 8. Steps over time (LO 2.4, LO 2.5)
+
+```{r}
+#| label: ex8
+steps_summary <- walk |>
+  group_by(arm, month_sched) |>
+  summarise(n = n(), mean = mean(steps), sd = sd(steps))
+steps_summary |> mutate(across(c(mean, sd), \(x) round(x, 2))) |> print(n = 18)
+```
+
+```{r}
+#| label: ex8-plots
+#| fig-cap: "Observed mean steps by arm (left) and steps for 30 random participants (right)."
+#| fig-width: 10
+#| fig-height: 4.5
+p_m <- plot_observed_means(walk_lab, month_sched, steps, arm_lab) +
+  scale_x_continuous(breaks = sched_months) +
+  labs(x = "Scheduled month", y = "Mean steps (1000/day), 95% CI")
+p_s <- plot_spaghetti(walk_lab, month, steps, id, n_show = 30, seed = 3,
+                      alpha = 0.6) +
+  labs(x = "Months since randomisation", y = "Steps (1000/day)")
+p_m + p_s
+```
+
+```{r}
+#| label: ex8-numbers
+#| include: false
+st <- function(a, m) steps_summary$mean[steps_summary$arm == a & steps_summary$month_sched == m]
+```
+
+**Model answer.** Mean steps start at about 6 thousand per day in all arms (`r sprintf("%.1f", st("UC", 0))`, `r sprintf("%.1f", st("SP", 0))` and `r sprintf("%.1f", st("EP", 0))` in UC, SP and EP). They rise quickly after randomisation in the programme arms, to about `r sprintf("%.1f", st("SP", 12))` (SP) and `r sprintf("%.1f", st("EP", 12))` (EP) thousand per day at month 12, most of the rise occurring by month 3, and change little in usual care (`r sprintf("%.1f", st("UC", 12))`). Participants differ widely: the standard deviation at each visit is about 2 thousand steps per day, as large as the rise in the enhanced programme's mean, and individual lines fluctuate from visit to visit.
+
+### Exercise 9. Who drops out? (LO 2.5, LO 2.6)
+
+```{r}
+#| label: ex9
+baseline_t <- baseline |>
+  mutate(sbp0_third = cut(sbp0, quantile(sbp0, c(0, 1/3, 2/3, 1)),
+                          include.lowest = TRUE,
+                          labels = c("Lowest third", "Middle third", "Highest third")))
+drop_tab <- baseline_t |>
+  group_by(sbp0_third, arm) |>
+  summarise(pct_dropout = round(100 * mean(dropout))) |>
+  pivot_wider(names_from = arm, values_from = pct_dropout)
+drop_tab
+overall_third <- baseline_t |> group_by(sbp0_third) |> summarise(p = 100 * mean(dropout))
+```
+
+```{r}
+#| label: ex9-means
+complete <- load_walk("complete")
+m12 <- complete |>
+  filter(month_sched == 12) |>
+  group_by(arm) |>
+  summarise(observed = mean(sbp[observed]), complete = mean(sbp)) |>
+  mutate(difference = observed - complete)
+m12
+```
+
+**Model answer.** Dropout is most common among participants in the highest third of baseline SBP: `r round(overall_third$p[3])`%, against `r round(overall_third$p[1])`% in the lowest and `r round(overall_third$p[2])`% in the middle third (all arms together). Within arms the pattern is irregular, because each cell holds only about 40 participants, but the highest third has the highest or second-highest dropout in every arm. Baseline SBP is only a proxy: in WALK dropout depends on the most recent observed SBP. Because participants with higher SBP are more likely to be missing at month 12, the observed month-12 mean is lower than the complete-data mean in every arm, by `r round(min(-m12$difference), 1)` to `r round(max(-m12$difference), 1)` mmHg. The comparison with `walk_complete.csv` is possible only because the data are simulated. In a real study you see only the first column, and the dropout table is the evidence that it is biased downwards.
+
+### Exercise 10. Out-of-window visits (LO 2.3, LO 2.5)
+
+```{r}
+#| label: ex10
+#| fig-cap: "Deviation of each visit from its target date, with protocol windows (dashed)."
+win <- tibble(month_sched = sched_months[-1],
+              w = window_days[as.character(sched_months[-1])])
+walk_clean |>
+  filter(visit > 1) |>
+  ggplot(aes(factor(month_sched), dev_days)) +
+  geom_jitter(aes(colour = out_of_window), width = 0.2, height = 0, size = 0.8) +
+  geom_errorbar(data = win, aes(x = factor(month_sched), ymin = -w, ymax = w),
+                inherit.aes = FALSE, linetype = "dashed", width = 0.5) +
+  scale_colour_manual(values = c(`FALSE` = "#9A9A9A", `TRUE` = "#D55E00"),
+                      labels = c("Within window", "Out of window"), name = NULL) +
+  labs(x = "Scheduled month", y = "Deviation from target date (days)")
+```
+
+```{r}
+#| label: ex10-means
+m12_window <- walk_clean |>
+  filter(month_sched == 12) |>
+  left_join(baseline |> select(id, arm), by = "id") |>
+  group_by(arm) |>
+  summarise(all_visits = mean(sbp, na.rm = TRUE),
+            within_window = mean(sbp[!out_of_window], na.rm = TRUE),
+            n_excluded = sum(out_of_window))
+m12_window
+```
+
+**Model answer.** Deviations widen with follow-up. Because the windows also widen, most out-of-window visits are at months 1 and 3. Excluding the `r sum(m12_window$n_excluded)` out-of-window month-12 visits changes the arm means at month 12 by at most `r round(max(abs(m12_window$all_visits - m12_window$within_window)), 1)` mmHg, which does not change the description of the data. The course models use actual time (`month`) for the random slope, so a late visit is placed where it happened rather than discarded. That keeps the information and avoids creating extra missing data.

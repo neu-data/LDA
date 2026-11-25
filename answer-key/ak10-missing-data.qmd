@@ -1,0 +1,311 @@
+---
+title: "Module 10. Missing data and dropout"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+walk_b <- load_walk("baseline")
+walk_w <- load_walk("wide")
+walk_c <- load_walk("complete")
+kidney <- load_kidney()
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+Complete solutions to the Module 10 workbook with executed output, and marking notes.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Describing the missingness pattern
+
+```{r}
+#| label: ex1a
+pattern <- walk_c |>
+  arrange(id, visit) |>
+  group_by(id, arm) |>
+  summarise(pattern = paste(ifelse(observed, "O", "."), collapse = ""),
+            n_obs = sum(observed), last = max(visit[observed])) |>
+  ungroup() |>
+  mutate(type = case_when(n_obs == 6 ~ "Complete",
+                          n_obs == last ~ "Dropout only",
+                          last == 6 ~ "Intermittent only",
+                          TRUE ~ "Intermittent and dropout"))
+count(pattern, pattern, sort = TRUE)
+count(pattern, type)
+```
+
+```{r}
+#| label: ex1b
+visit_flow(walk, id, month_sched, arm) |>
+  tidyr::pivot_wider(names_from = arm, values_from = n_seen)
+```
+
+```{r}
+#| label: ex1c
+#| fig-cap: "Missingness map of WALK, by arm."
+#| fig-height: 5
+plot_missing_map(walk_c, id, month_sched, observed,
+                 order_by = as.numeric(observed) * visit) +
+  facet_wrap(~ arm, scales = "free_y", labeller = as_labeller(walk_arm_labels))
+```
+
+```{r}
+#| label: ex1-values
+#| include: false
+tp <- count(pattern, type)
+seen12 <- walk |> filter(month_sched == 12) |> count(arm)
+```
+
+1. `r tp$n[tp$type == "Complete"]` participants have complete data, `r tp$n[tp$type == "Intermittent only"]` have only intermittent gaps, and `r sum(tp$n[grepl("Dropout|dropout", tp$type)])` drop out (`r tp$n[tp$type == "Intermittent and dropout"]` of them also have an earlier gap).
+2. Retention at month 12 is similar: `r paste(seen12$arm, seen12$n, sep = " ", collapse = ", ")` of 120 per arm.
+
+*Marking notes.* Accept any clear tabulation. Students should distinguish participants with a missed final visit (counted as dropout) from intermittent gaps.
+
+### Exercise 2. Mechanisms and what the data can show
+
+(a) 1. MCAR (unrelated to the participant's blood pressure). 2. MAR (depends on the recorded month-3 SBP, which is in the analysis). 3. MNAR (depends on the unrecorded rise in SBP). 4. MCAR given arm, sometimes called covariate-dependent MCAR; it is ignorable when arm is in the model.
+
+```{r}
+#| label: ex2b
+risk <- walk_c |>
+  arrange(id, visit) |>
+  group_by(id) |>
+  mutate(last_sbp = sapply(seq_along(visit),
+                           function(k) sbp[max(which(observed[1:k]))])) |>
+  ungroup() |>
+  left_join(walk_b |> select(id, last_month_sched), by = "id") |>
+  group_by(id) |>
+  mutate(prev_sbp = lag(last_sbp), prev_sched = lag(month_sched)) |>
+  ungroup() |>
+  filter(visit > 1, prev_sched <= last_month_sched) |>
+  mutate(drop_now = as.integer(prev_sched == last_month_sched),
+         prev_sbp10 = (prev_sbp - 150) / 10)
+m_drop <- glm(drop_now ~ prev_sbp10 + arm, family = binomial, data = risk)
+dt <- fixef_table(m_drop, exponentiate = TRUE); dt
+```
+
+1. The odds of dropping out before the next visit are `r f2(dt$estimate[2])` times higher (95% CI `r f2(dt$lower[2])` to `r f2(dt$upper[2])`) per 10 mmHg higher last observed SBP. Dropout depends on observed SBP, so MCAR is implausible.
+2. No. The observed data cannot distinguish MAR from MNAR: the same association would appear if dropout depended on the unobserved current SBP, which is correlated with the last observed value. MAR is an assumption justified by knowledge of the study (here, a protocol that withdraws participants after high readings would support it) and examined by sensitivity analysis.
+
+### Exercise 3. Mixed model, completers and LOCF
+
+```{r}
+#| label: ex3
+diff_change <- function(m) {
+  e  <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+  ch <- contrast(e, list(change = c(-1, 1)), by = "arm")
+  as.data.frame(summary(contrast(ch, "trt.vs.ctrl", by = NULL), infer = TRUE,
+                        adjust = "none"))
+}
+m_lmm  <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+completers <- walk_b$id[!walk_b$dropout]
+m_cc   <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+               data = filter(walk, id %in% completers), control = lmer_ctrl)
+m_full <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk_c, control = lmer_ctrl)
+locf <- walk |> group_by(id, arm) |>
+  summarise(base = sbp[visit == 1], last = sbp[which.max(visit)]) |> ungroup()
+m_locf <- lm(I(last - base) ~ arm, data = locf)
+est <- c(complete_data = diff_change(m_full)$estimate[2],
+         mixed_all = diff_change(m_lmm)$estimate[2],
+         completers = diff_change(m_cc)$estimate[2],
+         locf = unname(coef(m_locf)["armEP"]))
+round(est, 2)
+```
+
+1. EP versus UC: complete data `r f2(est[1])`, mixed model of all observed data `r f2(est[2])`, completers `r f2(est[3])`, LOCF `r f2(est[4])` mmHg (truth −8.1). The mixed model of all observed data is valid under MAR; completers require MCAR; LOCF is biased in general.
+2. (i) MAR; (ii) separability of the parameters of the outcome and missingness models (together: ignorability); (iii) a correctly specified model for the joint distribution of the repeated outcomes, mean and covariance; (iv) the variables that drive dropout are in the model (here, earlier SBP, which is the outcome, and arm).
+3. Dropout is moderate (`r round(100 * mean(walk_b$dropout))`%), depends on the SBP level rather than on change, and one data set contains sampling error that can mask or mimic small biases. Bias is a property of a method across repeated samples, which is why the notes use simulation.
+
+### Exercise 4. Why LOCF fails
+
+```{r}
+#| label: ex4
+one_rep <- function() {
+  d <- sim_two_arm(n_per_arm = 60, times = c(0, 3, 6, 9, 12), delta = -0.5,
+                   dropout = 0.15)
+  l <- d |> group_by(id, trt) |> summarise(ch = y[which.max(time)] - y[time == 0]) |>
+    ungroup()
+  locf <- coef(lm(ch ~ trt, data = l))["trt"]
+  m <- suppressMessages(lmer(y ~ time * trt + (time | id), data = d,
+                             control = lmerControl(calc.derivs = FALSE)))
+  c(locf = unname(locf), lmm = unname(fixef(m)["time:trt"] * 12))
+}
+set.seed(1)
+res <- replicate(100, one_rep())
+bias <- rowMeans(res) - (-0.5 * 12); bias
+mcse <- apply(res, 1, sd) / sqrt(100); mcse
+```
+
+1. LOCF is biased by `r f2(bias["locf"])` (Monte Carlo SE `r f2(mcse["locf"])`): it underestimates the size of the effect (the true difference is −6). The mixed model's bias is `r f2(bias["lmm"])` (MCSE `r f2(mcse["lmm"])`): much smaller, and within about two Monte Carlo standard errors of zero, so 100 replicates cannot distinguish it from no bias.
+2. The groups diverge over time. A participant who drops out at month 3 has their month-3 value carried to month 12, when the difference between arms would have been four times larger. Carrying forward early values shrinks the difference even though who drops out is random.
+3. The direction of LOCF bias depends on the shape of the trajectories in each arm and on when and in which arm people drop out. If the control arm deteriorated and its participants dropped out early, LOCF would make the control arm look better than it is and could exaggerate or hide the effect; nothing guarantees a bias towards the null.
+
+### Exercise 5. Multiple imputation in wide format
+
+```{r}
+#| label: ex5a
+walk_w <- walk_w |> mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+imp_vars <- c("age10", "sex", "bmi_c", paste0("sbp_m", c(0, 1, 3, 6, 9, 12)))
+imp_wide <- lapply(levels(walk_w$arm), function(a) {
+  d  <- walk_w |> filter(arm == a) |> select(id, all_of(imp_vars))
+  pm <- make.predictorMatrix(d); pm[, "id"] <- 0
+  mice(d, m = 20, method = "norm", predictorMatrix = pm, maxit = 10,
+       seed = 2026, printFlag = FALSE)
+})
+names(imp_wide) <- levels(walk_w$arm)
+completed <- function(k) bind_rows(lapply(names(imp_wide), function(a)
+  mice::complete(imp_wide[[a]], k) |> mutate(arm = a))) |>
+  mutate(arm = factor(arm, levels = c("UC", "SP", "EP")))
+```
+
+```{r}
+#| label: ex5b
+res <- t(sapply(1:20, function(k) {
+  f <- lm(I(sbp_m12 - sbp_m0) ~ arm, data = completed(k))
+  c(est = unname(coef(f)["armEP"]), se = sqrt(vcov(f)["armEP", "armEP"]))
+}))
+p <- mice::pool.scalar(Q = res[, 1], U = res[, 2]^2, n = 360, k = 3)
+c(estimate = p$qbar, se = sqrt(p$t), df = p$df, fmi = p$fmi)
+```
+
+```{r}
+#| label: ex5c
+m <- nrow(res)
+U_bar <- mean(res[, 2]^2); B <- var(res[, 1])
+T_tot <- U_bar + (1 + 1 / m) * B
+c(by_hand = T_tot, pool_scalar = p$t)
+```
+
+1. The analysis compares arms, and the relations between visits (and the treatment effect over time) differ by arm. Imputing within arm lets every coefficient differ by arm, so the imputation model contains the arm-by-visit structure of the analysis model. Imputing without arm would pull the arms together.
+2. The within-imputation variance ($\bar U$ = `r f2(U_bar)`) is the ordinary sampling variance of the estimate if the data were complete; the between-imputation variance ($B$ = `r f2(B)`) reflects uncertainty about the missing values.
+3. The pooled EP estimate, `r f2(p$qbar)` (SE `r f2(sqrt(p$t))`), is close to the mixed model of all observed data (`r f2(est[2])`), as expected because both assume MAR and use similar information.
+
+*Marking notes.* Accept `pool()` with a tidier if available. Results differ slightly with the seed and number of imputations; the notes use 50.
+
+### Exercise 6. Delta adjustment and tipping point
+
+```{r}
+#| label: ex6
+post_drop <- walk_b |> select(id, last_month_sched)
+delta_pool <- function(delta, shift_arms = c("SP", "EP")) {
+  r <- lapply(1:20, function(k) {
+    d <- completed(k) |> left_join(post_drop, by = "id") |>
+      mutate(sbp_m12 = sbp_m12 + ifelse(arm %in% shift_arms & last_month_sched < 12,
+                                        delta, 0))
+    f <- lm(I(sbp_m12 - sbp_m0) ~ arm, data = d)
+    data.frame(term = c("SP", "EP"), est = coef(f)[2:3], se = sqrt(diag(vcov(f)))[2:3])
+  }) |> bind_rows()
+  bind_rows(lapply(c("SP", "EP"), function(tm) {
+    x <- filter(r, term == tm)
+    p <- mice::pool.scalar(x$est, x$se^2, n = 360, k = 3)
+    q <- qt(0.975, p$df)
+    data.frame(term = tm, delta = delta, estimate = p$qbar,
+               lower = p$qbar - q * sqrt(p$t), upper = p$qbar + q * sqrt(p$t))
+  }))
+}
+tip <- bind_rows(lapply(seq(0, 28, by = 4), delta_pool))
+tip |> mutate(across(c(estimate, lower, upper), ~ round(., 2)))
+```
+
+```{r}
+#| label: ex6-plot
+#| fig-cap: "Tipping-point plot: difference in mean change at month 12 versus usual care as δ increases."
+ggplot(tip, aes(delta, estimate, colour = term, fill = term)) +
+  geom_hline(yintercept = 0) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, colour = NA) +
+  geom_line() + geom_point() +
+  scale_colour_arm(name = NULL) + scale_fill_arm(name = NULL) +
+  labs(x = "δ (mmHg)", y = "Difference in mean change (mmHg)")
+```
+
+```{r}
+#| label: ex6-values
+#| include: false
+first0 <- function(tm) { x <- filter(tip, term == tm); if (any(x$upper >= 0)) min(x$delta[x$upper >= 0]) else NA }
+```
+
+1. On this grid the SP interval first includes zero at δ = `r first0("SP")` mmHg; for EP `r ifelse(is.na(first0("EP")), "it does not include zero up to δ = 28 mmHg", paste("at δ =", first0("EP"), "mmHg"))`.
+2. A δ of that size means that programme dropouts would have month-12 SBP that much higher than comparable participants who stayed, larger than the programme effect itself. That seems implausible, but the judgement should come from clinicians, from recorded reasons for dropout, and from data on what happens to people who stop such programmes (for example registry or follow-up data on a sample of dropouts).
+3. In usual care there is no intervention to stop, so leaving the study is unlikely to change the trajectory beyond what MAR predicts. Shifting only the programme arms represents the scenario that matters most for the conclusion: dropouts losing the programme's benefit.
+
+## Independent exercises
+
+### Exercise 7. Multilevel imputation in long format
+
+```{r}
+#| label: ex7
+long_grid <- walk_c |>
+  mutate(sbp = ifelse(observed, sbp, NA), month = ifelse(observed, month, month_sched),
+         idn = as.integer(factor(id)))
+X <- model.matrix(~ visit_f * arm, long_grid)[, -1]
+colnames(X) <- make.names(colnames(X))
+ld <- data.frame(idn = long_grid$idn, sbp = long_grid$sbp, X,
+                 month = long_grid$month, cons = 1)
+meth <- make.method(ld); meth[] <- ""; meth["sbp"] <- "2l.norm"
+pred <- make.predictorMatrix(ld); pred[, ] <- 0
+pred["sbp", ] <- 1; pred["sbp", "sbp"] <- 0
+pred["sbp", "idn"] <- -2; pred["sbp", c("cons", "month")] <- 2
+imp_long <- mice(ld, m = 10, method = meth, predictorMatrix = pred, maxit = 1,
+                 seed = 2027, printFlag = FALSE)
+rl <- t(sapply(1:10, function(k) {
+  d <- long_grid |> mutate(sbp = mice::complete(imp_long, k)$sbp)
+  s <- coef(summary(lmer(sbp ~ visit_f * arm + (1 + month | id), data = d,
+                         control = lmer_ctrl)))
+  s["visit_f12:armEP", 1:2]
+}))
+pl <- mice::pool.scalar(rl[, 1], rl[, 2]^2, n = 360, k = 3)
+c(estimate = pl$qbar, se = sqrt(pl$t), fmi = pl$fmi)
+```
+
+The long-format MI gives `r f2(pl$qbar)` mmHg (SE `r f2(sqrt(pl$t))`) for EP versus UC, compared with `r f2(p$qbar)` from wide-format MI and `r f2(est[2])` from the mixed model. Differences of this size arise because the multilevel imputation model imposes a random-intercept-and-slope correlation between visits (a more restrictive model than the arm-specific visit-to-visit regressions of wide MI), and because of Monte Carlo error with only 10 imputations.
+
+*Marking notes.* Students may use `2l.lmer` with a random intercept only; with a random slope it fails in mice 3.19.0 for this data set (see the notes). Single-level imputation of the long file (`norm`) is an error.
+
+### Exercise 8. Informative visit timing in KIDNEY
+
+```{r}
+#| label: ex8
+kidney <- kidney |> mutate(age10 = (age - 60) / 10) |>
+  group_by(id) |> arrange(years, .by_group = TRUE) |>
+  mutate(next_gap = lead(years) - years) |> ungroup()
+kidney |> filter(!is.na(next_gap)) |>
+  group_by(low = egfr < 30) |> summarise(mean_gap_months = 12 * mean(next_gap), n = n())
+k_ev <- load_kidney("events") |> mutate(age10 = (age - 60) / 10)
+k_tr <- readRDS(here("data", "kidney_truth.rds"))
+m_kid <- lmer(egfr ~ years + I(years^2) + diabetes + diabetes:years + age10 +
+                (1 + years | id), data = kidney, control = lmer_ctrl)
+k_tab <- data.frame(year = 1:4) |> rowwise() |>
+  mutate(naive = mean(kidney$egfr[abs(kidney$years - year) <= 0.25]),
+         mixed = mean(predict(m_kid, newdata = mutate(k_ev, years = year), re.form = NA)),
+         truth = mean(k_tr$b0 + (k_tr$b1 + k_tr$b1_dm * k_ev$diabetes) * year +
+                        k_tr$b2 * year^2 + k_tr$b_age * k_ev$age10)) |> ungroup()
+k_tab
+```
+
+(d) Patients with low eGFR are seen about twice as often, so they contribute more values to each window and pull the naive mean down. Patients with the lowest eGFR also reach kidney failure and stop contributing, pushing later window means up. In KIDNEY the two partly offset, so the naive errors in this single data set (`r paste(f2(k_tab$naive - k_tab$truth), collapse = ", ")`) are not uniformly large; the simulation in the notes shows the separate biases. The mixed model treats each patient as the unit and conditions on each patient's observed history; it is protected when the timing of visits depends only on previously observed eGFR (an MAR-type visit process) and the model is correctly specified. Its errors here are `r paste(f2(k_tab$mixed - k_tab$truth), collapse = ", ")`.
+
+### Exercise 9. Analysis-plan section (model answer)
+
+> **Missing data.** Missingness will be described by arm with a participant-flow table, a missingness map and the frequency of dropout patterns, and dropout will be related to baseline characteristics and the last observed SBP using a discrete-time logistic model. The primary analysis, a linear mixed model of all observed SBP values, is valid if data are missing at random given previous SBP and arm. This is plausible because the main known reason for withdrawal (a high recorded SBP) is captured in the data. Complete-case analysis requires MCAR and LOCF assumes no change after dropout; neither will be used. A supporting analysis will use multiple imputation (50 imputations, by arm, chained equations using all SBP visits, age, sex and BMI) combined with Rubin's rules. Sensitivity to departures from MAR will be examined by delta adjustment: imputed month-12 SBP of programme participants who dropped out will be increased by δ = 0, 2, 4, ..., 30 mmHg, with usual-care dropouts imputed under MAR. δ values up to 6 mmHg (the expected programme effect) are considered plausible. The tipping point will be reported.
+
+*Marking notes.* Award marks for: description; the stated MAR assumption with justification; reasons for rejecting LOCF and complete cases; a specified MI model including arm; pre-specified δ grid with clinical rationale.
+
+### Exercise 10. Delta in all arms
+
+```{r}
+#| label: ex10
+tip_all <- bind_rows(lapply(seq(0, 28, by = 4), delta_pool,
+                            shift_arms = c("UC", "SP", "EP")))
+tip_all |> mutate(across(c(estimate, lower, upper), ~ round(., 2)))
+```
+
+When all dropouts are shifted by the same δ, the shift largely cancels in the comparison: each arm's mean change increases by about δ times its proportion of dropouts, and these proportions are similar across arms. The treatment effects move only by δ times the *difference* in dropout proportions. This scenario represents a departure from MAR that is the same in every arm (for example, everyone who leaves has higher SBP than predicted, for reasons unrelated to treatment), which threatens estimates of within-arm change but not the comparison between arms. Departures that differ between arms are the ones that matter for the treatment effect.

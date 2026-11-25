@@ -1,0 +1,537 @@
+---
+title: "Module 3. Statistical foundations and traditional approaches"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+wide <- load_walk("wide")
+```
+
+```{r}
+#| label: prep
+#| include: false
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+yv <- paste0("sbp_m", c(0, 1, 3, 6, 9, 12))
+m_ols <- lm(sbp ~ month * arm, data = walk)
+b <- coef(m_ols); ols_tab <- fixef_table(m_ols)
+walk$res_ols <- resid(m_ols)
+res_cor <- visit_correlation(walk, id, month_sched, res_ols)
+ep <- wide |> filter(arm == "EP", !is.na(sbp_m0), !is.na(sbp_m12))
+uc <- wide |> filter(arm == "UC", !is.na(sbp_m0), !is.na(sbp_m12))
+tt_ep <- t.test(ep$sbp_m12, ep$sbp_m0, paired = TRUE)
+tt_uc <- t.test(uc$sbp_m12, uc$sbp_m0, paired = TRUE)
+cc <- wide[complete.cases(wide[, yv]), ]
+lc <- cc |> select(id, arm, all_of(yv)) |>
+  pivot_longer(all_of(yv), names_to = "visit", values_to = "sbp") |>
+  mutate(visit = factor(visit, levels = yv), id = factor(id))
+rm_aov <- aov(sbp ~ arm * visit + Error(id / visit), data = lc)
+wth <- summary(rm_aov)[["Error: id:visit"]][[1]]
+btw <- summary(rm_aov)[["Error: id"]][[1]]
+Y <- as.matrix(cc[, yv])
+rm_mlm <- lm(Y ~ arm, data = cc)
+idata <- data.frame(visit = factor(yv, levels = yv))
+rm_sph <- anova(rm_mlm, X = ~1, idata = idata, test = "Spherical")
+hd <- attr(rm_sph, "heading")
+eps_gg <- as.numeric(sub(".*: *", "", grep("Greenhouse", hd, value = TRUE)))
+eps_hf <- as.numeric(sub(".*: *", "", grep("Huynh", hd, value = TRUE)))
+mau <- mauchly.test(rm_mlm, X = ~1, idata = idata)
+S_cc <- cov(Y)
+d12 <- wide |> filter(!is.na(sbp_m0), !is.na(sbp_m12)) |> mutate(chg = sbp_m12 - sbp_m0)
+m_fu <- lm(sbp_m12 ~ arm, data = d12)
+m_chg <- lm(chg ~ arm, data = d12)
+m_anc <- lm(sbp_m12 ~ arm + sbp_m0, data = d12)
+tab12 <- bind_rows(
+  fixef_table(m_fu)  |> mutate(analysis = "Follow-up only"),
+  fixef_table(m_chg) |> mutate(analysis = "Change score"),
+  fixef_table(m_anc) |> mutate(analysis = "ANCOVA")) |>
+  filter(term %in% c("armSP", "armEP"))
+g <- function(a, t, col) tab12[tab12$analysis == a & tab12$term == t, col]
+r0_12 <- cor(d12$sbp_m0, d12$sbp_m12)
+# Module 4 primary model, for the bridging statements
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+lmm12 <- as.data.frame(contrast(
+  contrast(emmeans(m_prim, ~ visit_f | arm), list(chg12 = c(-1, 0, 0, 0, 0, 1))),
+  "trt.vs.ctrl", by = NULL, adjust = "none"))
+# Family-wise error of 12 per-visit tests under no effect (as in the notes)
+set.seed(3)
+fwer <- mean(replicate(2000, {
+  y <- MASS::mvrnorm(360, rep(145, 6), S_cc)
+  arm <- factor(rep(c("UC", "SP", "EP"), each = 120), levels = c("UC", "SP", "EP"))
+  p <- sapply(1:6, function(j) coef(summary(lm(y[, j] ~ arm)))[2:3, 4])
+  any(p < 0.05)
+}))
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Traditional methods are still everywhere, so we need to judge them
+
+- Regression ignoring correlation, paired t-tests, repeated-measures ANOVA, ANCOVA at the last visit, a test at every visit
+- Each answers a narrow question under strong assumptions
+- Goal: know what each one estimates, when it is adequate, and why Module 4 moves on
+
+::: {.notes}
+Open by asking who has seen a paper with a t-test at every visit, or an RM-ANOVA. Most hands go up. The message of the module is not "these are wrong" but "know what each answers and what it assumes". ANCOVA in particular remains the recommended analysis for a single follow-up in a trial. Learning outcomes 3.1 to 3.5 are on the next slide.
+:::
+
+## Learning outcomes
+
+- **3.1** Interpret coefficients, interactions, CIs and residuals in models with time
+- **3.2** Carry out a paired comparison and an RM-ANOVA; state assumptions
+- **3.3** Explain sphericity, apply GG and HF corrections, list RM-ANOVA limitations
+- **3.4** Compare follow-up-only, change-score and ANCOVA analyses
+- **3.5** Explain why separate tests at each visit are inefficient and inflate comparisons
+
+::: {.notes}
+Read through briefly. Point out that 3.4 is the outcome with the most practical consequence: many analysis plans still specify change scores. Prerequisites are Modules 0 to 2.
+:::
+
+## WALK: three arms, six scheduled visits, incomplete data
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+plot_observed_means(walk, month_sched, sbp, arm) +
+  labs(x = "Scheduled month", y = "Mean SBP (mmHg)")
+```
+
+Only `r nrow(cc)` of 360 participants have all six visits; `r nrow(d12)` have month 12.
+
+::: {.notes}
+Remind participants of WALK: 120 per arm, visits at 0, 1, 3, 6, 9, 12 months with irregular actual times, dropout depending on last SBP (MAR). The two numbers at the bottom matter for the whole module: complete-case methods throw away a third of the participants (RM-ANOVA) or a fifth (month-12 analyses).
+:::
+
+# Part 1. Regression foundations
+
+## The arm-by-time interaction carries the treatment effect
+
+$$
+y_{ij} = \beta_0 + \beta_1 t_{ij} + \beta_2 \text{SP}_i + \beta_3 \text{EP}_i + \beta_4 t_{ij}\text{SP}_i + \beta_5 t_{ij}\text{EP}_i + \varepsilon_{ij}
+$$
+
+- $\beta_2, \beta_3$: arm differences **at month 0**
+- $\beta_4, \beta_5$: differences in **slope** (mmHg/month) from UC
+- $\varepsilon_{ij} \sim N(0, \sigma^2)$, assumed **independent**
+
+::: {.notes}
+Walk through each symbol. Stress that with an interaction in the model the "main effect" of arm is the difference where time equals zero. Ask: what would the model say if we dropped the interaction? Answer: parallel lines, no possibility of a treatment effect on change. The independence assumption is highlighted because it is the one that fails.
+:::
+
+## Fitting it with `lm()`
+
+```{r}
+#| eval: false
+m_ols <- lm(sbp ~ month * arm, data = walk)
+summary(m_ols)
+```
+
+```{r}
+#| echo: false
+knitr::kable(ols_tab[, c("term", "estimate", "se", "lower", "upper")], digits = 2)
+```
+
+::: {.notes}
+Read the EP interaction: an extra fall of `r f2(-b["month:armEP"])` mmHg per month, about `r f1(-12 * b["month:armEP"])` mmHg over a year. armEP is `r f2(b["armEP"])`, close to zero as randomisation implies. The intervals are computed as if the `r nrow(walk)` rows were independent, which the next slide shows is false.
+:::
+
+## Residuals from the same participant are strongly correlated
+
+```{r}
+#| echo: false
+knitr::kable(round(res_cor, 2))
+```
+
+Independence would need these to be near 0. They range from `r f2(min(res_cor[upper.tri(res_cor)]))` to `r f2(max(res_cor[upper.tri(res_cor)]))`.
+
+::: {.notes}
+This table is why OLS is not a valid final analysis. The residual-versus-fitted plot looks fine and cannot show this, because the problem concerns pairs of residuals from one person. Note also the pattern: higher correlation between adjacent visits. Hold on to that for sphericity. Remind them of the Module 1 simulation: SEs too small for between-subject comparisons and too large for within-subject ones.
+:::
+
+## Try it
+
+Workbook exercise 1: fit the arm-by-time regression, interpret every coefficient, and inspect the residual correlations (LO 3.1).
+
+::: {.notes}
+Give participants time for exercise 1. Circulate and check that they interpret the interaction, not the arm main effect, as the treatment effect.
+:::
+
+# Part 2. The paired t-test
+
+## A paired t-test answers a within-group question
+
+$$
+d_i = y_{i,12} - y_{i,0}, \qquad t = \frac{\bar d}{s_d/\sqrt n}, \qquad \operatorname{Var}(d_i) = \sigma_0^2 + \sigma_{12}^2 - 2\rho\sigma_0\sigma_{12}
+$$
+
+- Pairing removes stable between-person differences
+- High correlation $\rho$ makes the differences much less variable
+- The estimand is the mean change **within one arm**
+
+::: {.notes}
+Explain why pairing helps through the variance formula. Then stress that within-arm change mixes the programme effect with regression to the mean, seasonality, trial participation and medication changes. Participants were recruited because their SBP was raised, so regression to the mean is expected.
+:::
+
+## EP falls by `r f1(-tt_ep$estimate)` mmHg, but UC also changes
+
+```{r}
+#| eval: false
+ep <- wide |> filter(arm == "EP", !is.na(sbp_m0), !is.na(sbp_m12))
+t.test(ep$sbp_m12, ep$sbp_m0, paired = TRUE)
+```
+
+| Arm | n pairs | Mean change (95% CI) |
+|---|---|---|
+| EP | `r nrow(ep)` | `r fmt_ci(tt_ep$estimate, tt_ep$conf.int[1], tt_ep$conf.int[2])` |
+| UC | `r nrow(uc)` | `r fmt_ci(tt_uc$estimate, tt_uc$conf.int[1], tt_uc$conf.int[2])` |
+
+::: {.notes}
+The EP change is large and clearly non-zero. Ask: does this show the programme works? No. The effect is the difference between the arms' changes, which the paired tests do not estimate. "Significant in one arm, not in another" is not a test of a difference between arms. Also note that only completers with both values are used.
+:::
+
+## Try it
+
+Workbook exercise 2: paired t-tests in each arm and why they do not compare arms (LO 3.2).
+
+::: {.notes}
+Ask participants to write one sentence explaining why two within-arm tests do not test the programme effect.
+:::
+
+# Part 3. Repeated-measures ANOVA
+
+## RM-ANOVA is a random-intercept model with categorical time and complete data
+
+$$
+y_{ij} = \mu + \alpha_g + \gamma_j + (\alpha\gamma)_{gj} + b_{0i} + \varepsilon_{ij}, \quad b_{0i} \sim N(0,\tau_0^2), \ \varepsilon_{ij} \sim N(0,\sigma^2)
+$$
+
+- Between-subject test: arm (averaged over visits)
+- Within-subject tests: visit, **arm-by-visit** (the question in a trial)
+- Implies equal variances and equal correlations (compound symmetry)
+
+::: {.notes}
+Link back to Module 1: the participant effect b0i creates the correlation. Point out that this is already a mixed model, the simplest of Module 4. The arm-by-visit interaction is the relevant test in a trial. The between-subject arm test averages over visits including baseline.
+:::
+
+## Two routes in base R
+
+```{r}
+#| eval: false
+cc <- wide[complete.cases(wide[, yv]), ]            # listwise deletion
+rm_aov <- aov(sbp ~ arm * visit + Error(id / visit), data = lc)   # long
+
+Y <- as.matrix(cc[, yv])                             # wide
+rm_mlm <- lm(Y ~ arm, data = cc)
+idata <- data.frame(visit = factor(yv, levels = yv))
+anova(rm_mlm, X = ~1, idata = idata, test = "Spherical")
+mauchly.test(rm_mlm, X = ~1, idata = idata)
+```
+
+::: {.notes}
+The aov route needs long data and an Error() term with id/visit, giving two strata. The multivariate lm route needs wide data; X = ~1 means "test contrasts orthogonal to the constant", i.e. within-subject effects. It prints the GG and HF epsilons. In its table, the row "(Intercept)" is visit and the row "arm" is arm-by-visit. No extra packages are needed.
+:::
+
+## The arms follow different patterns over time
+
+| Effect | F | df | p |
+|---|---|---|---|
+| Arm (between) | `r f2(btw["arm", "F value"])` | `r btw["arm", "Df"]`, `r btw["Residuals", "Df"]` | `r fmt_p(btw["arm", "Pr(>F)"])` |
+| Visit | `r f2(wth[1, "F value"])` | `r wth[1, "Df"]`, `r wth[3, "Df"]` | `r fmt_p(wth[1, "Pr(>F)"])` |
+| Arm × visit | `r f2(wth[2, "F value"])` | `r wth[2, "Df"]`, `r wth[3, "Df"]` | `r fmt_p(wth[2, "Pr(>F)"])` |
+
+`r nrow(cc)` completers. Mauchly W = `r f2(mau$statistic)`, `r fmt_p(mau$p.value)`.
+
+::: {.notes}
+The arm main effect is not significant even though the curves separate: it averages over all visits, including the early ones, and its error term is between-person variation. The interaction is strong. Mauchly rejects sphericity, so the within-subject p-values need correcting. Warn that Mauchly's test is unreliable as a decision rule: weak in small samples, oversensitive in large ones.
+:::
+
+## Sphericity: every pairwise difference should be equally variable
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+#| fig-width: 7
+#| out-width: "62%"
+cor_long <- as.data.frame(as.table(round(cov2cor(S_cc), 2)))
+levels(cor_long$Var1) <- levels(cor_long$Var2) <- c(0, 1, 3, 6, 9, 12)
+ggplot(cor_long, aes(Var1, Var2, fill = Freq)) +
+  geom_tile(colour = "white") +
+  geom_text(aes(label = sprintf("%.2f", Freq)), size = 4) +
+  scale_fill_gradient(low = "#F2F2F2", high = "#0072B2", name = "Correlation") +
+  labs(x = "Scheduled month", y = "Scheduled month") +
+  theme(panel.grid = element_blank())
+```
+
+::: {.notes}
+Sphericity: Var(y_j minus y_k) is the same for every pair of visits. Compound symmetry implies it. Here correlation falls with the gap between visits, from `r f2(max(cov2cor(S_cc)[upper.tri(S_cc)]))` to `r f2(min(cov2cor(S_cc)[upper.tri(S_cc)]))`, so differences between distant visits vary much more than differences between adjacent ones. Typical of longitudinal data.
+:::
+
+## The variance of differences is far from constant
+
+```{r}
+#| echo: false
+pairs <- t(combn(6, 2))
+vd <- S_cc[cbind(pairs[, 1], pairs[, 1])] + S_cc[cbind(pairs[, 2], pairs[, 2])] -
+  2 * S_cc[pairs]
+lab <- c(0, 1, 3, 6, 9, 12)
+dv <- data.frame(pair = paste0("m", lab[pairs[, 1]], " vs m", lab[pairs[, 2]]),
+                 var_diff = round(vd, 1))
+dv <- dv[order(dv$var_diff), ]
+knitr::kable(rbind(head(dv, 3), tail(dv, 3)), row.names = FALSE)
+```
+
+Smallest `r f1(min(vd))`, largest `r f1(max(vd))` mmHg². Under sphericity all 15 would be similar.
+
+::: {.notes}
+Computed as s_jj + s_kk minus 2 s_jk from the completers' covariance matrix. Adjacent visits give the smallest variances, distant visits the largest. This is the concrete meaning of the sphericity violation.
+:::
+
+## Greenhouse–Geisser and Huynh–Feldt shrink the degrees of freedom
+
+$$
+\hat\epsilon_{\text{GG}} = \frac{(\sum_r \lambda_r)^2}{(k-1)\sum_r \lambda_r^2}, \qquad \lambda_r \text{ eigenvalues of } C^\top S C
+$$
+
+- WALK: $\hat\epsilon_{\text{GG}}$ = `r f2(eps_gg)`, $\hat\epsilon_{\text{HF}}$ = `r f2(eps_hf)`
+- Interaction df become `r round(eps_gg * 10, 1)` and `r round(eps_gg * wth[3, "Df"])` (GG); corrected `r fmt_p(rm_sph["arm", "G-G Pr"])`
+- GG is conservative near 1; HF less so [@greenhouse1959; @huynh1976]
+
+::: {.notes}
+Epsilon equals 1 under sphericity and has a lower bound of 1/(k minus 1) = 0.2 here. Both df are multiplied by epsilon. Rule of thumb: GG if epsilon is below about 0.75, otherwise HF; many report GG always. Here the conclusion does not change because the sample is large; with small samples it can. The notes reproduce the GG value by hand from the eigenvalues.
+:::
+
+## RM-ANOVA has limitations that corrections cannot fix
+
+- **Complete cases only**: `r nrow(wide) - nrow(cc)` of 360 participants (`r round(100 * (1 - nrow(cc) / 360))`%) dropped
+- **Fixed occasions**: actual visit times are discarded
+- **No time-varying covariates** (e.g. steps)
+- **No individual slopes**: only a shift in level per person
+- **Omnibus F-tests**, not an effect estimate with CI
+
+::: {.notes}
+Under MAR dropout the completers are a selected group, so estimates can be biased. Module 4's mixed model removes every one of these restrictions. Ask: which of these limitations matters most for WALK? A good answer: listwise deletion, since dropout depends on SBP; and the lack of an estimate of the month-12 effect.
+:::
+
+## Try it
+
+Workbook exercise 3: RM-ANOVA on completers, Mauchly's test and the corrected p-values (LO 3.2, 3.3).
+
+::: {.notes}
+Ask participants to find which row of the Spherical table is the interaction, and to report epsilon.
+:::
+
+# Part 4. Baseline and one follow-up
+
+## Three analyses of month 12 estimate the same effect in a trial
+
+$$
+\begin{aligned}
+\text{Follow-up:}\ & y_{i,12} = \beta_0 + \beta_1\text{SP}_i + \beta_2\text{EP}_i + \varepsilon_i \\
+\text{Change:}\ & y_{i,12} - y_{i0} = \beta_0 + \beta_1\text{SP}_i + \beta_2\text{EP}_i + \varepsilon_i \\
+\text{ANCOVA:}\ & y_{i,12} = \beta_0 + \beta_1\text{SP}_i + \beta_2\text{EP}_i + \gamma y_{i0} + \varepsilon_i
+\end{aligned}
+$$
+
+Follow-up fixes $\gamma = 0$, change fixes $\gamma = 1$, ANCOVA estimates $\gamma$.
+
+::: {.notes}
+Randomisation makes baseline means equal in expectation, so the difference at month 12 and the difference in change are the same estimand. The choice is therefore about precision. ANCOVA subtracts the optimal fraction of baseline.
+:::
+
+## Precision depends on the baseline–follow-up correlation $\rho$
+
+$$
+\operatorname{Var} \propto \quad 1 \ (\text{follow-up}), \qquad 2(1-\rho) \ (\text{change}), \qquad 1-\rho^2 \ (\text{ANCOVA})
+$$
+
+- Change beats follow-up only if $\rho > 0.5$
+- ANCOVA is never worse than either [@senn2006; @vickers2001]
+- WALK: $\rho$ = `r f2(r0_12)`
+
+::: {.notes}
+Work an example on the board: rho = 0.69 gives 1, 0.62, 0.52. So ANCOVA is about half the variance of follow-up only, equivalent to doubling the sample size. With rho = 0.3, change is worse than follow-up only.
+:::
+
+## In WALK, ANCOVA gives the narrowest intervals
+
+```{r}
+#| eval: false
+m_anc <- lm(sbp_m12 ~ arm + sbp_m0, data = d12)
+```
+
+| Analysis | SP vs UC | EP vs UC | SE (EP) |
+|---|---|---|---|
+| Follow-up only | `r fmt_ci(g("Follow-up only","armSP","estimate"), g("Follow-up only","armSP","lower"), g("Follow-up only","armSP","upper"))` | `r fmt_ci(g("Follow-up only","armEP","estimate"), g("Follow-up only","armEP","lower"), g("Follow-up only","armEP","upper"))` | `r f2(g("Follow-up only","armEP","se"))` |
+| Change score | `r fmt_ci(g("Change score","armSP","estimate"), g("Change score","armSP","lower"), g("Change score","armSP","upper"))` | `r fmt_ci(g("Change score","armEP","estimate"), g("Change score","armEP","lower"), g("Change score","armEP","upper"))` | `r f2(g("Change score","armEP","se"))` |
+| ANCOVA | `r fmt_ci(g("ANCOVA","armSP","estimate"), g("ANCOVA","armSP","lower"), g("ANCOVA","armSP","upper"))` | `r fmt_ci(g("ANCOVA","armEP","estimate"), g("ANCOVA","armEP","lower"), g("ANCOVA","armEP","upper"))` | `r f2(g("ANCOVA","armEP","se"))` |
+
+`r nrow(d12)` participants with month 12. Truth (simulation only): −4.6 and −8.1.
+
+::: {.notes}
+All three agree on direction; the SE shrinks from follow-up to change to ANCOVA. The point estimates differ through chance baseline imbalance among those analysed. All three are complete-case analyses of the 288 with month-12 data. For comparison, the Module 4 primary mixed model, using all 360 participants, gives `r f2(lmm12$estimate[1])` and `r f2(lmm12$estimate[2])` mmHg.
+:::
+
+## Simulation: ANCOVA is most precise at every correlation
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+sim_three <- function(rho, n = 100, effect = -5, sd = 13, reps = 1000) {
+  S <- sd^2 * matrix(c(1, rho, rho, 1), 2)
+  est <- replicate(reps, {
+    y <- MASS::mvrnorm(2 * n, c(145, 145), S)
+    trt <- rep(0:1, each = n)
+    y[, 2] <- y[, 2] + effect * trt
+    c(coef(lm(y[, 2] ~ trt))[2], coef(lm(I(y[, 2] - y[, 1]) ~ trt))[2],
+      coef(lm(y[, 2] ~ trt + y[, 1]))[2])
+  })
+  data.frame(rho = rho, analysis = c("Follow-up only", "Change score", "ANCOVA"),
+             emp_se = unname(apply(est, 1, sd)))
+}
+set.seed(303)
+sim_res <- bind_rows(lapply(c(0.2, 0.5, 0.7, 0.9), sim_three))
+ggplot(sim_res, aes(rho, emp_se, colour = analysis)) +
+  geom_line() + geom_point() +
+  scale_colour_manual(values = c("Follow-up only" = "#6B6B6B",
+                                 "Change score" = "#0072B2",
+                                 "ANCOVA" = "#D55E00"), name = NULL) +
+  labs(x = "Correlation between baseline and follow-up",
+       y = "Empirical SE (mmHg)")
+```
+
+::: {.notes}
+1,000 simulated randomised trials per correlation, 100 per arm, true effect -5. All three estimators are unbiased (shown in the notes). The change score is worst at low correlation and nearly matches ANCOVA at 0.9. ANCOVA is always lowest [@twisk2018].
+:::
+
+## Lord's paradox: without randomisation, change and ANCOVA disagree
+
+```{r}
+#| echo: false
+set.seed(17)
+n_l <- 500
+grp <- rep(c("A", "B"), each = n_l)
+true_level <- rnorm(2 * n_l, ifelse(grp == "A", 135, 150), 10)
+lord <- data.frame(grp = grp, y0 = true_level + rnorm(2 * n_l, 0, 7),
+                   y1 = true_level + rnorm(2 * n_l, 0, 7))
+lc_ <- coef(summary(lm(I(y1 - y0) ~ grp, data = lord)))["grpB", ]
+la_ <- coef(summary(lm(y1 ~ grp + y0, data = lord)))["grpB", ]
+```
+
+- Two pre-existing groups, true levels 135 vs 150, **no change** in either
+- Change score: B − A = `r f2(lc_[1])` mmHg (`r fmt_p(lc_[4])`)
+- ANCOVA: B − A = `r f2(la_[1])` mmHg (`r fmt_p(la_[4])`)
+- Different questions; they coincide only when groups are comparable at baseline (randomisation)
+
+::: {.notes}
+Explain the mechanism: at the same observed baseline, a member of the high group probably had a low reading by chance, so they move up at follow-up; a member of the low group moves down. ANCOVA conditions on observed baseline and so finds a "difference". In observational data the analysis must follow a clearly stated causal question; often neither simple analysis suffices.
+:::
+
+## Try it
+
+Workbook exercises 4 and 5: the three month-12 analyses and checking ANCOVA assumptions (LO 3.4).
+
+::: {.notes}
+Ask participants to compute the ratio of standard errors and compare with the formula using their own estimate of rho.
+:::
+
+# Part 5. Separate tests at each visit
+
+## A test at every visit multiplies false positives and wastes information
+
+- 6 visits × 2 comparisons = 12 tests: $1 - 0.95^{12}$ = `r f2(1 - 0.95^12)` if independent
+- Each test ignores baseline: SE of follow-up-only analysis
+- Each visit analyses different people as dropout accumulates
+
+```{r}
+#| echo: false
+nv <- sapply(yv, function(v) sum(!is.na(wide[[v]])))
+knitr::kable(t(setNames(nv, c(0, 1, 3, 6, 9, 12))), caption = "Participants analysed at each scheduled month")
+```
+
+::: {.notes}
+Three problems: multiplicity, inefficiency, inconsistency with missing data. The notes show by simulation (correlated visits, no effect) that the chance of at least one false positive is about `r round(100 * fwer)`%, not 5%. Bonferroni fixes multiplicity but not the other two problems.
+:::
+
+## Visit-wise estimates look informative but mix effect and selection
+
+```{r}
+#| echo: false
+#| fig-height: 4
+per_visit <- bind_rows(lapply(yv, function(v) {
+  d <- wide[!is.na(wide[[v]]), ]
+  fixef_table(lm(reformulate("arm", v), data = d)) |>
+    filter(term != "(Intercept)") |> mutate(visit = v)
+}))
+per_visit |>
+  mutate(month = as.numeric(sub("sbp_m", "", visit)),
+         arm = ifelse(term == "armSP", "SP", "EP")) |>
+  ggplot(aes(month, estimate, colour = arm)) +
+  geom_hline(yintercept = 0, colour = "#888888") +
+  geom_pointrange(aes(ymin = lower, ymax = upper), position = position_dodge(width = 0.6)) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  scale_x_continuous(breaks = c(0, 1, 3, 6, 9, 12)) +
+  labs(x = "Scheduled month", y = "Difference from UC (mmHg)")
+```
+
+::: {.notes}
+Warn against reading "onset of effect" from the first significant visit. Visit-specific differences are better obtained as contrasts from one longitudinal model (Module 4 and Module 6).
+:::
+
+## Try it
+
+Independent exercise: compare the per-visit tests with ANCOVA at month 6 (LO 3.5).
+
+::: {.notes}
+Encourage participants to count how many participants each test uses.
+:::
+
+# Part 6. Putting it together
+
+## Each traditional method has a narrow use
+
+| Method | Use it for | Main problem |
+|---|---|---|
+| OLS on long data | Understanding the mean model | Invalid SEs |
+| Paired t-test | Within-arm change | Not a comparison of arms |
+| RM-ANOVA | Complete, balanced, fixed visits | Listwise deletion, sphericity, no estimates |
+| ANCOVA at one visit | Single follow-up in a trial | Ignores other visits; complete cases |
+| Test per visit | Nothing as a primary analysis | Multiplicity, inefficiency, shifting samples |
+
+::: {.notes}
+Summarise. ANCOVA is the one method here that remains a recommended primary analysis, for a single follow-up with little missing data. Everything else is better done with the linear mixed model.
+:::
+
+## The linear mixed model keeps what is good and removes the restrictions
+
+- Uses all `r n_distinct(walk$id)` participants and all `r nrow(walk)` observations
+- Uses actual visit times, allows random slopes
+- Valid under MAR dropout (if correctly specified)
+- Gives the difference in mean change at month 12 with a CI
+
+::: {.notes}
+Bridge to Module 4. The primary model there has categorical time for the mean and a random slope on actual time, and gives month-12 differences in mean change of `r f2(lmm12$estimate[1])` (SP) and `r f2(lmm12$estimate[2])` (EP) mmHg, close to the ANCOVA results but using everyone.
+:::
+
+## Summary
+
+- Interactions carry the treatment effect on change; main effects are at time 0
+- Paired tests describe change within a group
+- RM-ANOVA needs sphericity and complete data; correct with GG/HF
+- In a randomised trial with one follow-up, prefer ANCOVA
+- Never use a test at every visit as the primary analysis
+
+::: {.notes}
+Close by pointing to the workbook and the knowledge check. Further reading: Senn (2006), Vickers and Altman (2001), Twisk et al. (2018).
+:::
+
+## References
+
+::: {#refs}
+:::

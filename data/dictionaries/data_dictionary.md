@@ -1,0 +1,163 @@
+# Data dictionary
+
+**All datasets in this course are simulated.** The WALK, CLEAR, DIARY and KIDNEY studies do not exist. Results from them show how the methods work. They are not empirical findings about blood pressure, skin disease, migraine or kidney disease.
+
+Every dataset can be regenerated exactly by running the scripts in `data-raw/` (fixed seeds). Run `scripts/00_make_data.R` to rebuild them all.
+
+| Dataset | Outcome type | Structure | Used mainly in | Simulation script |
+|---|---|---|---|---|
+| WALK | Continuous (systolic blood pressure) | 3-arm trial, 6 scheduled visits, irregular actual times, dropout, 8 clinics | Modules 1–6, 9–12, 13 (three-level, nonlinear) | `data-raw/01_simulate_walk.R` |
+| CLEAR | Binary and ordinal (itch) | 2-arm trial, 6 scheduled visits, dropout | Modules 7, 8, 11, 13 (ordinal) | `data-raw/02_simulate_clear.R` |
+| DIARY | Count with exposure (migraine days) | 2-arm trial, baseline + 6 diary periods | Modules 7, 8, 11 | `data-raw/03_simulate_diary.R` |
+| KIDNEY | Continuous (eGFR) + time to event | Observational cohort, irregular visits, informative visit timing | Modules 9, 10, 13 (joint models) | `data-raw/04_simulate_kidney.R` |
+
+---
+
+## WALK study (core dataset)
+
+A hypothetical three-arm randomised trial of a community walking programme for adults with raised blood pressure. There are 360 participants (120 per arm) at 8 clinics. Visits are scheduled at months 0 (baseline), 1, 3, 6, 9 and 12, but each participant's actual visit times vary around the schedule. Some visits are missed at random (about 5%), and some participants drop out. The chance of dropping out depends on the most recent observed blood pressure and on arm, so the dropout is *missing at random* (MAR) given the observed data.
+
+### `walk_long.csv`: one row per attended visit (analysis dataset)
+
+| Variable | Type | Description |
+|---|---|---|
+| `id` | character | Participant identifier (`W001`–`W360`) |
+| `clinic` | integer 1–8 | Clinic where the participant was recruited |
+| `arm` | character | `UC` = usual care (reference), `SP` = standard programme, `EP` = enhanced programme |
+| `age` | integer, years | Age at baseline (40–80) |
+| `sex` | character | `Male` (reference), `Female` |
+| `bmi` | numeric, kg/m² | Body mass index at baseline |
+| `visit` | integer 1–6 | Visit number (1 = baseline) |
+| `month_sched` | numeric | Scheduled time of the visit (0, 1, 3, 6, 9, 12 months) |
+| `month` | numeric | Actual time of the visit, months since randomisation |
+| `steps` | numeric, thousands/day | Average daily step count over the week before the visit (time-varying covariate) |
+| `sbp` | integer, mmHg | Systolic blood pressure (outcome) |
+
+In R, `load_walk()` also adds `visit_f`, a factor version of `month_sched`.
+
+### `walk_baseline.csv`: one row per participant
+
+| Variable | Description |
+|---|---|
+| `id`, `clinic`, `arm`, `age`, `sex`, `bmi` | As above |
+| `rand_date` | Date of randomisation (YYYY-MM-DD) |
+| `sbp0`, `steps0` | Baseline systolic blood pressure and steps |
+| `dropout` | `TRUE` if the last attended visit was before month 12 |
+| `last_month_sched` | Scheduled month of the last attended visit |
+
+### `walk_wide.csv`: one row per participant
+
+The baseline covariates plus `sbp_m0`, `sbp_m1`, `sbp_m3`, `sbp_m6`, `sbp_m9`, `sbp_m12`, which hold SBP at each scheduled visit (`NA` if not attended).
+
+### `walk_complete.csv`: teaching only
+
+All 2,160 scheduled visits *before* any missing data were created, with `observed` (`TRUE`/`FALSE`) showing which visits appear in `walk_long.csv`. A real study never has this file. The course uses it only to show how missing data change results.
+
+### `walk_visits_raw.csv`: messy export for Module 2
+
+A deliberately untidy visit-level export: `participant` (some IDs in lower case), `visit_label` (`M0`, `M1`, …), `visit_date`, `sbp_mmhg` (text, includes one blank and one value with a typing error), `steps_k`. It has 6 exact duplicate rows and 3 conflicting duplicates (same participant and visit, different values and dates). The rows are in random order.
+
+### `walk_truth.rds`: true generating values
+
+This file is an R list holding the parameters used to simulate WALK. The element `true_change` gives the true mean change in SBP from baseline by arm and scheduled month, which is the estimand the analyses aim to recover.
+
+| Month | Usual care | Standard programme | Enhanced programme |
+|---|---|---|---|
+| 1 | −0.9 | −2.8 | −4.3 |
+| 3 | −1.7 | −5.4 | −8.1 |
+| 6 | −2.0 | −6.4 | −9.8 |
+| 12 | −2.1 | −6.7 | −10.2 |
+
+True differences in mean change at month 12 compared with usual care: standard programme −4.6 mmHg, enhanced programme −8.1 mmHg. Part of each programme's effect acts through increased walking (the within-person steps effect is −0.6 mmHg per 1,000 steps/day). The between-person association is −1.5 mmHg per 1,000 steps/day.
+
+Key variance parameters: between-participant SD of intercepts 11 mmHg; SD of individual linear slopes 0.35 mmHg/month (intercept–slope correlation −0.25); between-clinic SD 3 mmHg; serially correlated residual SD 5 mmHg with correlation exp(−|Δt|/3 months); measurement error SD 4 mmHg.
+
+---
+
+## CLEAR study (binary and ordinal outcomes)
+
+A hypothetical two-arm randomised trial (placebo vs active topical treatment) in 200 participants with a chronic itchy skin condition. Visits are scheduled at weeks 0, 2, 4, 6, 8 and 12. Dropout depends on the last observed severity (MAR).
+
+### `clear_long.csv`: one row per attended visit
+
+| Variable | Description |
+|---|---|
+| `id` | `C001`–`C200` |
+| `arm` | `Placebo` (reference), `Active` |
+| `age` | Years |
+| `sex` | `Male` (reference), `Female` |
+| `visit` | 1–6 |
+| `week` | Scheduled week (0, 2, 4, 6, 8, 12) |
+| `severity` | Itch severity, ordinal: 0 none, 1 mild, 2 moderate, 3 severe |
+| `itch` | Binary: 1 if severity is moderate or severe (≥ 2), else 0 |
+
+**Generating model (subject-specific).** The data come from a cumulative logit model with a random intercept (SD 2.0 on the logit scale). In the placebo arm the conditional log-odds of higher severity change by −0.06 per week; the active arm has an additional −0.16 per week. Age adds 0.20 per 10 years and female sex adds 0.30. Because the binary outcome is a dichotomy of this model, it follows a logistic random-intercept model with intercept 0 (at week 0 for a 45-year-old man), the same slopes and random-intercept SD 2.0. The population-averaged (marginal) effects are smaller in magnitude than these conditional effects. Modules 7 and 8 explain why.
+
+---
+
+## DIARY study (count outcome with exposure)
+
+A hypothetical two-arm randomised trial (placebo vs preventive treatment) in 160 people with migraine. There is a 28-day baseline diary period (period 0) followed by six 28-day treatment periods. Some diary periods are incomplete, and some participants leave the study (completely at random).
+
+### `diary_long.csv`: one row per completed diary period
+
+| Variable | Description |
+|---|---|
+| `id` | `D001`–`D160` |
+| `arm` | `Placebo` (reference), `Active` |
+| `age`, `sex` | As above |
+| `period` | 0 = baseline, 1–6 = treatment periods |
+| `post` | 1 for periods 1–6, 0 for baseline |
+| `days` | Days with a completed diary entry in the period (14–28): the **exposure** |
+| `migraine_days` | Number of days with migraine (count outcome, ≤ `days`) |
+
+**Generating model.** The model is a negative binomial with a random intercept (SD 0.55 on the log scale) and size parameter 5, with log(`days`) as an offset. The baseline rate is about 0.18 migraine days per diary day. After baseline the placebo arm's rate changes by a factor of exp(−0.10) = 0.90. The active arm has a further conditional rate ratio of exp(−0.40) = 0.67. No excess zeros were generated, so zero inflation is *not* part of the true model.
+
+---
+
+## KIDNEY cohort (irregular visits and a time-to-event outcome; advanced)
+
+A hypothetical observational cohort of 300 adults with chronic kidney disease, followed for up to 5 years. eGFR is measured at routine clinic visits at irregular times. **Visits are more frequent after a low eGFR** (mean gap 3 months if the last eGFR was < 30, otherwise 6 months), so the visit process depends on the outcome history. Measurements stop at kidney failure.
+
+### `kidney_long.csv`: one row per clinic visit
+
+| Variable | Description |
+|---|---|
+| `id` | `K001`–`K300` |
+| `age` | Years at entry |
+| `sex` | `Male` (reference), `Female` |
+| `diabetes` | 1 = diabetes at entry, 0 = no |
+| `years` | Time of the visit, years since entry |
+| `egfr` | Estimated glomerular filtration rate, mL/min/1.73m² (values below 4 recorded as 4) |
+
+### `kidney_events.csv`: one row per participant
+
+| Variable | Description |
+|---|---|
+| `id`, `age`, `sex`, `diabetes` | As above |
+| `time` | Years to kidney failure or censoring |
+| `failure` | 1 = kidney failure, 0 = censored (end of 5-year follow-up or loss to follow-up) |
+
+**Generating model.** True eGFR is quadratic in time with a random intercept and slope. Diabetes steepens the decline by 1.5 units/year. The hazard of kidney failure increases by a factor of exp(0.13) ≈ 1.14 for each 1-unit *lower* current true eGFR (association parameter −0.13). This is the structure a joint model estimates (Module 13).
+
+---
+
+## MOOD study (final project)
+
+A hypothetical two-arm randomised trial comparing a guided digital self-help programme with a waiting-list control in 240 adults with depressive symptoms, at 4 sites. Assessments are scheduled at weeks 0, 2, 4, 8, 12 and 24; actual times vary. Some assessments are missed and some participants drop out. **The reasons for dropout are not disclosed to participants**, because judging their plausibility is part of the project. The true generating values are in `data/mood_truth.rds`, which is for instructors only.
+
+### `mood_long.csv`: one row per completed assessment
+
+| Variable | Description |
+|---|---|
+| `id` | `M001`–`M240` |
+| `site` | Recruitment site, 1–4 |
+| `arm` | `Waitlist` (reference), `Programme` |
+| `age` | Years at baseline |
+| `sex` | `Male` (reference), `Female` |
+| `visit` | Assessment number, 1–6 |
+| `week_sched` | Scheduled week: 0, 2, 4, 8, 12, 24 |
+| `week` | Actual week of the assessment |
+| `sleep` | Average nightly sleep in the past week, hours (time-varying) |
+| `score` | Depressive symptom score, 0–27, higher is worse (primary outcome) |
+| `response` | 1 if `score` < 10, else 0 (secondary binary outcome) |

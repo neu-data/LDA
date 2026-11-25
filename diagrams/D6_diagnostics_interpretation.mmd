@@ -1,0 +1,18 @@
+%% D6. Diagnostics and interpretation workflow
+%% A guide to reasoning, not an automatic rule for choosing a model.
+flowchart TD
+  A["Fitted model"] --> B{"Warnings: convergence, singular fit, separation?"}
+  B -->|Yes| B1["Investigate: rescale time and covariates, check gradients, compare optimisers, simplify random effects for a stated reason (Module 11)"]
+  B1 --> A
+  B -->|No| C["Residuals: against fitted values and time, by group; Q-Q plots; DHARMa for GLMMs"]
+  C --> D["Random effects: BLUP plots (read with care) and comparison of covariance models"]
+  D --> E["Influence: leave-one-subject-out change in the key estimate"]
+  E --> F{"Do any problems matter for the estimand?"}
+  F -->|Yes| G["Revise for substantive reasons, record the change in the analysis log, report both if the primary model was prespecified"]
+  F -->|No| H["Interpret on the scale of the question: EMMs, differences in mean change, probabilities, rates"]
+  G --> H
+  H --> I["Report estimates with CIs, the model, its assumptions, missing-data handling and sensitivity analyses (Module 12)"]
+  classDef q fill:#ffffff,stroke:#555555,color:#222222;
+  classDef m fill:#eef4f8,stroke:#0b5d8f,color:#222222;
+  class A,B,F q;
+  class B1,C,D,E,G,H,I m;

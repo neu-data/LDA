@@ -1,0 +1,498 @@
+---
+title: "Module 0. Foundations refresher: R and regression"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk_base <- load_walk("baseline") |>
+  mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29,
+         hyp150 = as.integer(sbp0 >= 150))
+walk <- load_walk()
+m_lin <- lm(sbp0 ~ age10 + sex + bmi_c, data = walk_base)
+ci  <- confint(m_lin); co <- coef(m_lin); pv <- coef(summary(m_lin))[, 4]
+m_int <- lm(sbp0 ~ age10 * sex + bmi_c, data = walk_base)
+ci_int <- confint(m_int); cf_int <- coef(m_int)
+m_log <- glm(hyp150 ~ age10 + sex + bmi_c, family = binomial, data = walk_base)
+or_tab <- exp(cbind(OR = coef(m_log), confint(m_log)))
+sex_cols <- c(Male = "#0072B2", Female = "#D55E00")
+```
+
+## Why a regression refresher comes first
+
+- Every longitudinal model in this course is a regression with something added
+- Mixed models add terms for people; GEE adds corrected standard errors
+- This module: one row per participant (cross-sectional)
+- It ends with the reason that is not enough
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.notes}
+Open by telling participants why this module exists: if linear and logistic regression are secure, Modules 3 to 8 are much easier. Those who are confident can take the Module 0 knowledge check and move on. Point out the simulated-data warning: WALK is fictional, so we can compare estimates with the true values, which is never possible in real studies. Ask the room who uses R daily and who has not used it for a while, to calibrate the pace of the first section.
+:::
+
+## Learning outcomes
+
+1. **0.1** Open the course R project, load data with relative paths and inspect data frames with `dplyr`.
+2. **0.2** Fit linear and logistic regression and interpret each coefficient, CI and p-value in outcome units.
+3. **0.3** Specify and interpret a categorical-by-continuous interaction.
+4. **0.4** Produce and interpret residual-vs-fitted and Q–Q plots, and name the assumption each checks.
+5. **0.5** Explain a confidence interval for a mean vs a prediction interval for a new observation.
+
+::: {.notes}
+Read through the outcomes briefly. Emphasise outcome 0.3: interactions between a group and a continuous variable are the shape of almost every longitudinal question (arm by time). Outcome 0.5 returns in Module 6. The outcomes are abbreviated on the slide; the notes have the full wording.
+:::
+
+# Working in R
+
+## Open the project; refer to files relative to its root
+
+```{r}
+#| eval: false
+# Open LDA_course.Rproj, then in any script or document:
+source(here::here("R", "setup.R"))        # packages, theme, helpers
+walk_raw  <- read_csv(here("data", "walk_baseline.csv"))
+walk_base <- load_walk("baseline")         # same data, factors set
+```
+
+- `here()` builds paths from the project root, wherever the folder lives
+- Never `setwd("C:/Users/me/...")`: it breaks on every other computer
+- `load_walk()` sets reference levels: usual care first, male first
+
+::: {.notes}
+Demonstrate live if possible: open the .Rproj file, run the setup line, and show that here() returns the full path. Explain that the loader exists so that everyone has the same factor levels; reference levels decide what the regression coefficients compare. Likely question: "Why not just use setwd?" Answer: scripts must run unchanged on other computers and after the folder moves.
+:::
+
+## Five `dplyr` verbs do most of the work
+
+```{r}
+walk_base |>
+  group_by(arm) |>
+  summarise(n = n(), mean_age = mean(age),
+            pct_women = 100 * mean(sex == "Female"),
+            mean_sbp0 = mean(sbp0), pct_150 = 100 * mean(hyp150))
+```
+
+`filter()` rows, `select()` columns, `mutate()` new columns, `group_by()` + `summarise()`, `arrange()`/`count()`
+
+::: {.notes}
+Walk through the pipe: take the data, group it by arm, summarise. Point out the derived variables created in setup: age10 is age centred at 60 per 10 years, bmi_c is BMI centred at 29, hyp150 flags SBP of at least 150. Ask: why should the three arms look similar? Because WALK is randomised. The mean baseline SBP differs by less than 2 mmHg between arms.
+:::
+
+## `ggplot2` builds figures in layers
+
+```{r}
+#| fig-height: 4
+ggplot(walk_base, aes(bmi, sbp0, colour = sex)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, formula = y ~ x) +
+  scale_colour_manual(values = sex_cols, name = NULL) +
+  labs(x = "BMI (kg/m²)", y = "Baseline SBP (mmHg)")
+```
+
+::: {.notes}
+Read the code line by line: data and aesthetic mappings, then points, then a fitted line per sex, then colours and labels with units. Ask participants to describe the figure in words before you do: SBP rises with BMI, women are a few mmHg lower at the same BMI, and there is a lot of scatter. That description is the regression model we fit next.
+:::
+
+## Try it
+
+Workbook **Exercise 1**: open the project, load the baseline data, summarise by sex and draw a histogram of baseline SBP.
+
+::: {.notes}
+Give participants time for Exercise 1. Circulate and check that everyone can run the setup line; path problems are the most common blocker. Those who finish early can try colouring the histogram by arm.
+:::
+
+# Linear regression
+
+## The question: how is baseline SBP associated with age, sex and BMI?
+
+$$
+y_i = \beta_0 + \beta_1\,\text{age10}_i + \beta_2\,\text{Female}_i + \beta_3\,\text{bmi\_c}_i + \varepsilon_i,\quad \varepsilon_i \sim N(0,\sigma^2)
+$$
+
+- $\beta_0$: mean SBP for a 60-year-old man with BMI 29 (all predictors zero)
+- $\beta_1, \beta_2, \beta_3$: adjusted differences in mean SBP, in mmHg
+- $\varepsilon_i$: residual; independent, constant variance $\sigma^2$
+
+::: {.notes}
+Stress that each coefficient is an adjusted difference in means: two groups of people who differ in one predictor and are alike in the others. Because age and BMI are centred, the intercept describes a real kind of participant. Note the independence assumption written into the error term: it is the one that longitudinal data will break.
+:::
+
+## Fitting is one line; reading the output is the skill
+
+```{r}
+#| class-output: small
+m_lin <- lm(sbp0 ~ age10 + sex + bmi_c, data = walk_base)
+round(cbind(coef(summary(m_lin))[, c(1, 2, 4)], confint(m_lin)), 3)
+```
+
+Residual SD `r round(sigma(m_lin), 1)` mmHg; $R^2$ = `r round(summary(m_lin)$r.squared, 3)`
+
+::: {.notes}
+Point to each row. Intercept: about 149 mmHg for a 60-year-old man with BMI 29. sexFemale: women about 4.8 mmHg lower at the same age and BMI. bmi_c: about 0.62 mmHg per kg/m². age10: 1.4 mmHg per decade with an interval that includes zero. Ask: does the low R-squared mean the model is wrong? No: it means most variation in SBP is due to other things; the coefficients can still be estimated well.
+:::
+
+## Each coefficient in words, with its interval
+
+| Term | Estimate (95% CI), mmHg | Reading |
+|---|---|---|
+| `age10` | `r fmt_ci(co[2], ci[2, 1], ci[2, 2])` | per 10 years, same sex and BMI |
+| `sexFemale` | `r fmt_ci(co[3], ci[3, 1], ci[3, 2])` | women minus men, same age and BMI |
+| `bmi_c` | `r fmt_ci(co[4], ci[4, 1], ci[4, 2], 2)` | per 1 kg/m², same age and sex |
+
+- CI: values of the true coefficient compatible with the data
+- p-value: how surprising the estimate would be if the true value were 0
+- True values (known because simulated): 3.0, −4.0, 0.6. The age truth lies just outside its interval: 1 in 20 intervals miss
+
+::: {.notes}
+Model the language: "Among participants of the same sex and BMI, those 10 years older had mean SBP 1.4 mmHg higher (95% CI -0.1 to 2.9)." Then discuss the comparison with the truth: the true age gradient of 3.0 lies just above the upper limit. This is sampling variation, not a mistake; it is a good moment to explain what 95% coverage means. Discourage "no effect of age" based on p = 0.07.
+:::
+
+## Centring changes the intercept, not the slopes
+
+```{r}
+m_raw <- lm(sbp0 ~ age + sex + bmi, data = walk_base)
+rbind(centred = coef(m_lin), raw = coef(m_raw)) |> round(3)
+```
+
+- Raw intercept `r round(coef(m_raw)[1], 1)` mmHg = a man aged 0 with BMI 0
+- Slopes identical (age per year vs per decade)
+- Centring will matter a lot once there are interactions
+
+::: {.notes}
+Ask participants to explain why the slopes are the same: centring only shifts the origin. The fitted values and residuals do not change. The intercept is the only thing whose meaning moves. In longitudinal models the intercept is the mean at the start of follow-up, so where time zero sits matters.
+:::
+
+## Categorical predictors: K levels, K − 1 indicators
+
+```{r}
+m_arm <- lm(sbp0 ~ arm, data = walk_base)
+round(coef(m_arm), 2)
+round(coef(lm(sbp0 ~ relevel(arm, ref = "EP"), data = walk_base)), 2)
+```
+
+- Each coefficient compares a level with the reference
+- `relevel()` changes the comparison, not the model
+- Baseline arm differences are chance: arm was randomised
+
+::: {.notes}
+Point out that the intercept is the usual-care mean and the other two coefficients are SP minus UC and EP minus UC. After relevel the intercept becomes the EP mean. The fitted group means are identical either way. Mention that anova(m_arm) gives the overall 2-degree-of-freedom F-test of equal means.
+:::
+
+## Residual plots check two assumptions; neither checks independence
+
+```{r}
+#| echo: false
+#| fig-height: 4
+diag_df <- data.frame(fitted = fitted(m_lin), resid = resid(m_lin),
+                      std_resid = rstandard(m_lin))
+p1 <- ggplot(diag_df, aes(fitted, resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") + geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = "#0072B2") +
+  labs(x = "Fitted SBP (mmHg)", y = "Residual (mmHg)", title = "Mean structure, constant variance")
+p2 <- ggplot(diag_df, aes(sample = std_resid)) + stat_qq(alpha = 0.5) +
+  stat_qq_line(colour = "#0072B2") +
+  labs(x = "Normal quantile", y = "Standardised residual", title = "Normality")
+p1 + p2
+```
+
+::: {.notes}
+Left: residuals against fitted values. Look for curvature (wrong mean structure) and funnels (non-constant variance). Here it is a band; the upturn at the far left rests on a handful of points. Right: Q-Q plot. Points near the line indicate normal residuals; at the left end they sit a little above the line, a mild right skew that does not matter with 360 participants. Ask: which plot checks independence? Neither. Independence comes from the design.
+:::
+
+## Reporting a linear regression
+
+::: {.callout-tip title="Reporting example"}
+Mean baseline SBP was `r fmt_ci(co[4], ci[4, 1], ci[4, 2], 2)` mmHg higher per 1 kg/m² of BMI (`r fmt_p(pv[4])`) and `r fmt_ci(co[3], ci[3, 1], ci[3, 2])` mmHg different in women than men (`r fmt_p(pv[3])`), adjusted for age and sex or BMI. The model explained `r round(100 * summary(m_lin)$r.squared, 1)`% of the variance (residual SD `r round(sigma(m_lin), 1)` mmHg).
+:::
+
+::: {.notes}
+Point out the order: estimate, interval, then p-value, with units. State what each estimate is adjusted for. Report residual SD as well as R-squared. Ask participants to write a sentence for the age coefficient in the same style.
+:::
+
+## Try it
+
+Workbook **Exercises 2 and 3**: fit and interpret `sbp0 ~ age10 + sex + bmi_c`, then change reference levels.
+
+::: {.notes}
+Exercise 2 asks for written interpretations of each coefficient; check that participants say "holding the other predictors fixed" and give units. Exercise 3 uses relevel with clinic or arm.
+:::
+
+# Interactions
+
+## An interaction lets a slope differ between groups
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+nd <- expand.grid(age = 40:80, sex = factor(c("Male", "Female"), levels = c("Male", "Female")),
+                  bmi_c = 0) |> mutate(age10 = (age - 60) / 10)
+nd <- cbind(nd, predict(m_int, newdata = nd, interval = "confidence"))
+ggplot(nd, aes(age, fit, colour = sex, fill = sex)) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.15, colour = NA) +
+  geom_line(linewidth = 0.9) +
+  scale_colour_manual(values = sex_cols, name = NULL) +
+  scale_fill_manual(values = sex_cols, name = NULL) +
+  geom_vline(xintercept = 60, linetype = "dotted") +
+  labs(x = "Age (years)", y = "Fitted mean SBP (mmHg), BMI 29")
+```
+
+::: {.notes}
+Without an interaction the two lines would be parallel. With one, the gap between men and women changes with age. Point to the dotted line at age 60: the sex "main effect" is the gap there. Connect to the rest of the course: arm by time in a trial is exactly this, with time as the continuous variable.
+:::
+
+## Write out the mean for each group to read the coefficients
+
+$$
+y_i = \beta_0 + \beta_1\,\text{age10}_i + \beta_2\,\text{Female}_i + \beta_3\,\text{bmi\_c}_i + \beta_4\,\text{age10}_i\,\text{Female}_i + \varepsilon_i
+$$
+
+- Men: intercept $\beta_0$, age slope $\beta_1$
+- Women: intercept $\beta_0 + \beta_2$, age slope $\beta_1 + \beta_4$
+- $\beta_4$ = difference in slopes; $\beta_2$ = sex difference **at age 60**
+
+::: {.notes}
+This is the single most useful trick in the course: substitute 0 and 1 for the indicator and collect terms. Ask a participant to say what beta_2 means. The common wrong answer is "the effect of sex"; the right answer is "the sex difference at age 60, where age10 is zero".
+:::
+
+## The interaction estimate is imprecise here
+
+```{r}
+m_int <- lm(sbp0 ~ age10 * sex + bmi_c, data = walk_base)
+round(cbind(est = coef(m_int), confint(m_int)), 2)
+emtrends(m_int, ~ sex, var = "age10")
+```
+
+::: {.notes}
+Men's slope about 0.2 mmHg per decade; women's about 2.5; the difference about 2.3 with a CI from about -0.7 to 5.3. The data are compatible with equal slopes, and because the data are simulated we know the true interaction is zero. emtrends gives each sex's slope with its own interval; Module 6 uses emmeans extensively.
+:::
+
+## Without centring, the "main effect" refers to age 0
+
+```{r}
+m_int_raw <- lm(sbp0 ~ age * sex + bmi_c, data = walk_base)
+round(coef(summary(m_int_raw))["sexFemale", ], 2)
+```
+
+- Same model, same fitted values, same interaction
+- `sexFemale` is now the sex difference for newborns: an extrapolation
+- Centre continuous predictors so that zero is a value you care about
+
+::: {.notes}
+This number looks dramatic and imprecise, but nothing about the model has changed. It is answering a meaningless question. Ask: in a longitudinal model with arm by month, what does the arm main effect mean? The arm difference at month 0. That is why time zero matters.
+:::
+
+## Try it
+
+Workbook **Exercise 4**: fit a BMI-by-sex interaction, centre BMI, and interpret every coefficient.
+
+::: {.notes}
+Participants should write out the mean for each sex before interpreting. Check that they describe the sexFemale coefficient as the difference at BMI 29.
+:::
+
+# Logistic regression
+
+## Logistic regression models the log-odds
+
+$$
+\log\frac{p_i}{1-p_i} = \beta_0 + \beta_1\,\text{age10}_i + \beta_2\,\text{Female}_i + \beta_3\,\text{bmi\_c}_i
+$$
+
+- Outcome: baseline SBP ≥ 150 mmHg (`r sum(walk_base$hyp150)` of `r nrow(walk_base)`)
+- $e^{\beta_k}$ = odds ratio for a one-unit difference
+- No residual term: variance $p_i(1-p_i)$ follows from the mean
+
+::: {.notes}
+Explain why we cannot use a straight line for probabilities. The log-odds can take any value, so it can be linear in the predictors. Say clearly that dichotomising SBP loses information; we do it here because the tools carry over to genuinely binary outcomes such as dropout and itch in CLEAR.
+:::
+
+## Exponentiate estimates and limits to get odds ratios
+
+```{r}
+m_log <- glm(hyp150 ~ age10 + sex + bmi_c, family = binomial,
+             data = walk_base)
+round(exp(cbind(OR = coef(m_log), confint(m_log))), 3)
+```
+
+- BMI: odds × `r round(or_tab[4, 1], 3)` per kg/m² (about `r round(100 * (or_tab[4, 1] - 1))`% higher)
+- Women: OR `r fmt_ci(or_tab[3, 1], or_tab[3, 2], or_tab[3, 3], 2)`
+
+::: {.notes}
+The intercept row is an odds, not an odds ratio: the odds for a 60-year-old man with BMI 29, almost exactly 1, so a probability of about one half. Warn against calling 0.67 "33% lower risk": it is lower odds, and with a common outcome odds ratios exaggerate risk ratios. The directions agree with the linear model, but the evidence is weaker because of dichotomisation.
+:::
+
+## Predicted probabilities make odds ratios concrete
+
+```{r}
+#| echo: false
+profiles <- data.frame(
+  profile = c("Man, 60, BMI 29", "Woman, 60, BMI 29", "Woman, 70, BMI 35"),
+  age10 = c(0, 0, 1),
+  sex   = factor(c("Male", "Female", "Female"), levels = c("Male", "Female")),
+  bmi_c = c(0, 0, 6))
+lp <- predict(m_log, newdata = profiles, type = "link", se.fit = TRUE)
+profiles |>
+  mutate(probability = plogis(lp$fit),
+         lower = plogis(lp$fit - 1.96 * lp$se.fit),
+         upper = plogis(lp$fit + 1.96 * lp$se.fit)) |>
+  select(profile, probability, lower, upper) |>
+  knitr::kable(digits = 2)
+```
+
+- Interval computed on the log-odds scale, then transformed with `plogis()`
+- Constant odds ratio, but the probability difference depends on the starting point
+
+::: {.notes}
+Show the code in the notes: predict with type = "link" and se.fit = TRUE, then plogis. Explain why: an interval built on the probability scale can go below 0 or above 1. Emphasise that probability differences depend on the profile, which is why later modules report effects on the response scale as well as odds ratios.
+:::
+
+## Check a logistic model with calibration, not Q–Q plots
+
+```{r}
+#| echo: false
+#| fig-height: 4
+#| out-width: "55%"
+calib <- walk_base |>
+  mutate(p_hat = fitted(m_log), group = ntile(p_hat, 5)) |>
+  group_by(group) |>
+  summarise(pred = mean(p_hat), obs = mean(hyp150), n = n()) |>
+  mutate(se = sqrt(obs * (1 - obs) / n))
+ggplot(calib, aes(pred, obs)) +
+  geom_abline(linetype = "dashed") +
+  geom_errorbar(aes(ymin = obs - 1.96 * se, ymax = obs + 1.96 * se), width = 0.01) +
+  geom_point(size = 2) + coord_equal(xlim = c(0.1, 0.8), ylim = c(0.1, 0.8)) +
+  labs(x = "Mean predicted probability", y = "Observed proportion")
+```
+
+::: {.notes}
+Group participants into fifths of predicted probability and compare the average prediction with the observed proportion. Points on the diagonal mean good calibration; here every interval crosses it. Residual-vs-fitted plots are uninformative for binary data because residuals take only two values at each fitted probability. Module 11 introduces DHARMa for mixed models.
+:::
+
+## Try it
+
+Workbook **Exercise 5**: logistic regression for dropout, with odds ratios and predicted probabilities.
+
+::: {.notes}
+The dropout model uses baseline SBP and arm. Participants should exponentiate, interpret per 10 mmHg, and compute a predicted probability. This also previews Module 10: dropout that depends on SBP.
+:::
+
+# Confidence and prediction intervals
+
+## A mean is known more precisely than an individual
+
+```{r}
+new_men <- data.frame(age10 = 0, bmi_c = c(0, 6),
+                      sex = factor("Male", levels = c("Male", "Female")))
+predict(m_lin, new_men, interval = "confidence") |> round(1)
+predict(m_lin, new_men, interval = "prediction") |> round(1)
+```
+
+- Confidence interval: where the **mean** for such men lies
+- Prediction interval: where **one new** man's SBP lies; adds $\hat\sigma^2$
+
+::: {.notes}
+Rows are BMI 29 and BMI 35 for 60-year-old men. The confidence interval for BMI 35 is about 5 mmHg wide; the prediction interval about 50 mmHg wide. Ask: what happens to each as the sample size grows? The CI shrinks towards zero width; the PI approaches plus or minus 1.96 sigma. The PI also relies on normality of residuals.
+:::
+
+## The two bands answer two different questions
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+grid <- data.frame(age10 = 0, sex = factor("Male", levels = c("Male", "Female")),
+                   bmi_c = seq(19, 40, by = 0.5) - 29)
+band <- cbind(grid, as.data.frame(predict(m_lin, grid, interval = "confidence")),
+              setNames(as.data.frame(predict(m_lin, grid, interval = "prediction"))[, 2:3],
+                       c("plo", "phi"))) |> mutate(bmi = bmi_c + 29)
+ggplot(band, aes(bmi)) +
+  geom_ribbon(aes(ymin = plo, ymax = phi), fill = "#0072B2", alpha = 0.12) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), fill = "#0072B2", alpha = 0.35) +
+  geom_line(aes(y = fit), colour = "#0072B2", linewidth = 0.9) +
+  geom_point(data = filter(walk_base, sex == "Male", between(age, 55, 65)),
+             aes(bmi, sbp0), alpha = 0.6) +
+  labs(x = "BMI (kg/m²)", y = "SBP (mmHg)")
+```
+
+::: {.notes}
+Dark band: 95% CI for the mean line, narrowest near the middle of the data. Light band: 95% PI for a new man, most observed men fall inside it. The same distinction returns in Module 6: confidence intervals for mean trajectories versus prediction intervals for an individual participant's trajectory.
+:::
+
+## Try it
+
+Workbook **Exercise 6**: compute and plot both intervals for women aged 70.
+
+::: {.notes}
+Ask participants to explain in one sentence to a clinician which interval answers "what SBP should I expect for my next patient like this?"
+:::
+
+# Why repeated measures change everything
+
+## WALK measured the same people six times
+
+```{r}
+c(rows = nrow(walk), participants = n_distinct(walk$id))
+m_once <- lm(sbp0 ~ bmi, data = walk_base)
+m_all  <- lm(sbp ~ bmi, data = walk)     # every visit as if independent
+rbind(baseline_only = coef(summary(m_once))["bmi", 1:2],
+      all_visits    = coef(summary(m_all))["bmi", 1:2]) |> round(3)
+```
+
+::: {.notes}
+The all-visits model has more than five times as many rows and a standard error less than half as large. Ask: did we really learn that much more about the BMI association? No: BMI was measured once per person, so there are still 360 people to compare. The extra precision is spurious.
+:::
+
+## Measurements on the same person are correlated
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+#| out-width: "60%"
+m1 <- walk |> filter(month_sched == 1) |> select(id, sbp_m1 = sbp)
+pairs01 <- inner_join(walk_base, m1, by = "id")
+r01 <- cor(pairs01$sbp0, pairs01$sbp_m1)
+ggplot(pairs01, aes(sbp0, sbp_m1)) + geom_point(alpha = 0.5) +
+  coord_equal() +
+  labs(x = "SBP at baseline (mmHg)", y = "SBP at month 1 (mmHg)",
+       subtitle = paste0("Correlation ", round(r01, 2)))
+```
+
+- Each person's measurements share their personal level of SBP
+- Treating them as independent makes **between-person** SEs too small
+- For **within-person** comparisons (change over time) the error can go the other way
+
+::: {.notes}
+A correlation of 0.87 means a second measurement on the same person carries much less new information than a measurement on a new person. Residual plots cannot detect this: independence is about the design. Module 1 measures the dependence and uses a simulation to show both directions of error. This is the bridge to the rest of the course.
+:::
+
+## Summary
+
+- Coefficients are adjusted differences (linear) or odds ratios (logistic), always with units and intervals
+- Centring moves the meaning of the intercept and of main effects under interactions
+- Under an interaction, a main effect is the effect where the other variable is zero
+- Residual-vs-fitted: mean and variance; Q–Q: normality; neither: independence
+- CI for a mean vs PI for a new person
+- Repeated measures violate independence: Module 1
+
+::: {.notes}
+Summarise in your own words. Point participants to the knowledge check and the workbook. Remind them that the main skill from today, writing out what a coefficient means by substituting values, will be used in every module.
+:::
+
+## Further reading
+
+- @gelman2007, chapters 3–5: regression, interactions, centring
+- @fitzmaurice2011, chapter 1: why longitudinal data need different methods
+- @wickham2014: tidy data
+
+::: {.notes}
+Gelman and Hill is the most useful companion for this module because it leads naturally to multilevel models. Fitzmaurice, Laird and Ware chapter 1 is a good bridge to Module 1.
+:::
+
+## References {.smaller}
+
+::: {#refs}
+:::

@@ -1,0 +1,278 @@
+---
+title: "Module 8. Generalized linear mixed models"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+clear <- load_clear() |> arrange(id, week) |> mutate(age45 = (age - 45) / 10)
+diary <- load_diary() |> arrange(id, period)
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Complete, executed solutions to the Module 8 workbook, with model answers and marking notes.
+
+```{r}
+#| label: helpers
+gauss_hermite <- function(n) {
+  i <- seq_len(n - 1)
+  J <- matrix(0, n, n); J[cbind(i, i + 1)] <- J[cbind(i + 1, i)] <- sqrt(i / 2)
+  e <- eigen(J, symmetric = TRUE)
+  list(x = e$values, w = sqrt(pi) * e$vectors[1, ]^2)
+}
+gh <- gauss_hermite(30)
+marginal_p <- function(eta, sigma)
+  sapply(eta, function(e) sum(gh$w / sqrt(pi) * plogis(e + sqrt(2) * sigma * gh$x)))
+```
+
+## Guided exercises
+
+### Exercise 1. Laplace or quadrature?
+
+```{r}
+#| label: ex1
+m_lap <- glmer(itch ~ week * arm + (1 | id), data = clear, family = binomial, nAGQ = 1)
+m_agq <- glmer(itch ~ week * arm + (1 | id), data = clear, family = binomial, nAGQ = 25)
+m_tmb <- glmmTMB(itch ~ week * arm + (1 | id), data = clear, family = binomial)
+cmp1 <- rbind(laplace = c(fixef(m_lap), sd = unname(attr(VarCorr(m_lap)$id, "stddev"))),
+              agq = c(fixef(m_agq), sd = unname(attr(VarCorr(m_agq)$id, "stddev"))),
+              glmmTMB = c(fixef(m_tmb)$cond, sd = unname(attr(VarCorr(m_tmb)$cond$id, "stddev"))))
+round(cmp1, 4)
+```
+
+**(b)** The random-intercept SD changes most: `r f2(cmp1["laplace", "sd"], 3)` with Laplace against `r f2(cmp1["agq", "sd"], 3)` with AGQ. The fixed effects move slightly towards zero under Laplace (interaction `r f2(cmp1["laplace", 4], 4)` against `r f2(cmp1["agq", 4], 4)`). CLEAR has a binary outcome, at most six observations per participant and a large random-intercept variance, which is where the Laplace approximation to the integral is least accurate.
+
+**(c)** `glmmTMB` agrees with the Laplace fit because it uses the Laplace approximation.
+
+*Marking notes.* Accept any `nAGQ` of 10 or more for the AGQ fit.
+
+### Exercise 2. Conditional interpretation and residual checks
+
+```{r}
+#| label: ex2
+ft <- fixef_table(m_agq, exponentiate = TRUE); ft
+fc <- fixef(m_agq); sig <- attr(VarCorr(m_agq)$id, "stddev")
+c(or_week12 = exp(12 * fc["week:armActive"]), icc_latent = sig^2 / (sig^2 + pi^2 / 3))
+res <- simulateResiduals(m_agq, n = 1000, seed = 1)
+plot(res, quantreg = FALSE)
+testDispersion(res, plot = FALSE)
+```
+
+**(b)** For a given participant on placebo, the odds of moderate or severe itch are multiplied by `r f2(ft$estimate[2], 3)` each week. For a given participant on active treatment, they are multiplied each week by a further `r f2(ft$estimate[4], 3)` (95% CI `r f2(ft$lower[4], 3)` to `r f2(ft$upper[4], 3)`).
+
+**(c)** The conditional odds ratio at week 12 is `r f2(exp(12 * fc["week:armActive"]))`: a participant on active treatment has odds of itch about `r round(100 * (1 - exp(12 * fc["week:armActive"])))`% lower than a participant on placebo with the same random intercept and baseline odds. The latent ICC is `r f2(sig^2 / (sig^2 + pi^2 / 3))`.
+
+**(d)** The QQ plot follows the diagonal, the residuals show no pattern against the predictions, and the dispersion test is not significant (`r fmt_p(testDispersion(res, plot = FALSE)$p.value)`): no evidence of misfit.
+
+*Marking notes.* The phrase "for a given participant" (or equivalent) is required for full marks in (b).
+
+### Exercise 3. Why do GLMM and GEE coefficients differ?
+
+```{r}
+#| label: ex3
+gee <- geeglm(itch ~ week * arm, id = factor(id), waves = visit, data = clear,
+              family = binomial, corstr = "exchangeable")
+atten <- 1 / sqrt(1 + 0.346 * sig^2)
+grid <- expand.grid(week = c(0, 2, 4, 6, 8, 12),
+                    arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")))
+X <- model.matrix(~ week * arm, grid)
+grid$p <- marginal_p(X %*% fc, sig)
+exact <- coef(suppressWarnings(glm(p ~ week * arm, family = binomial, data = grid)))
+t3 <- cbind(glmm = fc, approx_marginal = fc * atten, exact_marginal = exact, gee = coef(gee))
+round(t3, 4)
+true_marg <- c(-0.06, -0.16) / sqrt(1 + 0.346 * 2^2); true_marg
+```
+
+**(b, c)** The attenuation factor is `r f2(atten, 3)`. The approximate marginal interaction is `r f2(t3[4, 2], 4)`, the exact one `r f2(t3[4, 3], 4)`, and GEE estimates `r f2(t3[4, 4], 4)`, against a conditional `r f2(t3[4, 1], 4)`.
+
+**(d)** GEE estimates should be compared with the true *marginal* values, about `r f2(true_marg[1], 3)` (week) and `r f2(true_marg[2], 3)` (week:armActive) by the approximation. Comparing them with −0.06 and −0.16 would wrongly suggest that GEE is biased towards zero.
+
+**(e)** Model answer: "The mixed-model odds ratio compares the same patient on and off treatment; because patients differ a lot in their underlying tendency to itch, an individual's odds change more steeply than the overall proportion in a group of patients. The GEE (or the averaged mixed-model) result describes the proportion of patients with itch, so it answers your question: at week 12, about `r round(100 * marginal_p(sum(fc * c(1, 12, 0, 0)), sig))`% on placebo and `r round(100 * marginal_p(sum(fc * c(1, 12, 1, 12)), sig))`% on active treatment."
+
+*Marking notes.* Common error: concluding that one of the two analyses is wrong.
+
+### Exercise 4. Predicted probabilities with uncertainty
+
+```{r}
+#| label: ex4
+emmeans(m_agq, ~ arm | week, at = list(week = c(0, 12)), type = "response")
+V_joint <- 2 * solve(m_agq@optinfo$derivs$Hessian)
+set.seed(1)
+draws <- MASS::mvrnorm(4000, mu = c(getME(m_agq, "theta"), fc), Sigma = V_joint)
+pg <- expand.grid(arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")),
+                  week = c(0, 12))
+Xp <- model.matrix(~ week * arm, pg)
+md <- apply(draws, 1, function(d) marginal_p(Xp %*% d[-1], abs(d[1])))
+pg$marginal <- marginal_p(Xp %*% fc, sig)
+pg$lower <- apply(md, 1, quantile, 0.025)
+pg$upper <- apply(md, 1, quantile, 0.975)
+pg
+rd <- c(pg$marginal[4] - pg$marginal[3], quantile(md[4, ] - md[3, ], c(0.025, 0.975)))
+rr <- c(pg$marginal[4] / pg$marginal[3], quantile(md[4, ] / md[3, ], c(0.025, 0.975)))
+rbind(risk_difference = rd, risk_ratio = rr) |> round(3)
+```
+
+**(a)** These are probabilities for a participant with random intercept 0 (a median participant), with delta-method intervals; they are not population proportions.
+
+**(c)** Marginal risk difference at week 12: `r fmt_ci(rd[1], rd[2], rd[3], 3)`; risk ratio `r fmt_ci(rr[1], rr[2], rr[3], 2)`.
+
+**(d)** Averaging the S-shaped inverse logit over participants with very low and very high propensities mixes probabilities near 0 and near 1, pulling the average towards 0.5.
+
+*Marking notes.* Draw-based intervals vary slightly with the seed. Accept a parametric bootstrap (`bootMer`) as an alternative.
+
+### Exercise 5. Poisson or negative binomial?
+
+```{r}
+#| label: ex5
+m_pois <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                  data = diary, family = poisson)
+m_nb <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                data = diary, family = nbinom2)
+pr <- sum(residuals(m_pois, type = "pearson")^2) / df.residual(m_pois); pr
+r_pois <- simulateResiduals(m_pois, n = 1000, seed = 1)
+r_nb <- simulateResiduals(m_nb, n = 1000, seed = 1)
+testDispersion(r_pois, plot = FALSE); testDispersion(r_nb, plot = FALSE)
+k <- "post:armActive"
+rbind(poisson = c(est = fixef(m_pois)$cond[k], se = sqrt(vcov(m_pois)$cond[k, k])),
+      negbin = c(est = fixef(m_nb)$cond[k], se = sqrt(vcov(m_nb)$cond[k, k])))
+```
+
+**(b, c)** The Pearson ratio of the Poisson model is `r f2(pr)` and the DHARMa test signals overdispersion; the NB model shows none. The Poisson SE of the treatment effect (`r f2(sqrt(vcov(m_pois)$cond[k, k]), 3)`) is much smaller than the NB SE (`r f2(sqrt(vcov(m_nb)$cond[k, k]), 3)`) because the Poisson model ignores the extra variation. Report the NB model.
+
+*Marking notes.* Penalise reporting the Poisson model's p-value as evidence of an effect.
+
+### Exercise 6. Zero inflation, rate ratios and expected counts
+
+```{r}
+#| label: ex6
+testZeroInflation(r_pois, plot = FALSE); testZeroInflation(r_nb, plot = FALSE)
+m_zinb <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                  ziformula = ~ 1, data = diary, family = nbinom2)
+AIC(m_pois, m_nb, m_zinb)
+t6 <- fixef_table(m_nb, exponentiate = TRUE); t6
+s_nb <- attr(VarCorr(m_nb)$cond$id, "stddev")
+e_c <- emmeans(m_nb, ~ arm | post, offset = log(28), type = "response"); e_c
+e_m <- emmeans(m_nb, ~ arm | post, offset = log(28), type = "response",
+               bias.adjust = TRUE, sigma = s_nb); e_m
+```
+
+```{r}
+#| label: ex6-values
+#| include: false
+ec6 <- as.data.frame(e_c); em6 <- as.data.frame(e_m)
+```
+
+**(a)** The Poisson model appears zero-inflated, the NB model does not, and the ZINB model has a higher AIC than the NB model. The excess zeros of the Poisson model are a consequence of overdispersion; there is no evidence (and no substantive reason) for a separate zero process.
+
+**(b)** Ratio of rate ratios `r fmt_ci(t6$estimate[4], t6$lower[4], t6$upper[4], 2)`.
+
+**(c)** During treatment, for $b_{0i} = 0$: `r f2(ec6$response[3], 1)` (placebo) and `r f2(ec6$response[4], 1)` (active) migraine days per 28 days; averaged over participants: `r f2(em6$response[3], 1)` and `r f2(em6$response[4], 1)`.
+
+**(d)** With a log link, $E(Y) = \exp(\mathbf{x}^\top\boldsymbol\beta)\,E\{\exp(b_{0i})\}$: averaging over the random intercept multiplies every mean by the same constant $\exp(\tau_0^2/2)$, so ratios are unchanged. With a logit link the averaging changes the shape of the curve and the odds ratios shrink towards 1.
+
+### Exercise 7. Categorical time in the CLEAR GLMM
+
+```{r}
+#| label: ex7
+m7 <- glmer(itch ~ week_f * arm + (1 | id), data = clear, family = binomial, nAGQ = 25,
+            control = glmerControl(optimizer = "bobyqa"))
+f7 <- fixef(m7); s7 <- attr(VarCorr(m7)$id, "stddev")
+or12 <- confint(contrast(emmeans(m7, ~ arm | week_f, at = list(week_f = "12")),
+                         "revpairwise"), type = "response")
+or12
+V7 <- 2 * solve(m7@optinfo$derivs$Hessian)
+set.seed(7)
+d7 <- MASS::mvrnorm(4000, c(getME(m7, "theta"), f7), V7)
+nd <- data.frame(week_f = factor("12", levels = levels(clear$week_f)),
+                 arm = factor(c("Placebo", "Active"), levels = c("Placebo", "Active")))
+X7 <- model.matrix(~ week_f * arm, nd)
+md7 <- apply(d7, 1, function(d) marginal_p(X7 %*% d[-1], abs(d[1])))
+p7 <- marginal_p(X7 %*% f7, s7)
+rd7 <- c(p7[2] - p7[1], quantile(md7[2, ] - md7[1, ], c(0.025, 0.975)))
+round(rd7, 3)
+```
+
+```{r}
+#| label: ex7-values
+#| include: false
+o12 <- as.data.frame(or12)
+```
+
+The conditional odds ratio at week 12 is `r fmt_ci(o12$odds.ratio, o12$asymp.LCL, o12$asymp.UCL, 2)` and the population-averaged risk difference `r fmt_ci(rd7[1], rd7[2], rd7[3], 3)`, compared with `r fmt_ci(rd[1], rd[2], rd[3], 3)` from the linear-in-week model. The categorical model makes no assumption about the shape of the trajectory and its interval is wider.
+
+With the default optimiser this model reports a convergence warning (a large gradient); switching to `glmerControl(optimizer = "bobyqa")`, as here, converges cleanly. Module 11 discusses convergence warnings in detail.
+
+*Marking notes.* Note that the conditional odds ratio includes the baseline difference term; accept either a comparison at week 12 or a difference-in-change formulation if clearly described.
+
+### Exercise 8. A random slope for week?
+
+```{r}
+#| label: ex8
+m8_ri <- glmer(itch ~ week * arm + (1 | id), data = clear, family = binomial)
+m8_rs <- glmer(itch ~ week * arm + (1 + week | id), data = clear, family = binomial)
+VarCorr(m8_rs)
+lr8 <- lr_test(m8_ri, m8_rs); lr8
+p_mix <- 0.5 * pchisq(lr8$chisq, 1, lower.tail = FALSE) +
+  0.5 * pchisq(lr8$chisq, 2, lower.tail = FALSE)
+p_mix
+```
+
+Read any convergence or singular-fit message printed above: a random-slope variance close to zero or a correlation at ±1 indicates that the data contain little information about slope variation. The likelihood-ratio statistic is `r f2(lr8$chisq)`; with the boundary-corrected 50:50 mixture of $\chi^2_1$ and $\chi^2_2$ the p-value is `r fmt_p(p_mix)`. `r if (p_mix > 0.05) "There is no evidence that a random slope is needed, consistent with the generating model, which has a random intercept only." else "The test suggests a random slope; check whether this is plausible."` With a random slope the variance of $b_{0i} + b_{1i}t$ changes over time, so the attenuation factor differs by week and no single factor converts all coefficients.
+
+*Marking notes.* Credit use of the boundary-corrected reference distribution (Module 5) and recognition that AGQ is not available with two random effects in `glmer`.
+
+### Exercise 9. Period-specific rate ratios in DIARY
+
+```{r}
+#| label: ex9
+m9 <- glmmTMB(migraine_days ~ period_f * arm + offset(log(days)) + (1 | id),
+              data = diary, family = nbinom2)
+e9 <- emmeans(m9, ~ period_f * arm)
+rr9 <- confint(contrast(e9, interaction = c("trt.vs.ctrl1", "revpairwise")),
+               type = "response")
+rr9
+```
+
+```{r}
+#| label: ex9-values
+#| include: false
+r9 <- as.data.frame(rr9)
+```
+
+The period-specific ratios of rate ratios range from `r f2(min(r9$ratio))` to `r f2(max(r9$ratio))`, with wide, overlapping intervals and no trend, so a single post-baseline effect is a reasonable and more precise summary (the generating model has a constant effect).
+
+### Exercise 10. Attenuation by simulation
+
+```{r}
+#| label: ex10
+sim_att <- function(sd_b, n = 2000, beta = -1) {
+  d <- expand.grid(visit = 1:6, id = seq_len(n))
+  d$trt <- as.integer(d$id > n / 2)
+  b <- rnorm(n, 0, sd_b)
+  d$y <- rbinom(nrow(d), 1, plogis(beta * d$trt + b[d$id]))
+  coef(geeglm(y ~ trt, id = id, data = d, family = binomial,
+              corstr = "independence"))["trt"]
+}
+set.seed(10)
+att <- data.frame(sd_b = c(0, 1, 2, 3))
+att$gee <- sapply(att$sd_b, sim_att)
+att$approx <- -1 / sqrt(1 + 0.346 * att$sd_b^2)
+# exact marginal log-odds ratio by numerical integration
+att$exact <- sapply(att$sd_b, function(s) qlogis(marginal_p(-1, s)) - qlogis(marginal_p(0, s)))
+att
+ggplot(att, aes(sd_b)) +
+  geom_line(aes(y = approx), linetype = 2) +
+  geom_point(aes(y = gee), size = 2) +
+  labs(x = "Random-intercept SD", y = "Marginal log-odds ratio")
+```
+
+The marginal log-odds ratio estimated by GEE shrinks towards zero as the random-intercept SD grows, following the approximation (dashed line); at $\tau_0 = 0$ it is close to the conditional value −1. The exact values from numerical integration (`r paste(f2(att$exact), collapse = ", ")`) and the approximation (`r paste(f2(att$approx), collapse = ", ")`) agree closely. The GEE estimates (`r paste(f2(att$gee), collapse = ", ")`) come from one simulated dataset per SD, so they scatter around the exact values because of sampling error, which with 2,000 participants is of the order of 0.05 to 0.1 on the log-odds scale.
+
+*Marking notes.* Small departures from the line reflect sampling error and, at large SDs, the limits of the approximation.

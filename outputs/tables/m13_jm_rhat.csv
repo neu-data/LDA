@@ -1,0 +1,10 @@
+parameter,Rhat
+diabetes,1.0001943538271993
+value(egfr),1.004613028194003
+(Intercept),1.00077729268485
+"ns(years, knots = 2.5, Boundary.knots = c(0, 5))1",1.0109225203796004
+"ns(years, knots = 2.5, Boundary.knots = c(0, 5))2",1.0113260309577186
+diabetes,1.0000840712636463
+age10,1.0000518939926561
+diabetes:years,1.00937617260235
+sigma,1.0006681397444046

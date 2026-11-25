@@ -1,0 +1,356 @@
+---
+title: "Module 11. Diagnostics and troubleshooting"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk  <- load_walk()
+clear <- load_clear()
+diary <- load_diary()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This answer key gives complete, executed solutions to the Module 11 workbook, with model answers and marking notes.
+
+## Guided exercises
+
+### Exercise G1. Conditional and marginal residuals for the linear-time model (LO 11.1)
+
+```{r}
+#| label: g1
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+res_lin <- walk |>
+  mutate(fit_cond = fitted(m_lin),
+         fit_marg = predict(m_lin, re.form = NA),
+         res_cond_std = resid(m_lin, scaled = TRUE),
+         res_marg = sbp - fit_marg)
+```
+
+```{r}
+#| label: fig-g1
+#| fig-cap: "Linear-time model. Left: marginal residuals against time. Right: standardised conditional residuals against time. Loess smoothers by arm."
+#| fig-width: 9
+#| fig-height: 4
+p1 <- ggplot(res_lin, aes(month, res_marg, colour = arm)) +
+  geom_point(alpha = 0.15, size = 0.6) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE) +
+  geom_hline(yintercept = 0, linetype = 2) + scale_colour_arm(name = NULL) +
+  coord_cartesian(ylim = c(-8, 8)) +
+  labs(x = "Actual time (months)", y = "Marginal residual (mmHg)")
+p2 <- ggplot(res_lin, aes(month, res_cond_std, colour = arm)) +
+  geom_point(alpha = 0.15, size = 0.6) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE) +
+  geom_hline(yintercept = 0, linetype = 2) + scale_colour_arm(name = NULL) +
+  labs(x = "Actual time (months)", y = "Standardised conditional residual")
+p1 | p2
+```
+
+```{r}
+#| label: g1-numbers
+res_by_visit <- res_lin |>
+  group_by(arm, month_sched) |>
+  summarise(mean_marg = mean(res_marg), mean_cond = mean(res_cond_std * sigma(m_lin)))
+res_by_visit |> filter(arm == "EP")
+ep <- res_by_visit |> filter(arm == "EP")
+```
+
+**Answers.** (i) In the programme arms the mean marginal residual follows a systematic wave: in the EP arm it is `r round(ep$mean_marg[ep$month_sched == 0], 1)` mmHg at baseline, `r round(ep$mean_marg[ep$month_sched == 3], 1)` mmHg at month 3 and `r round(ep$mean_marg[ep$month_sched == 12], 1)` mmHg at month 12. The observed SBP falls quickly and then levels off, while the straight line falls steadily, so the line is too low at baseline, too high in the first months and too low again at month 12. The linear-time mean model is misspecified for the programme arms. (ii) The conditional residuals show the same wave (mean conditional residuals in EP: `r round(ep$mean_cond[ep$month_sched == 3], 1)` mmHg at month 3, `r round(ep$mean_cond[ep$month_sched == 12], 1)` mmHg at month 12). Random slopes let each participant have a different straight line, but they cannot absorb a curvature shared by everyone in an arm, so the misfit remains in both kinds of residual. It is easier to see in the conditional residuals because they are much less variable than the marginal ones, which include each participant's level. (iii) No. The linear model forces the EP − UC difference to grow steadily, so it underestimates the early difference. The categorical-time primary model is appropriate for visit-specific contrasts.
+
+*Marking notes.* Accept any clear description of the wave pattern. For (ii), full marks require the point that random slopes cannot absorb curvature common to an arm.
+
+### Exercise G2. Influential participants (LO 11.1)
+
+```{r}
+#| label: g2a
+m_pri <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+loo <- readRDS(here("outputs", "models", "m11_loo.rds"))
+se_ep12 <- sqrt(vcov(m_pri)["visit_f12:armEP", "visit_f12:armEP"])
+loo <- loo |>
+  mutate(dfbeta = fixef(m_pri)["visit_f12:armEP"] - ep12,
+         frac_se = abs(dfbeta) / se_ep12) |>
+  left_join(walk |> distinct(id, arm), by = "id") |>
+  arrange(desc(frac_se))
+head(loo, 5)
+```
+
+```{r}
+#| label: fig-g2
+#| fig-cap: "Observed SBP for the three most influential participants (solid) and the observed arm means by scheduled visit (dashed)."
+top3 <- loo$id[1:3]
+arm_means <- walk |> group_by(arm, month_sched) |> summarise(sbp = mean(sbp))
+ggplot(filter(walk, id %in% top3), aes(month, sbp, group = id)) +
+  geom_line(aes(colour = arm), linewidth = 0.8) +
+  geom_point(aes(colour = arm)) +
+  geom_line(data = arm_means, aes(month_sched, sbp, group = arm, colour = arm),
+            linetype = 2) +
+  scale_colour_arm(name = NULL) +
+  labs(x = "Months", y = "SBP (mmHg)")
+```
+
+```{r}
+#| label: g2c
+m_drop <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+               data = filter(walk, id != top3[1]), control = lmer_ctrl)
+c(full = fixef(m_pri)["visit_f12:armEP"],
+  without = fixef(m_drop)["visit_f12:armEP"])
+```
+
+```{r}
+#| label: g2-numbers
+#| include: false
+change_g2 <- walk |> filter(id %in% top3) |> group_by(id, arm) |>
+  summarise(change = sbp[month_sched == max(month_sched)] - sbp[month_sched == 0],
+            last = max(month_sched))
+```
+
+**Answers.** (i) The most influential participant, `r top3[1]` (`r loo$arm[1]` arm), moves the estimate by `r round(loo$dfbeta[1], 2)` mmHg. The three most influential participants are in the UC or EP arms (the arms in the contrast) and have unusual changes from baseline relative to their arm: their changes to the last visit are `r paste(round(change_g2$change, 0), collapse = ", ")` mmHg. Participants with complete follow-up and little shrinkage carry more weight. (ii) No. The largest shift is `r round(100 * loo$frac_se[1])`% of the standard error, well below half. Refitting without `r top3[1]` reproduces the leave-one-out value (`r round(fixef(m_drop)["visit_f12:armEP"], 3)` against `r round(fixef(m_pri)["visit_f12:armEP"], 3)` with everyone). (iii) A participant's observations are correlated and enter the likelihood together through their random effects; deleting one observation leaves the participant's other observations, and the BLUPs, to pull the fit in the same direction, so observation-level deletion understates influence.
+
+*Marking notes.* Accept "unusual trajectory relative to the arm" for (i). For (ii) the key point is comparing the shift with the SE, not with a fixed cut-off.
+
+### Exercise G3. BLUPs and shrinkage (LO 11.2)
+
+```{r}
+#| label: g3a
+m_ri <- lmer(sbp ~ visit_f * arm + (1 | id), data = walk, control = lmer_ctrl)
+tau0_sq  <- as.data.frame(VarCorr(m_ri))$vcov[1]
+sigma_sq <- sigma(m_ri)^2
+lam <- data.frame(n_i = 1:6, lambda = tau0_sq / (tau0_sq + sigma_sq / (1:6)))
+lam
+```
+
+```{r}
+#| label: g3b
+blup <- data.frame(id = rownames(ranef(m_ri)$id), b0 = ranef(m_ri)$id[, 1]) |>
+  left_join(count(walk, id, name = "n_i"), by = "id")
+blup_sd <- blup |>
+  mutate(group = ifelse(n_i < 4, "fewer than 4", ifelse(n_i == 6, "6", "4-5"))) |>
+  group_by(group) |> summarise(n = n(), sd_blup = sd(b0))
+blup_sd
+sqrt(tau0_sq)
+```
+
+**Answers.** (i) Each BLUP is $\lambda_i$ times the participant's deviation from the mean, with $\lambda_i < 1$, so BLUPs are pulled towards zero and vary less than the true random effects. Here $\lambda_i$ ranges from `r round(lam$lambda[1], 2)` for one observation to `r round(lam$lambda[6], 2)` for six, because $\tau_0^2 =$ `r round(tau0_sq)` is large relative to $\sigma^2 =$ `r round(sigma_sq)`. The SD of the BLUPs is `r round(blup_sd$sd_blup[blup_sd$group == "fewer than 4"], 1)` mmHg for participants with fewer than 4 observations and `r round(blup_sd$sd_blup[blup_sd$group == "6"], 1)` mmHg for those with 6, against $\hat\tau_0 =$ `r round(sqrt(tau0_sq), 1)` mmHg. Overall, the SD of the BLUPs is `r round(sd(blup$b0), 1)` mmHg, below $\hat\tau_0$. The group with fewer than 4 observations has the most shrinkage but nevertheless a larger SD: these participants are mostly dropouts, and dropout depended on high SBP, so their true deviations are more spread out. Comparisons of BLUPs between groups mix shrinkage with selection. (ii) A straight Q–Q plot of BLUPs is weak evidence: shrinkage pulls their distribution towards the assumed normal, and the notes showed a bimodal distribution whose BLUPs looked normal. In any case, the fixed effects are not sensitive to this assumption in a study of this size.
+
+*Marking notes.* Full marks for (i) require the link between $n_i$ and the amount of shrinkage.
+
+### Exercise G4. Simulation-based residuals for DIARY (LO 11.3)
+
+```{r}
+#| label: g4a
+#| fig-width: 9
+#| fig-height: 4.5
+m_pois <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                  family = poisson, data = diary)
+m_nb   <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                  family = nbinom2, data = diary)
+s_pois <- simulateResiduals(m_pois, n = 500, seed = 1)
+s_nb   <- simulateResiduals(m_nb, n = 500, seed = 1)
+plot(s_pois)
+d_p <- testDispersion(s_pois, plot = FALSE); z_p <- testZeroInflation(s_pois, plot = FALSE)
+d_n <- testDispersion(s_nb, plot = FALSE);   z_n <- testZeroInflation(s_nb, plot = FALSE)
+data.frame(model = c("Poisson", "NB"),
+           dispersion = c(d_p$statistic, d_n$statistic),
+           disp_p = c(d_p$p.value, d_n$p.value),
+           zero_ratio = c(z_p$statistic, z_n$statistic),
+           zero_p = c(z_p$p.value, z_n$p.value))
+```
+
+```{r}
+#| label: g4b
+s_nb_u <- simulateResiduals(m_nb, n = 500, seed = 1, simulateREs = "unconditional")
+g_c <- testDispersion(recalculateResiduals(s_nb, group = diary$id), plot = FALSE)
+g_u <- testDispersion(recalculateResiduals(s_nb_u, group = diary$id), plot = FALSE)
+c(conditional = g_c$p.value, unconditional = g_u$p.value)
+```
+
+**Answers.** (i) The negative binomial model. The Poisson model is overdispersed (dispersion ratio `r round(d_p$statistic, 2)`, `r fmt_p(d_p$p.value)`) and its Q–Q plot departs from the diagonal; the negative binomial model's ratio is `r round(d_n$statistic, 2)` (`r fmt_p(d_n$p.value)`). (ii) No. The Poisson model predicts too few zeros (ratio `r round(z_p$statistic, 2)`) because its variance is too small; the negative binomial model reproduces the zeros (ratio `r round(z_n$statistic, 2)`, `r fmt_p(z_n$p.value)`). (iii) The unconditional result (`r fmt_p(g_u$p.value)`). Conditional simulations keep each participant's predicted random effect fixed, so they understate the spread of participant totals and the grouped test is miscalibrated (conditional `r fmt_p(g_c$p.value)` here); the notes showed that it rejected a correct model in every one of 20 simulated datasets.
+
+*Marking notes.* Penalise answers that add zero inflation. For (iii) the essential point is the calibration of the participant-level test.
+
+### Exercise G5. Rescaling, `allFit()` and sparse data (LO 11.4)
+
+```{r}
+#| label: g5a
+walk_w <- walk |> mutate(week = month * 4.348, age10 = (age - 60) / 10)
+m_w <- lmer(sbp ~ week * arm + age + (1 + week | id), data = walk_w,
+            control = lmer_ctrl)
+m_m <- lmer(sbp ~ month * arm + age10 + (1 + month | id), data = walk_w,
+            control = lmer_ctrl)
+c(weeks = unname(fixef(m_w)["week:armEP"] * 4.348),
+  months = unname(fixef(m_m)["month:armEP"]))
+m_w@optinfo$conv$lme4$messages
+```
+
+```{r}
+#| label: g5b
+m_m2 <- lmer(sbp ~ month * arm + age10 + (1 + month | id), data = walk_w,
+             control = lmerControl(optimizer = "bobyqa"))
+af <- summary(allFit(m_m2, verbose = FALSE))
+af$llik
+af$fixef[, "month:armEP"]
+```
+
+```{r}
+#| label: g5c
+sev3 <- clear |> filter(week == 0, severity == 3) |> pull(id)
+tab_g5 <- clear |> filter(id %in% sev3, week == 12) |> count(arm, itch)
+tab_g5
+```
+
+**Answers.** (i) The EP slope difference per month is the same in both parameterisations (`r round(fixef(m_w)["week:armEP"] * 4.348, 3)` and `r round(fixef(m_m)["month:armEP"], 3)` mmHg/month). Any message from the weeks model (`r if (length(m_w@optinfo$conv$lme4$messages) == 0) "none here" else "shown above"`) reflects scaling, not a different answer: the models are reparameterisations of each other, and all `r length(af$llik)` optimisers give the same log-likelihood (range `r formatC(diff(range(af$llik)), format = "e", digits = 0)`) and slope for the rescaled model. (ii) Only `r length(sev3)` participants had severe itch at baseline, `r sum(tab_g5$n)` of whom were seen at week 12, and the smallest arm-by-outcome cell contains `r min(tab_g5$n)` participants. A subgroup estimate from such a table is unstable, and a cell with no events would mean separation. Report the table, use a penalised method (Firth or a weakly informative prior) if an estimate is needed, and treat the subgroup result as exploratory. Do not report the maximum-likelihood coefficient.
+
+*Marking notes.* For (i) accept any answer that checks the estimates rather than the warning alone.
+
+### Exercise G6. Analysis log entries (LO 11.6)
+
+Model answer (two entries):
+
+| Field | Entry 1 | Entry 2 |
+|---|---|---|
+| Category | Model specification | Convergence or fitting |
+| Status | Data-driven, blind to comparison (if pre-specified in the SAP as "negative binomial if Poisson is overdispersed", write "Pre-specified") | Data-driven, blind to comparison |
+| What was observed | Poisson GLMM: DHARMa dispersion ratio `r round(d_p$statistic, 2)`, zero ratio `r round(z_p$statistic, 2)` | Linear-time model with time in weeks and age in years: scaling message from lme4 (if any) |
+| Decision | Negative binomial GLMM (nbinom2) with the same mean model and offset | Time in months, age per 10 years centred at 60 |
+| Reason | Overdispersion; NB residuals consistent with the model; zeros explained without zero inflation | Reparameterisation; avoids badly scaled parameters |
+| Alternatives considered | Observation-level random effect; zero-inflated model (rejected: zeros as expected under NB) | `allFit()` on the original scaling |
+| Effect on estimates | `armActive:post` `r round(fixef(m_pois)$cond[4], 3)` (SE `r round(sqrt(vcov(m_pois)$cond[4, 4]), 3)`) to `r round(fixef(m_nb)$cond[4], 3)` (SE `r round(sqrt(vcov(m_nb)$cond[4, 4]), 3)`) | None: EP slope difference `r round(fixef(m_m)["month:armEP"], 3)` mmHg/month in both |
+
+*Marking notes.* The Status and Effect fields are essential. Deduct marks for entries that do not quote what was observed.
+
+## Independent exercises
+
+### Exercise I1. GEE mean-model check for DIARY (LO 11.3)
+
+```{r}
+#| label: i1
+diary_g <- diary |> mutate(id_f = factor(id)) |> arrange(id_f, period)
+g_post <- geeglm(migraine_days ~ arm * post + offset(log(days)), id = id_f,
+                 family = poisson, corstr = "exchangeable", data = diary_g)
+g_per  <- geeglm(migraine_days ~ arm * period_f + offset(log(days)), id = id_f,
+                 family = poisson, corstr = "exchangeable", data = diary_g)
+diary_g <- diary_g |>
+  mutate(rate_post = fitted(g_post)[, 1] / days, rate_per = fitted(g_per)[, 1] / days,
+         pres = (migraine_days - fitted(g_post)[, 1]) / sqrt(fitted(g_post)[, 1]))
+chk <- diary_g |> group_by(arm, period) |>
+  summarise(observed = sum(migraine_days) / sum(days),
+            post_model = mean(rate_post), period_model = mean(rate_per))
+chk
+c(QIC_post = QIC(g_post)[["QIC"]], QIC_period = QIC(g_per)[["QIC"]])
+```
+
+```{r}
+#| label: fig-i1
+#| fig-cap: "DIARY GEE. Left: observed rates (points), arm-by-post model (solid) and arm-by-period model (dashed). Right: Pearson residuals of the arm-by-post model by period."
+#| fig-width: 9
+#| fig-height: 4
+pa <- ggplot(chk, aes(period, observed, colour = arm)) + geom_point(size = 2) +
+  geom_line(aes(y = post_model)) + geom_line(aes(y = period_model), linetype = 2) +
+  scale_colour_arm(name = NULL) + labs(x = "Period", y = "Migraine days per diary day")
+pb <- ggplot(diary_g, aes(factor(period), pres, fill = arm)) +
+  geom_boxplot(outlier.size = 0.5, linewidth = 0.3) + scale_fill_arm(name = NULL) +
+  labs(x = "Period", y = "Pearson residual")
+pa | pb
+```
+
+**Model answer.** The arm-by-post model assumes a constant rate in each arm over periods 1 to 6. The observed rates fluctuate around the fitted post-baseline rates (in the placebo arm between `r round(min(chk$observed[chk$arm == "Placebo" & chk$period > 0]), 3)` and `r round(max(chk$observed[chk$arm == "Placebo" & chk$period > 0]), 3)` migraine days per diary day) without a trend in either arm, and the Pearson residuals are centred near zero in every period. QIC is `r round(QIC(g_post)[["QIC"]], 1)` for the arm-by-post model and `r round(QIC(g_per)[["QIC"]], 1)` for the arm-by-period model; lower is better, so QIC favours the period-specific model, which reproduces the period-to-period fluctuations. Because those fluctuations have no systematic pattern, the arm-by-post model is a reasonable summary if the estimand is the average post-baseline rate ratio; the period-specific estimates can be reported as a supplement. QIC is one piece of evidence, not a decision rule. Because DIARY dropout is completely at random, unweighted GEE is appropriate here.
+
+*Marking notes.* Credit use of exposure (rates per diary day rather than raw counts). Accept either conclusion if it is supported by the plots and QIC and linked to the estimand.
+
+### Exercise I2. Separation and penalised likelihood (LO 11.4)
+
+```{r}
+#| label: i2
+firth_logit <- function(X, y, maxit = 100, tol = 1e-8) {
+  b <- rep(0, ncol(X))
+  for (it in seq_len(maxit)) {
+    p <- as.vector(plogis(X %*% b)); w <- p * (1 - p)
+    XtWX <- crossprod(X, w * X)
+    h <- w * rowSums((X %*% solve(XtWX)) * X)
+    step <- solve(XtWX, crossprod(X, y - p + h * (0.5 - p)))
+    b <- b + as.vector(step)
+    if (max(abs(step)) < tol) break
+  }
+  p <- as.vector(plogis(X %*% b))
+  data.frame(term = colnames(X), estimate = b,
+             se = sqrt(diag(solve(crossprod(X, p * (1 - p) * X)))))
+}
+set.seed(2211)
+n <- 60
+d <- expand.grid(visit = 0:3, id = seq_len(n)) |>
+  mutate(active = as.integer(id > n / 2), post = as.integer(visit > 0))
+b <- rnorm(n, 0, 0.5)
+d$event <- rbinom(nrow(d), 1, plogis(-2.5 + b[d$id] - 2 * d$active * d$post))
+d$event[d$active == 1 & d$post == 1] <- 0
+d$id <- factor(d$id)
+with(d, table(active, post, event))
+m_ml <- glm(event ~ active * post, family = binomial, data = d)
+f_fi <- firth_logit(model.matrix(~ active * post, data = d), d$event)
+m_pr <- glmmTMB(event ~ active * post + (1 | id), family = binomial, data = d,
+                priors = data.frame(prior = "normal(0, 2.5)", class = "fixef"))
+i2 <- data.frame(method = c("ML", "Firth", "glmmTMB prior"),
+                 estimate = c(coef(m_ml)[4], f_fi$estimate[4], fixef(m_pr)$cond[4]),
+                 se = c(sqrt(vcov(m_ml)[4, 4]), f_fi$se[4], sqrt(vcov(m_pr)$cond[4, 4])))
+i2
+```
+
+**Model answer.** The ML estimate (`r round(i2$estimate[1], 1)`, SE `r round(i2$se[1])`) is meaningless: under separation the likelihood has no maximum. Firth's method gives `r round(i2$estimate[2], 2)` (SE `r round(i2$se[2], 2)`) and the prior-penalised GLMM `r round(i2$estimate[3], 2)` (SE `r round(i2$se[3], 2)`). I would report the cross-tabulation (no post-baseline events in the active arm), the Firth or penalised GLMM estimate with a profile-likelihood interval if available, a statement that the estimate depends on the penalty, and a sensitivity analysis with a different prior scale. The fixed-effects Firth fit ignores clustering, so for inference the penalised GLMM (or a Firth fit with a cluster-robust SE) is preferable.
+
+*Marking notes.* Simulated values will differ with a different seed; mark the reasoning. Full marks require reporting the sparse table.
+
+### Exercise I3. Responding to diagnostics (LO 11.5)
+
+**Model answers.** (a) Fit a model with visit-specific residual variances (`nlme::lme` or `gls` with `varIdent(form = ~ 1 | visit_f)`) as a sensitivity analysis and report it next to the primary result; keep the primary model as pre-specified unless the SAP said otherwise; record the observation, decision and the change in the estimate and its SE. Do not log-transform the outcome without considering that this changes the estimand. (b) Refuse. Choosing the random-effects structure by the p-value of the treatment effect invalidates the inference. If the random slope is genuinely unsupported (singular fit), simplify in the pre-specified order and report it; record the request and the decision as post hoc if anything changes. (c) Check the value against the source data first; a 60 mmHg drop suggests an error (a transcription such as 92 for 152). If it is an error, correct it from the source and log the correction. If the value is verified, keep it in the primary analysis and report a sensitivity analysis without the participant, since 0.8 of an SE is a material shift. Never delete it silently.
+
+*Marking notes.* Each answer should name the action, what not to do, and what is logged.
+
+### Exercise I4. Non-normal random effects with sparse data (LO 11.2)
+
+```{r}
+#| label: i4
+#| message: false
+draw_re <- function(n, shape) {
+  switch(shape, normal = rnorm(n), skewed = (rchisq(n, 2) - 2) / 2,
+         bimodal = sample(c(-1, 1), n, TRUE) * 0.9 + rnorm(n, 0, sqrt(1 - 0.81)))
+}
+sim_re_shape <- function(shape, n_per_arm = 60, times = c(0, 3, 6, 9, 12),
+                         delta = -0.5, sd_int = 11, sd_slope = 0.4, sd_resid = 6) {
+  n <- 2 * n_per_arm; trt <- rep(0:1, each = n_per_arm)
+  u0 <- sd_int * draw_re(n, shape); u1 <- sd_slope * draw_re(n, shape)
+  d <- expand.grid(time = times, id = seq_len(n)); d$trt <- trt[d$id]
+  d$y <- 150 - 0.2 * d$time + delta * d$trt * d$time +
+    u0[d$id] + u1[d$id] * d$time + rnorm(nrow(d), 0, sd_resid)
+  d$id <- factor(d$id); d
+}
+set.seed(2214)
+i4 <- bind_rows(lapply(c("normal", "skewed", "bimodal"), function(sh) {
+  bind_rows(lapply(1:100, function(r) {
+    d <- sim_re_shape(sh, n_per_arm = 30, times = c(0, 6, 12))
+    m <- suppressMessages(lmer(y ~ time * trt + (1 + time | id), data = d,
+              control = lmerControl(optimizer = "bobyqa", calc.derivs = FALSE,
+                                    check.nobs.vs.nRE = "ignore")))
+    s <- coef(summary(m))["time:trt", ]
+    data.frame(shape = sh, est = s[["Estimate"]], se = s[["Std. Error"]],
+               singular = isSingular(m))
+  }))
+}))
+i4_sum <- i4 |> group_by(shape) |>
+  summarise(bias = mean(est) + 0.5, mcse_bias = sd(est) / sqrt(n()),
+            emp_se = sd(est), model_se = mean(se),
+            coverage = mean(abs(est + 0.5) <= qnorm(0.975) * se),
+            mcse_cov = sqrt(coverage * (1 - coverage) / n()),
+            singular = mean(singular))
+i4_sum
+```
+
+**Model answer.** With 30 per arm and three visits the estimates are much less precise (empirical SE `r round(min(i4_sum$emp_se), 2)` to `r round(max(i4_sum$emp_se), 2)` mmHg/month against about 0.14 in the notes), and a large share of fits are singular (`r round(100 * min(i4_sum$singular))`% to `r round(100 * max(i4_sum$singular))`%), because three visits give little information about individual slopes. Bias stays small relative to its Monte Carlo SE (bias between `r round(min(i4_sum$bias), 3)` and `r round(max(i4_sum$bias), 3)`, MCSE about `r round(max(i4_sum$mcse_bias), 3)`), and coverage ranges from `r round(100 * min(i4_sum$coverage))`% to `r round(100 * max(i4_sum$coverage))`% with MCSEs of about `r round(100 * max(i4_sum$mcse_cov), 1)` percentage points. The conclusion that the fixed effect is insensitive to the random-effects distribution broadly holds, but 100 simulations per scenario can only detect large departures in coverage, and the frequent singular fits mean the variance components themselves are poorly estimated.
+
+*Marking notes.* Credit answers that report MCSEs and discuss what 100 simulations can and cannot detect.

@@ -1,0 +1,237 @@
+---
+title: "Module 1. Foundations of longitudinal data"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+Worked solutions to `workbook/wb01-foundations.qmd`, with executed code. Numbers in the written answers come from inline R. Marking notes describe acceptable alternatives and common errors. The simulations in Exercises 5 and 9 take a few minutes in total.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Classifying designs (LO 1.1)
+
+a. **Cross-sectional.** Each adult is measured once; the independent unit is the adult. (If the survey sampled households or areas in clusters, it would also be clustered.)
+b. **Repeated measures without a time axis.** Each volunteer is measured three times, but the conditions are postures in random order, not points in time. The volunteer is the independent unit; the three measurements are correlated.
+c. **Clustered (cluster-randomised), cross-sectional within cluster.** Patients are measured once, but patients in the same practice resemble each other and the treatment was allocated to practices. The independent unit is the practice (30 of them), not the 600 patients.
+d. **Longitudinal (observational), with irregular visits and unequal follow-up.** The independent unit is the participant.
+e. **Longitudinal (randomised trial)** with scheduled visits. The independent unit is the participant.
+f. **Longitudinal and clustered** (multilevel): visits within participants within clinics. Participants are the main independent unit; if clinic effects matter, clinics are a higher level (Module 13).
+
+*Marking notes.* Credit any answer that names the independent unit correctly and justifies it. In (c), a common error is to treat patients as independent.
+
+### Exercise 2. Anatomy of a dataset (LO 1.2, 1.4)
+
+**a.** Subject: `id`. Visit: `visit` (number) or `month_sched` (scheduled month). Measurement occasion: `month`, the actual time of the measurement. One observation is one row: one SBP measurement for one participant at one attended visit.
+
+**b.**
+
+```{r}
+check_long(walk, id, month_sched, "sbp")
+n_obs <- walk |> count(id, name = "n_obs") |> count(n_obs, name = "participants")
+n_obs
+```
+
+There are `r nrow(walk)` observations on `r n_distinct(walk$id)` participants; `r n_obs$participants[n_obs$n_obs == 6]` have all six and `r n_obs$participants[n_obs$n_obs == 1]` have only the baseline measurement.
+
+**c.**
+
+```{r}
+dev_tab <- walk |>
+  mutate(deviation = month - month_sched) |>
+  group_by(month_sched) |>
+  summarise(sd_dev = sd(deviation), max_abs_dev = max(abs(deviation)))
+dev_tab
+```
+
+Deviations grow with follow-up and are largest at month 12 (SD `r round(dev_tab$sd_dev[6], 2)` months, maximum `r dev_tab$max_abs_dev[6]` months). Baseline is defined as time 0, so it has no deviation.
+
+**d.**
+
+```{r}
+clear  <- load_clear()
+diary  <- load_diary()
+kidney <- load_kidney()
+check_long(clear, id, week, "severity")
+check_long(diary, id, period, "migraine_days")
+check_long(kidney, id, years, "egfr")
+```
+
+- **CLEAR:** subject `id`; time `week`, the scheduled week. There is no separate actual time, so scheduled and actual time cannot be distinguished.
+- **DIARY:** subject `id`; time `period` (0 = baseline, 1–6 treatment periods). A measurement occasion is a 28-day diary period, and the outcome is a count over the days with a completed diary (`days`), not a measurement at an instant.
+- **KIDNEY:** subject `id`; time `years` since entry, an actual time. There is no schedule, so there are no visits in the protocol sense, only occasions.
+
+**e.** DIARY is closest to balanced: `r round(100 * mean(table(diary$id) == 7))`% of participants have all seven periods. KIDNEY has the most unequal follow-up (between `r min(table(kidney$id))` and `r max(table(kidney$id))` visits, over very different lengths of time).
+
+*Marking notes.* Accept `visit` or `month_sched` for the visit. A common error is to call `month` the visit.
+
+### Exercise 3. Between- and within-person variation (LO 1.3)
+
+**a.**
+
+```{r}
+for (a in levels(walk$arm)) {
+  cat("\n", a, "\n")
+  print(round(visit_correlation(filter(walk, arm == a), id, month_sched, sbp), 2))
+}
+```
+
+In every arm all correlations are high, adjacent visits are generally more correlated than distant ones, and correlations do not fall towards zero over the year. The level differs a little between arms (usual care has somewhat lower correlations than the programme arms in this sample), which is expected with about 100 participants per arm; the pattern is the same.
+
+**b.**
+
+```{r}
+m_ri <- lmer(sbp ~ visit_f * arm + (1 | id), data = walk, control = lmer_ctrl)
+VarCorr(m_ri)
+icc1 <- icc_lmer(m_ri)
+icc1
+vc1 <- as.data.frame(VarCorr(m_ri))
+```
+
+**c.** Participants' personal SBP levels vary around the mean for their arm and visit with an SD of `r round(vc1$sdcor[1], 1)` mmHg, so about 95% lie within ±`r round(1.96 * vc1$sdcor[1])` mmHg of it. Around their own level, a participant's measurements vary with an SD of `r round(vc1$sdcor[2], 1)` mmHg. The ICC of `r round(icc1, 2)` means that `r round(100 * icc1)`% of the variance not explained by visit and arm lies between participants, and that two measurements on the same participant have a correlation of about `r round(icc1, 2)` under this model.
+
+**d.**
+
+```{r}
+m_ri0 <- lmer(sbp ~ 1 + (1 | id), data = walk, control = lmer_ctrl)
+VarCorr(m_ri0)
+icc_lmer(m_ri0)
+vc0 <- as.data.frame(VarCorr(m_ri0))
+```
+
+The residual SD increases most (from `r round(vc1$sdcor[2], 2)` to `r round(vc0$sdcor[2], 2)` mmHg), because the systematic changes in mean SBP over time, which differ by arm, are now counted as within-person variation. The between-person SD changes much less (`r round(vc1$sdcor[1], 2)` versus `r round(vc0$sdcor[1], 2)`). As a result the ICC falls to `r round(icc_lmer(m_ri0), 2)`.
+
+**e.** The model gets the level right: the observed correlations (0.69 to 0.87 overall) are centred near the ICC. It misses the decline with the time gap: it implies the same correlation for visits one month apart and twelve months apart. This compound-symmetry assumption will be relaxed with random slopes and serial correlation in Modules 4 and 5.
+
+*Marking notes.* Credit interpretations in mmHg. A common error is to describe the residual SD as "measurement error": it includes all within-person fluctuation, including real short-term change.
+
+### Exercise 4. Research questions and estimands (LO 1.5)
+
+a. **Change.** $\mu_{\text{SP}}(6) - \mu_{\text{SP}}(0)$: the mean change from baseline to month 6 in the population offered the standard programme. (True value −6.4 mmHg; known only because the data are simulated.)
+b. **Group difference in change.** $[\mu_{\text{EP}}(12) - \mu_{\text{EP}}(0)] - [\mu_{\text{SP}}(12) - \mu_{\text{SP}}(0)]$. (True value $-10.2 - (-6.7) = -3.5$ mmHg.)
+c. **Individual trajectories.** The variance (or SD) of individual rates of change, $\tau_1^2 = \text{Var}(b_{1i})$, in a model with a linear trajectory per person. (True SD 0.35 mmHg/month.)
+d. **Group difference in change** in an observational cohort: the difference in mean eGFR slope (mL/min/1.73m² per year) between people with and without diabetes. Because diabetes was not randomised, this is an association, which may be confounded.
+e. They should have estimated the **difference in mean change** between EP and usual care, with a confidence interval. Comparing p-values within arms is flawed: a significant change in one arm and a non-significant change in another does not show that the changes differ (the difference may itself be imprecise), and within-arm change includes effects common to both arms such as regression to the mean.
+
+*Marking notes.* Accept estimands written in words if they name the population, the times and the contrast.
+
+### Exercise 5. A small simulation (LO 1.6)
+
+```{r}
+#| label: ex5-sim
+#| cache: true
+sim_once <- function() {
+  d <- sim_two_arm(n_per_arm = 50, times = c(0, 3, 6, 9, 12), b0 = 150,
+                   b_time = -0.5, delta = 0, sd_int = 11, sd_slope = 0,
+                   cor_int_slope = 0, sd_resid = 6)
+  ols <- coef(summary(lm(y ~ time + trt, data = d)))
+  lmm <- coef(summary(lmer(y ~ time + trt + (1 | id), data = d, control = lmer_ctrl)))
+  c(arm_est = ols["trt", 1], arm_se_ols = ols["trt", 2], arm_se_lmm = lmm["trt", 2],
+    time_est = ols["time", 1], time_se_ols = ols["time", 2], time_se_lmm = lmm["time", 2])
+}
+set.seed(505)
+res <- as.data.frame(t(replicate(200, sim_once())))
+```
+
+```{r}
+R <- nrow(res)
+arm  <- c(sd = sd(res$arm_est), mcse = sd(res$arm_est) / sqrt(2 * (R - 1)),
+          ols = mean(res$arm_se_ols), lmm = mean(res$arm_se_lmm))
+time <- c(sd = sd(res$time_est), mcse = sd(res$time_est) / sqrt(2 * (R - 1)),
+          ols = mean(res$time_se_ols), lmm = mean(res$time_se_lmm))
+round(rbind(arm, time), 4)
+cov_arm <- mean(abs(res$arm_est) <= 1.96 * res$arm_se_ols)
+c(coverage = cov_arm, mcse = sqrt(cov_arm * (1 - cov_arm) / R))
+```
+
+**a.** For the arm difference, the empirical SD is `r round(arm["sd"], 2)` but OLS reports `r round(arm["ols"], 2)` on average: too small. The mixed model reports `r round(arm["lmm"], 2)`, close to the truth. For the time slope, the empirical SD is `r round(time["sd"], 3)`, OLS reports `r round(time["ols"], 3)` (too large) and the mixed model `r round(time["lmm"], 3)`.
+
+**b.** The Monte Carlo SEs of the empirical SDs are `r round(arm["mcse"], 3)` and `r round(time["mcse"], 4)`. The gaps between the OLS SEs and the empirical SDs are many times larger than these, so the conclusions are secure even with 200 replicates.
+
+**c.** Nominal 95% OLS intervals for the arm difference covered the true value in `r round(100 * cov_arm, 1)`% of replicates (Monte Carlo SE `r round(100 * sqrt(cov_arm * (1 - cov_arm) / R), 1)` points). Because the true difference is zero, a naive 5% test would reject in about `r round(100 * (1 - cov_arm))`% of trials: a false-positive rate several times the nominal 5%.
+
+**d.** The arm difference compares different people, so its precision depends on how many independent people there are and how much they differ. OLS counts five correlated measurements per person as five independent ones and so overstates the information. The time slope compares each person with themselves, so the between-person differences in level cancel; OLS does not know this and treats the large between-person variance as noise, overstating the uncertainty.
+
+*Marking notes.* Different seeds give slightly different numbers; the directions should not change. Full credit for part d requires both mechanisms.
+
+## Independent exercises
+
+### Exercise 6. Balance and follow-up in CLEAR and DIARY (LO 1.2, 1.4)
+
+```{r}
+clear |> count(id, name = "n_obs") |> count(n_obs, name = "participants")
+diary |> count(id, name = "n_obs") |> count(n_obs, name = "participants")
+summary(diary$days)
+```
+
+**Model answer.** CLEAR has `r nrow(clear)` observations on `r n_distinct(clear$id)` participants at fixed scheduled weeks (0, 2, 4, 6, 8, 12); `r sum(table(clear$id) == 6)` participants have all six, and the rest are incomplete, mostly through dropout. The occasions are fixed and unequally spaced. DIARY has `r nrow(diary)` periods on `r n_distinct(diary$id)` participants; `r sum(table(diary$id) == 7)` have all seven periods. Even when every period is present, the number of days with a completed diary varies from `r min(diary$days)` to `r max(diary$days)`. A count of migraine days over 14 days is not comparable with a count over 28 days, so periods carry different amounts of information. A model must account for the exposure, typically by modelling the rate with log(`days`) as an offset (Module 8).
+
+### Exercise 7. Variance components in KIDNEY (LO 1.3)
+
+```{r}
+m_k <- lmer(egfr ~ years + diabetes + (1 | id), data = kidney, control = lmer_ctrl)
+VarCorr(m_k)
+icc_k <- icc_lmer(m_k)
+icc_k
+vck <- as.data.frame(VarCorr(m_k))
+```
+
+**Model answer.** After allowing for a common linear decline and a difference by diabetes, people's personal eGFR levels vary with an SD of `r round(vck$sdcor[1], 1)` mL/min/1.73m², and measurements vary around a person's own line with an SD of `r round(vck$sdcor[2], 1)`. The ICC is `r round(icc_k, 2)`: most variation is between people. The model is too simple because people decline at different rates (and the true trajectories are curved), so a random slope and nonlinear time are needed (Module 9). The ICC should be interpreted with care because visits are more frequent when eGFR is low: people with poor kidney function contribute more measurements, so the estimated variance components (and the mean decline) give more weight to them.
+
+### Exercise 8. Naive and mixed-model SEs in WALK (LO 1.6)
+
+```{r}
+m8_ols <- lm(sbp ~ month + sex, data = walk)
+m8_lmm <- lmer(sbp ~ month + sex + (1 | id), data = walk, control = lmer_ctrl)
+se8 <- data.frame(term = names(coef(m8_ols)),
+                  se_ols = coef(summary(m8_ols))[, 2],
+                  se_lmm = coef(summary(m8_lmm))[, 2], row.names = NULL) |>
+  mutate(ratio = se_ols / se_lmm)
+se8
+```
+
+**Model answer.** For `sexFemale` the OLS SE (`r round(se8$se_ols[3], 2)`) is `r round(100 * se8$ratio[3])`% of the mixed-model SE (`r round(se8$se_lmm[3], 2)`): too small, because sex is a between-person comparison and OLS treats correlated measurements on the same person as independent evidence. For `month` the OLS SE (`r round(se8$se_ols[2], 3)`) is `r round(se8$ratio[2], 1)` times the mixed-model SE (`r round(se8$se_lmm[2], 3)`): too large, because the month effect is estimated mainly from changes within people, for which between-person differences in level are irrelevant.
+
+### Exercise 9. When individual slopes vary a lot (LO 1.6)
+
+```{r}
+#| label: ex9-sim
+#| cache: true
+sim_once_rs <- function(sd_slope = 0.4) {
+  d <- sim_two_arm(n_per_arm = 50, sd_slope = sd_slope)
+  ols <- coef(summary(lm(y ~ time * trt, data = d)))
+  lmm <- coef(summary(suppressMessages(
+    lmer(y ~ time * trt + (time | id), data = d, control = lmer_ctrl))))
+  c(est = ols["time:trt", 1], se_ols = ols["time:trt", 2], se_lmm = lmm["time:trt", 2])
+}
+ex9 <- lapply(c(0.4, 1.5, 3), function(s) {
+  set.seed(909)
+  r <- as.data.frame(t(replicate(200, sim_once_rs(s))))
+  data.frame(sd_slope = s, empirical_sd = sd(r$est),
+             mcse_sd = sd(r$est) / sqrt(2 * 199),
+             mean_se_ols = mean(r$se_ols), mean_se_lmm = mean(r$se_lmm))
+})
+ex9 <- do.call(rbind, ex9) |> mutate(ratio_ols = mean_se_ols / empirical_sd)
+ex9 |> mutate(across(where(is.numeric), \(x) round(x, 3)))
+```
+
+```{r}
+#| include: false
+dir_word <- function(r, m) ifelse(abs(r - 1) < 2.5 * m, "about right",
+                                  ifelse(r > 1, "too large", "too small"))
+w9 <- mapply(dir_word, ex9$ratio_ols, ex9$mcse_sd / ex9$empirical_sd)
+```
+
+**Model answer.** With `sd_slope` = 0.4 the OLS SE for the interaction is `r w9[1]` (ratio `r round(ex9$ratio_ols[1], 2)`); with 1.5 it is `r w9[2]` (ratio `r round(ex9$ratio_ols[2], 2)`); with 3 it is `r w9[3]` (ratio `r round(ex9$ratio_ols[3], 2)`). The mixed-model SE tracks the empirical SD in all three settings. Two errors compete in OLS. It wrongly counts the between-person variance in *level* as noise, which inflates the SE of any within-person comparison. And it ignores the between-person variance in *slopes*, which is genuine uncertainty about the difference in mean slopes between arms because each arm contains only 50 people with their own slopes; ignoring it deflates the SE. When people differ mainly in level, the first error dominates and OLS is conservative. When they differ substantially in their rate of change, the second dominates and OLS becomes overconfident. The rule "OLS SEs are too large for within-subject effects" therefore holds only when individual slopes vary little; a mixed model with a random slope is right in both cases.
+
+*Marking notes.* With 200 replicates, ratios have Monte Carlo SEs of a few per cent (shown as `mcse_sd` relative to `empirical_sd`); students should not over-interpret differences of that size.

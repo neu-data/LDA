@@ -1,0 +1,596 @@
+---
+title: "Module 4. Linear mixed-effects models"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+```{r}
+#| label: prep
+#| include: false
+f0 <- function(x) formatC(x, format = "f", digits = 0)
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+sched <- c(0, 1, 3, 6, 9, 12)
+truth <- readRDS(here("data", "walk_truth.rds"))
+# Same model specifications as the notes and scripts/04_linear_mixed_models.R
+m_ri  <- lmer(sbp ~ month * arm + (1 | id), data = walk, control = lmer_ctrl)
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_cat <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+walk <- walk |> mutate(month12 = month - 12)
+m_c12 <- lmer(sbp ~ month12 * arm + (1 + month12 | id), data = walk, control = lmer_ctrl)
+m_quad <- lmer(sbp ~ (month + I(month^2)) * arm + (1 + month | id), data = walk,
+               control = lmer_ctrl)
+m_cat_ml <- update(m_cat, REML = FALSE)
+m_cat_lme <- lme(sbp ~ visit_f * arm, random = ~ 1 + month | id, data = walk)
+vc_ri <- as.data.frame(VarCorr(m_ri)); icc_ri <- icc_lmer(m_ri)
+vc_lin <- as.data.frame(VarCorr(m_lin))
+tau0 <- vc_lin$sdcor[1]; tau1 <- vc_lin$sdcor[2]; r01 <- vc_lin$sdcor[3]; sig <- vc_lin$sdcor[4]
+G_lin <- as.matrix(VarCorr(m_lin)$id)
+V_lin <- implied_cov_lmer(m_lin, sched)
+obs_cor <- visit_correlation(walk, id, month_sched, sbp)
+ft_ri <- fixef_table(m_ri); ft_lin <- fixef_table(m_lin)
+lrt_s <- lr_test(m_ri, m_lin)
+emm <- emmeans(m_cat, ~ visit_f | arm)
+chg12 <- contrast(emm, list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+dmc12 <- contrast(chg12, "trt.vs.ctrl", by = NULL, adjust = "none")
+cs <- summary(chg12, infer = TRUE); ds <- summary(dmc12, infer = TRUE)
+tc <- with(truth$true_change[truth$true_change$month == 12, ], setNames(change, arm))
+ds_lme <- summary(contrast(contrast(emmeans(m_cat_lme, ~ visit_f | arm),
+                                    list(chg12 = c(-1, 0, 0, 0, 0, 1))),
+                           "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+shrink <- count(walk, id, arm, name = "n_obs") |>
+  left_join(coef(lme4::lmList(sbp ~ month | id, data = walk)) |>
+              tibble::rownames_to_column("id") |> select(id, ols_slope = month), by = "id") |>
+  left_join(coef(m_lin)$id |> tibble::rownames_to_column("id"), by = "id") |>
+  mutate(blup_slope = month + (arm == "SP") * `month:armSP` + (arm == "EP") * `month:armEP`,
+         n_group = cut(n_obs, c(0, 3, 5, 6), labels = c("2-3 visits", "4-5 visits", "6 visits")))
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Learning outcomes
+
+1. **4.1** Write random-intercept and random-slope models and explain every term
+2. **4.2** Distinguish fixed effects, random effects and residual variation; variance components and ICC
+3. **4.3** Code time as continuous, categorical, centred or nonlinear
+4. **4.4** Fit a group-by-time model with `lme4`/`lmerTest` and `nlme`; report the difference in mean change
+5. **4.5** Explain ML versus REML
+6. **4.6** Obtain and interpret BLUPs and shrinkage
+
+::: {.notes}
+Introduce the module as the heart of the course: almost everything after this builds on the linear mixed model. Remind participants of the Module 3 limitations (complete cases, fixed occasions, no individual slopes) and say that this module removes all of them with one model. Ask who has fitted a mixed model before, and in what software, to calibrate the pace.
+:::
+
+# Building the model
+
+## Every participant has a trajectory of their own
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+plot_spaghetti(walk, month, sbp, id, group = arm, n_show = 60) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+```
+
+::: {.notes}
+Point at three features: very different starting levels that persist, visit-to-visit wobble, and short lines from dropout. Ask: which Module 3 method could use the short lines? (None of RM-ANOVA, completers ANCOVA, or the paired t-test at month 12 uses them fully.) The mixed model will describe the persistence with random effects and the wobble with residual error.
+:::
+
+## Three sources of variation
+
+| Part | Symbol | Describes | WALK example |
+|---|---|---|---|
+| Fixed effects | $\boldsymbol\beta$ | Mean trajectory by arm | Mean SBP over time in EP |
+| Random effects | $b_{0i}, b_{1i}$ | Participant's departure from the mean line | Participant W017 is 15 mmHg above average |
+| Residual error | $\varepsilon_{ij}$ | Measurement around own line | Today's reading 4 mmHg high |
+
+- Random effects are not estimated one by one: we estimate their **variance** ($\tau_0^2$, $\tau_1^2$, $\tau_{01}$)
+- Variance components: $\tau_0^2$, $\tau_1^2$, $\tau_{01}$, $\sigma^2$
+
+::: {.notes}
+Stress the word "random": the participants are a sample from a population, and the parameters describe the population of trajectories. The participant example values in the table are illustrative, not from output. Introduce the terms subject-specific (conditional) and population-average (marginal) here, and say that for linear mixed models the fixed effects have both interpretations, which will not be true for logistic models in Module 8.
+:::
+
+## The model's line for each person is a compromise
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+set.seed(4)
+nobs <- count(walk, id)
+pick <- c(sample(nobs$id[nobs$n == 6], 2), sample(nobs$id[nobs$n %in% 4:5], 2),
+          sample(nobs$id[nobs$n %in% 2:3], 2))
+d6 <- walk |> filter(id %in% pick) |>
+  mutate(panel = paste0(id, " (", arm, ", ", ave(sbp, id, FUN = length), " visits)"))
+grid6 <- d6 |> distinct(id, arm, panel) |> tidyr::crossing(month = seq(0, 12, 0.5))
+grid6$blup <- predict(m_lin, newdata = grid6)
+grid6$mean <- predict(m_lin, newdata = grid6, re.form = NA)
+ols6 <- d6 |> group_by(id) |>
+  summarise(a = coef(lm(sbp ~ month))[1], b = coef(lm(sbp ~ month))[2])
+grid6 <- grid6 |> left_join(ols6, by = "id") |> mutate(ols = a + b * month)
+ggplot(d6, aes(month, sbp)) +
+  geom_line(data = grid6, aes(y = mean), colour = "#AAAAAA", linewidth = 0.8) +
+  geom_line(data = grid6, aes(y = ols), linetype = "dashed") +
+  geom_line(data = grid6, aes(y = blup), colour = course_colours["blue"], linewidth = 0.8) +
+  geom_point(size = 1.8) + facet_wrap(~ panel, ncol = 3) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+```
+
+<span class="small">Dashed: participant's own OLS line. Blue: model prediction. Grey: arm mean.</span>
+
+::: {.notes}
+This is the key intuition slide. With six visits the blue line is close to the dashed one; with two or three visits it is pulled toward the grey arm mean. Ask participants which line they would trust for the two-visit participant. Name the idea: shrinkage, or partial pooling. We return to it formally at the end of the module.
+:::
+
+# Random intercepts
+
+## Random intercept: parallel lines at different heights
+
+$$
+y_{ij} = \beta_0 + \beta_1 t_{ij} + \beta_2 \text{SP}_i + \beta_3 \text{EP}_i + \beta_4 t_{ij}\text{SP}_i + \beta_5 t_{ij}\text{EP}_i + b_{0i} + \varepsilon_{ij}
+$$
+
+$$
+b_{0i} \sim N(0, \tau_0^2), \qquad \varepsilon_{ij} \sim N(0, \sigma^2), \quad \text{independent}
+$$
+
+- $\beta_4, \beta_5$: difference in mean slope vs UC (the estimands)
+- $b_{0i}$: participant's level relative to their arm's mean line
+- All participants in an arm share one slope
+
+::: {.notes}
+Go through every symbol. Ask participants to say aloud what beta_2 means (difference at month 0, expected near zero by randomisation). Emphasise the distributional assumptions: normal random intercepts, normal residuals, independent of each other and of the covariates.
+:::
+
+## One correlation for every pair of visits: the ICC
+
+$$
+\operatorname{Corr}(y_{ij}, y_{ik}) = \rho_I = \frac{\tau_0^2}{\tau_0^2 + \sigma^2}
+$$
+
+```{r}
+#| echo: true
+m_ri <- lmer(sbp ~ month * arm + (1 | id), data = walk, control = lmer_ctrl)
+VarCorr(m_ri)
+icc_lmer(m_ri)
+```
+
+- $\hat\tau_0 =$ `r f1(vc_ri$sdcor[1])`, $\hat\sigma =$ `r f1(vc_ri$sdcor[2])` mmHg, ICC = `r f2(icc_ri)`
+
+::: {.notes}
+Interpret: `r round(100 * icc_ri)`% of the variation around the arm mean lines is between participants. The random intercept implies compound symmetry, the same structure RM-ANOVA assumes. tau0 is a spread of people, not a standard error; this confusion is common.
+:::
+
+## The data say correlation decays with distance
+
+```{r}
+#| echo: false
+round(obs_cor, 2)
+```
+
+- Observed: `r f2(obs_cor[1, 2])` (months 0, 1) down to `r f2(obs_cor[1, 6])` (months 0, 12)
+- Random intercept model: `r f2(icc_ri)` everywhere
+
+::: {.notes}
+Ask participants to compare the first row with the constant ICC. The random-intercept model cannot reproduce decaying correlation. This motivates random slopes. Mention that the steep drop between adjacent visits also hints at serial correlation, which Module 5 handles.
+:::
+
+## Try it
+
+Workbook exercise 1: fit the random-intercept model, compute the ICC and compare it with the observed correlations.
+
+::: {.notes}
+Allow participants to work in pairs. Check that they use `control = lmer_ctrl` and that they can find tau0 and sigma in the output.
+:::
+
+# Random slopes
+
+## Random slopes let each participant change at their own rate
+
+$$
+y_{ij} = \mathbf{x}_{ij}^\top\boldsymbol\beta + b_{0i} + b_{1i} t_{ij} + \varepsilon_{ij},
+\qquad
+\begin{pmatrix} b_{0i} \\ b_{1i} \end{pmatrix} \sim N\!\left(\mathbf{0}, G\right),
+\quad G = \begin{pmatrix} \tau_0^2 & \tau_{01} \\ \tau_{01} & \tau_1^2 \end{pmatrix}
+$$
+
+- $b_{1i}$: participant's slope minus their arm's mean slope
+- $\tau_1^2$: variance of slopes; $\tau_{01}$: covariance of intercepts and slopes
+- Matrix form: $\mathbf{y}_i = X_i\boldsymbol\beta + Z_i\mathbf{b}_i + \boldsymbol\varepsilon_i$, $\;V_i = Z_iGZ_i^\top + \sigma^2 I$
+
+::: {.notes}
+Explain Z_i as a column of ones and a column of times. The fixed part x'beta is the same arm-by-time mean as before. A negative tau01 means participants who start higher tend to fall faster. Write V_i on the board and say this is the marginal covariance, the link to Module 5.
+:::
+
+## The linear-time reference model
+
+```{r}
+#| echo: true
+#| output-location: column
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id),
+              data = walk, control = lmer_ctrl)
+VarCorr(m_lin)
+round(fixef(m_lin), 3)
+```
+
+::: {.notes}
+This is the course's linear-time reference model. Read out: tau0 = `r f2(tau0)` mmHg, tau1 = `r f3(tau1)` mmHg/month, correlation `r f2(r01)`, sigma = `r f2(sig)`. Slope differences: SP `r f3(fixef(m_lin)[5])`, EP `r f3(fixef(m_lin)[6])` mmHg/month. Over 12 months the slope SD implies individual changes vary with SD of about `r f1(12 * tau1)` mmHg, as large as the treatment effects.
+:::
+
+## Allowing for slope variation widens the SEs of slope differences
+
+| Term | SE, random intercept | SE, random slope |
+|---|---|---|
+| `month:armSP` | `r f3(ft_ri$se[5])` | `r f3(ft_lin$se[5])` |
+| `month:armEP` | `r f3(ft_ri$se[6])` | `r f3(ft_lin$se[6])` |
+
+- Slope variation between participants is part of the uncertainty about the mean slope
+- Ignoring it makes the treatment comparison look too precise
+
+::: {.notes}
+This is the practical reason to include random slopes in a trial with a time-by-arm estimand, even if individual differences are not of interest [@barr2013]. Ask: which direction would the error go if we used the random-intercept model? (Standard errors too small, so confidence intervals too narrow and p-values too small.)
+:::
+
+## In a random-slope model variance and correlation depend on time
+
+$$
+\operatorname{Var}(y_{ij}) = \tau_0^2 + 2\tau_{01}t_{ij} + \tau_1^2 t_{ij}^2 + \sigma^2
+$$
+
+```{r}
+#| echo: true
+cov_to_cor(implied_cov_lmer(m_lin, c(0, 1, 3, 6, 9, 12)))
+```
+
+::: {.notes}
+`implied_cov_lmer()` computes Z G Z' + sigma^2 I. Implied variance: `r f0(V_lin[1, 1])` at month 0, minimum near month `r f1(-G_lin[1, 2] / G_lin[2, 2])`, `r f0(V_lin[6, 6])` at month 12. Correlations now decline with distance, from `r f2(cov2cor(V_lin)[1, 2])` to `r f2(cov2cor(V_lin)[1, 6])`. There is no single ICC in a random-slope model.
+:::
+
+## Implied variance is quadratic in time
+
+```{r}
+#| echo: false
+#| fig-height: 4
+tt <- seq(0, 12, 0.25)
+var_t <- bind_rows(
+  tibble(month = tt, v = G_lin[1, 1] + 2 * tt * G_lin[1, 2] + tt^2 * G_lin[2, 2] + sig^2,
+         model = "Random slope"),
+  tibble(month = tt, v = vc_ri$vcov[1] + vc_ri$vcov[2], model = "Random intercept"))
+obs_var <- walk |> group_by(month_sched) |> summarise(v = var(sbp))
+ggplot(var_t, aes(month, v, linetype = model)) + geom_line() +
+  geom_point(data = obs_var, aes(month_sched, v), inherit.aes = FALSE,
+             colour = course_colours["orange"], size = 2.5) +
+  labs(x = "Months since randomisation", y = "Variance of SBP (mmHg²)", linetype = NULL)
+```
+
+::: {.notes}
+Orange points are observed variances at each scheduled visit. The random-slope curve follows their dip and rise roughly; the random-intercept model forces a flat line. Point out that the observed variances are noisy and computed from fewer participants at later visits.
+:::
+
+## Is the random slope needed? Test on the boundary
+
+```{r}
+#| echo: true
+anova(m_ri, m_lin, refit = FALSE)
+p_boundary_mixture(lr_test(m_ri, m_lin)$chisq, df_mix = c(1, 2))
+```
+
+- Same fixed effects, so REML likelihoods are comparable (`refit = FALSE`)
+- $\tau_1^2 = 0$ is on the boundary: use a 50:50 mixture of $\chi^2_1$ and $\chi^2_2$ [@self1987; @stram1994]
+
+::: {.notes}
+The naive chi-square on 2 df is conservative. Here the evidence is overwhelming either way. Emphasise that in trials we usually keep the random slope on design grounds, not on the basis of a test.
+:::
+
+## Try it
+
+Workbook exercises 2 and 3: fit the random-slope model, compute implied variances and correlations, and test the random slope.
+
+::: {.notes}
+Watch for participants who use `anova()` without `refit = FALSE` here: it still works but refits with ML. Discuss why both are acceptable for this comparison but REML is the natural choice.
+:::
+
+# Coding time
+
+## Centring time changes the question, not the model
+
+```{r}
+#| echo: true
+walk <- walk |> mutate(month12 = month - 12)
+m_c12 <- lmer(sbp ~ month12 * arm + (1 + month12 | id),
+              data = walk, control = lmer_ctrl)
+round(cbind(month0 = fixef(m_lin), month12 = fixef(m_c12)), 3)
+```
+
+- `armSP`, `armEP` now = differences **at month 12**; slopes unchanged
+
+::: {.notes}
+Same likelihood, same fitted values. The arm "main effects" move from baseline differences (`r f2(fixef(m_lin)[3])`, `r f2(fixef(m_lin)[4])`) to month-12 differences (`r f2(fixef(m_c12)[3])`, `r f2(fixef(m_c12)[4])`). The random-intercept variance now refers to month 12 too. Ask: which coding answers the trial's question directly?
+:::
+
+## Straight lines miss the levelling off
+
+```{r}
+#| echo: false
+#| fig-height: 4
+nd <- expand.grid(month = seq(0, 12, 0.25), arm = levels(walk$arm))
+nd$lin  <- predict(m_lin,  newdata = nd, re.form = NA)
+nd$quad <- predict(m_quad, newdata = nd, re.form = NA)
+cat_means <- as.data.frame(emm) |> mutate(month = as.numeric(as.character(visit_f)))
+ggplot(nd, aes(month, colour = arm)) +
+  geom_line(aes(y = lin, linetype = "Linear")) +
+  geom_line(aes(y = quad, linetype = "Quadratic")) +
+  geom_point(data = cat_means, aes(month, emmean, shape = "Categorical"), size = 2.5) +
+  scale_colour_arm(labels = walk_arm_labels, name = NULL) +
+  labs(x = "Months since randomisation", y = "Estimated mean SBP (mmHg)",
+       linetype = NULL, shape = NULL) +
+  theme(legend.box = "vertical")
+```
+
+::: {.notes}
+Categorical time (points) makes no shape assumption. SBP falls over six months and then levels off in the programme arms. The quadratic fits much better than the line (likelihood-ratio test on ML fits). Module 9 covers splines and piecewise models. Categorical time is the safe default for a few fixed visits.
+:::
+
+## Four ways to code time
+
+| Coding | Intercept means | Arm effect means | Use when |
+|---|---|---|---|
+| `month` | Mean at month 0 | Difference at month 0 | Rate of change is the question |
+| `month - 12` | Mean at month 12 | Difference at month 12 | Interest in a specific time |
+| `visit_f` | Mean at baseline | Difference at baseline | Few fixed visits, estimand at one visit |
+| `month + month^2` | Mean at month 0 | Difference at month 0 | Curved trajectories (Module 9) |
+
+::: {.notes}
+Whatever the coding, compute the quantity of interest with `emmeans`, which makes the coding of the coefficients irrelevant to the answer. Note that for categorical time the random slope still uses actual time.
+:::
+
+## Try it
+
+Workbook exercise 4: centre time at month 12 and explain the arm coefficients.
+
+::: {.notes}
+Ask participants to verify that `armEP` in the centred model equals armEP + 12 times month:armEP from the uncentred model.
+:::
+
+# The primary analysis
+
+## The primary model: a mean for every arm and visit
+
+```{r}
+#| echo: true
+m_cat <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+              data = walk, control = lmer_ctrl)
+round(fixef(m_cat)[c("visit_f12", "visit_f12:armSP", "visit_f12:armEP")], 2)
+```
+
+- Mean: scheduled visit (factor) by arm, 18 parameters, no shape assumption
+- Covariance: random intercept and slope on **actual** time
+- All `r n_distinct(walk$id)` participants, `r nrow(walk)` observations
+
+::: {.notes}
+Explain that `visit_f12:armSP` is exactly the difference in mean change from baseline to month 12 for SP versus UC, because UC and baseline are the reference levels. Under MAR, participants who dropped out still inform the month-12 means through their correlation with earlier visits.
+:::
+
+## The estimand with `emmeans`
+
+```{r}
+#| echo: true
+emm   <- emmeans(m_cat, ~ visit_f | arm)
+chg12 <- contrast(emm, list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+dmc12 <- contrast(chg12, "trt.vs.ctrl", by = NULL, adjust = "none")
+summary(dmc12, infer = TRUE)
+```
+
+::: {.notes}
+Three steps: means at each visit, change within arm, difference from UC. `adjust = "none"` is explicit because trt.vs.ctrl defaults to a Dunnett-type adjustment. Multiplicity is Module 6. SP: `r fmt_ci(ds$estimate[1], ds$lower.CL[1], ds$upper.CL[1], 2)`; EP: `r fmt_ci(ds$estimate[2], ds$lower.CL[2], ds$upper.CL[2], 2)` mmHg.
+:::
+
+## Estimates are close to the truth (we can check only because the data are simulated)
+
+| Month 12 (mmHg) | Estimate (95% CI) | Truth |
+|---|---|---|
+| Change, UC | `r fmt_ci(cs$estimate[1], cs$lower.CL[1], cs$upper.CL[1])` | `r f1(tc["UC"])` |
+| Change, SP | `r fmt_ci(cs$estimate[2], cs$lower.CL[2], cs$upper.CL[2])` | `r f1(tc["SP"])` |
+| Change, EP | `r fmt_ci(cs$estimate[3], cs$lower.CL[3], cs$upper.CL[3])` | `r f1(tc["EP"])` |
+| SP minus UC | `r fmt_ci(ds$estimate[1], ds$lower.CL[1], ds$upper.CL[1])` | `r f1(tc["SP"] - tc["UC"])` |
+| EP minus UC | `r fmt_ci(ds$estimate[2], ds$lower.CL[2], ds$upper.CL[2])` | `r f1(tc["EP"] - tc["UC"])` |
+
+::: {.notes}
+Both intervals contain the true values. The UC change is slightly smaller than the truth, which makes both differences a little larger in magnitude: sampling error in one trial, not bias. In a real study none of this comparison is possible; the confidence interval is what we have.
+:::
+
+## Basic residual checks
+
+```{r}
+#| echo: false
+#| fig-height: 4
+diag_df <- data.frame(fitted = fitted(m_cat), resid = resid(m_cat))
+re_df <- ranef(m_cat)$id
+p1 <- ggplot(diag_df, aes(fitted, resid)) + geom_point(alpha = 0.25, size = 0.8) +
+  geom_hline(yintercept = 0, colour = "#888888") +
+  geom_smooth(se = FALSE, method = "loess", formula = y ~ x, colour = course_colours["orange"]) +
+  labs(x = "Fitted (mmHg)", y = "Residual (mmHg)")
+p2 <- ggplot(diag_df, aes(sample = resid)) + stat_qq(alpha = 0.3, size = 0.8) +
+  stat_qq_line(colour = "#888888") + labs(x = "Normal quantile", y = "Residual")
+p3 <- ggplot(re_df, aes(sample = month)) + stat_qq(alpha = 0.4, size = 0.8) +
+  stat_qq_line(colour = "#888888") + labs(x = "Normal quantile", y = "Predicted b1i")
+p1 | p2 | p3
+```
+
+::: {.notes}
+No fanning in residuals against fitted values. The upward tilt of the smoother is an expected artefact of shrinkage: participants with extreme levels get fitted values pulled toward the mean, so their residuals point outward. It does not mean the mean model is wrong; Module 11 shows residuals without this artefact. Q-Q plots are close to straight. Predicted random effects are shrunken, so their Q-Q plot is only a rough guide. These plots cannot detect serial correlation; Module 11 covers full diagnostics.
+:::
+
+## `nlme::lme` gives the same answer
+
+```{r}
+#| echo: true
+m_cat_lme <- lme(sbp ~ visit_f * arm, random = ~ 1 + month | id,
+                 data = walk, method = "REML")
+max(abs(fixef(m_cat) - nlme::fixef(m_cat_lme)))
+```
+
+| | Estimate EP − UC | 95% CI | df |
+|---|---|---|---|
+| `lmer` (Satterthwaite) | `r f2(ds$estimate[2])` | `r f2(ds$lower.CL[2])` to `r f2(ds$upper.CL[2])` | `r f0(ds$df[2])` |
+| `lme` (containment) | `r f2(ds_lme$estimate[2])` | `r f2(ds_lme$lower.CL[2])` to `r f2(ds_lme$upper.CL[2])` | `r f0(ds_lme$df[2])` |
+
+::: {.notes}
+Same REML criterion, same estimates and standard errors; only the degrees-of-freedom method differs, which matters little with 360 participants. `nlme` is needed in Module 5 for residual correlation structures. Remind participants to use `nlme::fixef()` for lme objects because setup.R makes fixef the lme4 version.
+:::
+
+## Reporting the primary analysis
+
+::: {.callout-tip title="Reporting example"}
+Compared with usual care, SBP fell by an additional `r f1(-ds$estimate[1])` mmHg with the standard programme (95% CI `r f1(-ds$upper.CL[1])` to `r f1(-ds$lower.CL[1])`) and `r f1(-ds$estimate[2])` mmHg with the enhanced programme (`r f1(-ds$upper.CL[2])` to `r f1(-ds$lower.CL[2])`) from baseline to month 12, estimated from a linear mixed model with visit-by-arm fixed effects and a random intercept and slope on actual time (REML, all `r n_distinct(walk$id)` participants, valid under MAR).
+:::
+
+::: {.notes}
+Point out the elements: model, estimation, estimand, estimate with CI in units, the population used, and the missing-data assumption. A full report also states multiplicity handling and a sensitivity analysis.
+:::
+
+## Try it
+
+Workbook exercise 5: fit the primary model, obtain the difference in mean change at month 12, and refit it with `nlme::lme`.
+
+::: {.notes}
+Common error: leaving the default Dunnett adjustment without noticing. Another: reading `armSP` as the treatment effect.
+:::
+
+# Estimation and prediction
+
+## REML corrects the downward bias of ML variance estimates
+
+- ML: like dividing a sum of squares by $n$; ignores the $p$ df used by $\hat{\boldsymbol\beta}$
+- REML: maximises the likelihood of residual contrasts, like dividing by $n - 1$
+
+$$
+\ell_R(\boldsymbol\theta) = \ell\big(\hat{\boldsymbol\beta}(\boldsymbol\theta), \boldsymbol\theta\big) - \tfrac{1}{2}\log\Big|\textstyle\sum_i X_i^\top V_i^{-1}X_i\Big|
+$$
+
+::: {.notes}
+The extra term penalises uncertainty in the fixed effects. Fixed effects are then estimated by generalized least squares at the REML variance estimates. Consequence: REML likelihoods depend on X, so models with different fixed effects cannot be compared by REML.
+:::
+
+## In WALK the difference is tiny; in small studies it is not
+
+```{r}
+#| echo: true
+cbind(REML = varcomp_table(m_cat)$value,
+      ML   = varcomp_table(m_cat_ml)$value)
+```
+
+- Rows: $\tau_0$, $\tau_1$, correlation, $\sigma$
+- Simulation in the notes: 16 participants, true $\tau_0^2 = 121$; ML about 12% too small on average, REML close
+
+::: {.notes}
+With 360 participants ML and REML nearly coincide. The notes contain a 500-replicate simulation with 8 participants per arm, where ML underestimates the intercept variance and REML is close to the truth; quote the numbers from the rendered notes if asked. Underestimated variances give standard errors that are too small.
+:::
+
+## When to use each
+
+- **REML**: final model; variance components; comparing random-effects or covariance structures with the **same** fixed effects
+- **ML**: likelihood-ratio tests, AIC, BIC for models with **different** fixed effects
+- `anova()` on `lmer` fits refits with ML automatically
+
+```{r}
+#| echo: true
+anova(m_lin, m_quad)  # linear vs quadratic mean: ML refit
+```
+
+::: {.notes}
+Point at the "refitting model(s) with ML" message. After choosing a model by ML comparisons, refit it with REML for reporting.
+:::
+
+## BLUPs: predicted random effects
+
+$$
+\hat{\mathbf{b}}_i = \hat G Z_i^\top \hat V_i^{-1}(\mathbf{y}_i - X_i\hat{\boldsymbol\beta}),
+\qquad
+\hat b_{0i} = \frac{n_i\tau_0^2}{n_i\tau_0^2 + \sigma^2}\,(\bar y_i - \bar{\mathbf{x}}_i^\top\hat{\boldsymbol\beta})
+$$
+
+- Random effects are **predicted**, not estimated
+- Shrinkage factor near 1 with many precise observations, near 0 with few noisy ones
+
+::: {.notes}
+Work through the random-intercept formula: with n_i = 6 and the WALK variances the factor is about 0.96, with one visit about 0.78, because the intercept variance is large relative to sigma^2. For slopes, shrinkage is much stronger. `ranef()` gives b-hat; `coef()` adds the fixed effects.
+:::
+
+## Slopes shrink strongly toward the arm mean
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+shrink |> filter(!is.na(ols_slope)) |>
+  ggplot(aes(ols_slope, blup_slope, colour = n_group)) +
+  geom_abline(slope = 1, intercept = 0, colour = "#AAAAAA") +
+  geom_point(alpha = 0.7, size = 1.6) +
+  scale_colour_manual(values = unname(course_colours[c("orange", "blue", "grey")]), name = NULL) +
+  coord_cartesian(xlim = c(-6, 6)) +
+  labs(x = "Separate OLS slope (mmHg/month)", y = "BLUP slope (mmHg/month)")
+```
+
+::: {.notes}
+The identity line would mean no shrinkage. Every point lies on a much flatter line, flattest for participants with two or three visits. Individual rates of change are hard to estimate from a year of noisy measurements, and the model says so. Do not use BLUPs as data in a second-stage analysis; their spread is smaller than tau1.
+:::
+
+## Try it
+
+Workbook exercise 6: compute OLS and BLUP slopes and draw the shrinkage plot.
+
+::: {.notes}
+Ask participants to compute the SD of OLS slopes and BLUP slopes by number of visits and to explain the difference in their own words.
+:::
+
+# Wrap-up
+
+## Common mistakes
+
+- Reading `armSP` as the treatment effect in a model with interactions
+- Quoting one ICC for a random-slope model
+- Comparing REML fits with different fixed effects
+- Dropping random slopes because a test is borderline
+- Treating BLUPs as data; ranking people by BLUPs without uncertainty
+- Leaving the `emmeans` default adjustment unreported
+
+::: {.notes}
+Ask participants which mistake they think is most common in published papers. Typical answer: reporting main effects of arm from interaction models, and ignoring random slopes.
+:::
+
+## Summary
+
+- Fixed effects: mean trajectory; random effects: individual departures; residual: measurement noise
+- Random slopes make variance and correlation depend on time: $V_i = Z_iGZ_i^\top + \sigma^2I$
+- Code time for the question; compute estimands with `emmeans`
+- Primary WALK result: SP `r f1(ds$estimate[1])`, EP `r f1(ds$estimate[2])` mmHg vs UC at month 12
+- REML by default, ML to compare fixed effects; BLUPs shrink
+
+::: {.notes}
+Point forward: Module 5 adds residual correlation structures to V_i, Module 6 turns these models into reported results, Module 9 handles curvature and time-varying covariates, Module 10 examines the MAR assumption, Module 11 diagnostics.
+:::
+
+## Further reading
+
+- @laird1982; @verbeke2000; @fitzmaurice2011
+- @pinheiro2000 (`nlme`); @bates2015 (`lme4`)
+- @barr2013; @matuschek2017 (random-effects structure)
+
+::: {.notes}
+Recommend Fitzmaurice, Laird and Ware for applied readers and Verbeke and Molenberghs for theory.
+:::
+
+## References {.smaller}
+
+::: {#refs}
+:::

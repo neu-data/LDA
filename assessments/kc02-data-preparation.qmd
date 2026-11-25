@@ -1,0 +1,192 @@
+---
+title: "Module 2. Preparing and exploring longitudinal data in R"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+Fifteen questions on Module 2. Each question lists the learning outcome it assesses. Answers and explanations for instructors are at the end.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+```{r}
+#| label: prep
+#| include: false
+baseline <- load_walk("baseline")
+wide <- load_walk("wide")
+sched_months <- c(0, 1, 3, 6, 9, 12)
+```
+
+## Questions
+
+**Q1 (LO 2.1). Multiple choice.** `walk_wide.csv` has `r nrow(wide)` rows and six SBP columns (`sbp_m0` to `sbp_m12`). You run `pivot_longer()` on the six SBP columns and do **not** drop missing values. How many rows does the result have?
+
+(a) `r nrow(walk)`  (b) `r nrow(wide)`  (c) `r nrow(wide) * 6`  (d) 6
+
+**Q2 (LO 2.1). True or false, with a one-sentence justification.** "Wide format can store each participant's actual visit times in the column names."
+
+**Q3 (LO 2.1). Multiple choice.** You run the code below and get far more rows than participants, with many `NA` values. What is the most likely cause?
+
+```{r}
+#| label: q3-code
+#| eval: false
+walk |>
+  select(id, arm, month_sched, month, sbp) |>
+  pivot_wider(names_from = month_sched, values_from = sbp)
+```
+
+(a) `names_from` should be `month`. (b) `month` varies within participant, so each visit becomes its own row. (c) `pivot_wider()` cannot handle missing visits. (d) `arm` must be removed.
+
+**Q4 (LO 2.2). Interpret the output.** An analyst runs the following join after accidentally appending a second copy of one participant's baseline row.
+
+```{r}
+#| label: q4-output
+baseline_bad <- bind_rows(baseline, baseline |> filter(id == "W010"))
+tryCatch(
+  left_join(walk, baseline_bad |> select(id, rand_date),
+            by = "id", relationship = "many-to-one"),
+  error = function(e) cat(conditionMessage(e)))
+```
+
+What does the message mean, what would have happened without the `relationship` argument, and what should the analyst do?
+
+**Q5 (LO 2.2). True or false, with justification.** "If some visit records have participant IDs that are not in the baseline file, `left_join()` stops with an error by default."
+
+**Q6 (LO 2.3). Multiple choice.** Why must participant IDs be converted to a common case before looking for exact duplicate rows?
+
+(a) Because `distinct()` only works on upper-case text. (b) Because a copy that differs only in the case of the ID would not be recognised as a duplicate. (c) Because lower-case IDs are always errors and must be deleted. (d) It does not matter in which order this is done.
+
+**Q7 (LO 2.3). Short answer.** Two records exist for the same participant and visit, with SBP 137 and 143 mmHg, dated two days apart. Give one defensible rule for choosing between them, and explain why the rule must be fixed without looking at outcomes by treatment arm.
+
+**Q8 (LO 2.3). Interpret the output.** The table below summarises the deviation of each follow-up visit from its target date in the cleaned WALK data (window = protocol half-width in days; `n_out` = visits outside the window).
+
+```{r}
+#| label: q8-output
+#| echo: false
+raw <- read_csv(here("data", "walk_visits_raw.csv"),
+                col_types = cols(.default = col_character()))
+window_days <- c(`0` = 0, `1` = 7, `3` = 14, `6` = 28, `9` = 28, `12` = 28)
+clean <- raw |>
+  mutate(id = toupper(trimws(participant)),
+         month_sched = as.numeric(sub("^M", "", visit_label)),
+         visit = match(month_sched, sched_months),
+         visit_date = as.Date(visit_date), sbp = parse_double(sbp_mmhg),
+         steps = parse_double(steps_k)) |>
+  select(id, visit, month_sched, visit_date, sbp, steps) |>
+  distinct() |>
+  group_by(id, visit) |> arrange(visit_date, .by_group = TRUE) |>
+  slice(1) |> ungroup() |>
+  left_join(baseline |> select(id, rand_date), by = "id") |>
+  mutate(dev_days = as.numeric(visit_date - (rand_date + round(month_sched * 30.44))),
+         out_of_window = abs(dev_days) > window_days[as.character(month_sched)])
+win_tab <- clean |> filter(visit > 1) |> group_by(month_sched) |>
+  summarise(window = first(window_days[as.character(month_sched)]), n = n(),
+            sd_dev = round(sd(dev_days), 1), n_out = sum(out_of_window))
+win_tab
+```
+
+Which statement is correct?
+
+(a) Visit timing becomes more variable as follow-up goes on, and out-of-window visits should be kept and analysed at their actual time. (b) Month 6 has no out-of-window visits, so timing at month 6 was exact. (c) Out-of-window visits should be deleted because they violate the protocol. (d) The standard deviation of the deviation is the same at every visit.
+
+**Q9 (LO 2.3). True or false, with justification.** After cleaning the raw export, actual time (`month`) differs from `walk_long.csv` by up to 0.02 months in many rows. "This shows that the cleaning code contains an error."
+
+**Q10 (LO 2.4). Multiple choice.** In a participant-flow table showing n (%) seen at each visit, the percentages should be calculated relative to:
+
+(a) the number seen at the previous visit; (b) the number randomised to the arm; (c) the number who completed the study; (d) the total number of visits.
+
+**Q11 (LO 2.4). True or false, with justification.** "In a randomised trial, the baseline table should include p-values for differences between arms, so that readers can see whether randomisation worked."
+
+**Q12 (LO 2.3, 2.4). Interpret the output.** The complete grid of randomised participants × scheduled visits was built and each cell classified.
+
+```{r}
+#| label: q12-output
+#| echo: false
+grid <- baseline |> select(id, arm) |>
+  crossing(visit = 1:6) |>
+  left_join(walk |> select(id, visit, sbp), by = c("id", "visit")) |>
+  mutate(observed = !is.na(sbp)) |>
+  group_by(id) |>
+  mutate(last_seen = max(visit[observed]),
+         miss_type = case_when(observed ~ "observed",
+                               visit < last_seen ~ "intermittent",
+                               TRUE ~ "after dropout")) |>
+  ungroup()
+grid_tab <- count(grid, miss_type)
+grid_tab
+```
+
+What percentage of scheduled visits are missing, and what share of the missing visits follow dropout? Why was this grid built from the baseline file and the protocol schedule rather than from `walk_long.csv`?
+
+**Q13 (LO 2.5). Multiple choice.** Why should the participants shown in a "subset" spaghetti plot be chosen at random with a fixed seed?
+
+(a) Because `ggplot2` requires a seed. (b) So that the subset is representative rather than chosen to support a conclusion, and the figure can be reproduced. (c) Because random participants have fewer missing visits. (d) So that the lines do not overlap.
+
+**Q14 (LO 2.5, 2.6). Interpret the output.** For each visit before month 12, each participant's SBP was compared with the mean of their arm at that visit.
+
+```{r}
+#| label: q14-output
+#| echo: false
+walk |>
+  left_join(baseline |> select(id, last_month_sched), by = "id") |>
+  filter(month_sched < 12) |>
+  group_by(arm, month_sched) |>
+  mutate(dev_from_arm_mean = sbp - mean(sbp)) |>
+  ungroup() |>
+  mutate(status = if_else(month_sched == last_month_sched,
+                          "Last visit before dropout", "Seen again later")) |>
+  group_by(status) |>
+  summarise(n = n(), mean_dev = round(mean(dev_from_arm_mean), 2))
+```
+
+What does this suggest about the dropout mechanism, and in which direction would it bias the observed mean SBP at month 12?
+
+**Q15 (LO 2.6). True or false, with justification.** "If dropout is missing at random (MAR), the observed mean SBP at each visit is an unbiased estimate of the mean SBP of all randomised participants at that visit."
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers-numbers
+#| include: false
+n_grid <- sum(grid_tab$n)
+n_miss <- sum(grid_tab$n[grid_tab$miss_type != "observed"])
+n_after <- grid_tab$n[grid_tab$miss_type == "after dropout"]
+```
+
+**Q1.** (c) `r nrow(wide) * 6`. Each participant contributes one row per scheduled visit; unattended visits appear as `NA`. Option (a) is the number after dropping `NA` rows.
+
+**Q2.** False. Column names are shared by all participants, so they can hold only the scheduled visit. Actual times differ between participants and need their own columns or, better, long format.
+
+**Q3.** (b). Because `month` differs from visit to visit, every row has a unique combination of identifying columns. Select only constant columns, the time that becomes column names and the value.
+
+**Q4.** The join expected each `id` to match at most one baseline row, and W010 matched two. Without `relationship`, dplyr would only have warned about a many-to-many relationship and duplicated all of W010's visits. The analyst should remove the duplicate baseline row (after checking which is correct) and rerun the join with the same check.
+
+**Q5.** False. A left join keeps unmatched rows silently and fills the joined columns with `NA`. Use `anti_join()` to list unmatched keys, or add `unmatched = "error"`.
+
+**Q6.** (b). Duplicates are detected by comparing values, and `w004` differs from `W004`.
+
+**Q7.** Defensible rules include: query the clinic and use the source document; otherwise keep the earliest-dated record; keep the record closest to the target date; or average the values. Any of these is acceptable if documented. The rule must be fixed without looking at outcomes by arm because a choice made after seeing which version favours which arm becomes part of the analysis and can bias the treatment comparison. Prespecification in the analysis plan, before unblinding, prevents this. *Marking: 1 mark for a rule, 2 marks for the bias argument and the prespecification safeguard.*
+
+**Q8.** (a). The standard deviation rises from `r win_tab$sd_dev[1]` days at month 1 to `r win_tab$sd_dev[5]` days at month 12. Option (b) is wrong because zero out-of-window visits does not mean zero deviation (the SD at month 6 is `r win_tab$sd_dev[3]` days); the month-6 window is simply wide. Deleting the visits (c) discards valid data.
+
+**Q9.** False. The raw visit dates were rounded to whole days when the export was created, so a two-decimal month cannot be recovered exactly. Differences of up to 0.02 months (under one day) are expected, and the recomputed `month` is correct for the recorded date.
+
+**Q10.** (b). Percentages of those randomised show cumulative attrition and are the standard in trial flow reporting.
+
+**Q11.** False. Differences between randomised arms are due to chance by construction, so the p-values test a null hypothesis known to be true. Describe the groups and adjust for prespecified prognostic covariates instead.
+
+**Q12.** `r n_miss` of `r n_grid` scheduled visits are missing (`r round(100 * n_miss / n_grid, 1)`%), and `r n_after` of them (`r round(100 * n_after / n_miss)`%) follow dropout. The long file contains only attended visits, so participants or visits never observed would be absent from a grid built from it. The design defines what should exist.
+
+**Q13.** (b).
+
+**Q14.** Participants who were about to drop out had SBP several mmHg above their arm's mean at that visit, while those seen again were slightly below it. Dropout is related to the observed outcome (consistent with MAR, given earlier SBP). Because high-SBP participants leave, those still measured at month 12 are a lower-SBP group, so the observed month-12 mean is biased downwards, which exaggerates the apparent fall in SBP.
+
+**Q15.** False. Under MAR, missingness depends on observed earlier values, which are correlated with the later unobserved values, so those still measured are a selected group and $E(Y_{ij} \mid R_{ij} = 1) \neq E(Y_{ij})$ in general. Likelihood-based models fitted to all observed data (such as the mixed model) are valid under MAR; simple observed means are not. Module 10 explains this in detail.

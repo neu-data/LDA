@@ -1,0 +1,574 @@
+---
+title: "Module 2. Preparing and exploring longitudinal data in R"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+baseline <- load_walk("baseline")
+wide <- load_walk("wide")
+sched_months <- c(0, 1, 3, 6, 9, 12)
+walk_lab <- walk |>
+  mutate(arm_lab = factor(walk_arm_labels[as.character(arm)],
+                          levels = walk_arm_labels))
+```
+
+```{r}
+#| label: prep-all
+#| echo: false
+# Same cleaning steps and rules as notes/02-data-preparation.qmd
+raw <- read_csv(here("data", "walk_visits_raw.csv"),
+                col_types = cols(.default = col_character()))
+step2 <- raw |>
+  mutate(id = toupper(trimws(participant)),
+         month_sched = as.numeric(sub("^M", "", visit_label)),
+         visit = match(month_sched, sched_months),
+         visit_date = as.Date(visit_date, format = "%Y-%m-%d"),
+         sbp = parse_double(sbp_mmhg), steps = parse_double(steps_k)) |>
+  select(id, visit, month_sched, visit_date, sbp, steps)
+n_exact_dup <- sum(duplicated(step2))
+step3 <- distinct(step2)
+conflicts <- step3 |> add_count(id, visit, name = "n_records") |>
+  filter(n_records > 1) |> arrange(id, visit, visit_date)
+step4 <- step3 |> group_by(id, visit) |>
+  mutate(conflict_flag = n() > 1) |>
+  arrange(visit_date, .by_group = TRUE) |> slice(1) |> ungroup()
+window_days <- c(`0` = 0, `1` = 7, `3` = 14, `6` = 28, `9` = 28, `12` = 28)
+walk_clean <- step4 |>
+  left_join(baseline |> select(id, rand_date), by = "id",
+            relationship = "many-to-one") |>
+  mutate(days = as.numeric(visit_date - rand_date),
+         month = round(days / 30.44, 2),
+         dev_days = as.numeric(visit_date -
+                                 (rand_date + round(month_sched * 30.44))),
+         sbp_raw = sbp,
+         sbp_flag = case_when(is.na(sbp) ~ "blank",
+                              sbp < 70 | sbp > 250 ~ "implausible",
+                              TRUE ~ "ok"),
+         sbp = if_else(sbp_flag == "implausible", NA_real_, sbp),
+         out_of_window = abs(dev_days) > window_days[as.character(month_sched)])
+agreement <- walk_clean |>
+  full_join(walk |> select(id, visit, month_ref = month, sbp_ref = sbp),
+            by = c("id", "visit"))
+month_diff <- agreement$month - agreement$month_ref
+
+grid <- baseline |> select(id, arm) |>
+  crossing(visit = 1:6) |>
+  mutate(month_sched = sched_months[visit]) |>
+  left_join(walk |> select(id, visit, sbp), by = c("id", "visit")) |>
+  mutate(observed = !is.na(sbp)) |>
+  group_by(id) |>
+  mutate(last_seen = max(visit[observed]),
+         miss_type = case_when(observed ~ "observed",
+                               visit < last_seen ~ "intermittent",
+                               TRUE ~ "after dropout")) |>
+  ungroup()
+
+dropout_last_sbp <- walk |>
+  left_join(baseline |> select(id, last_month_sched), by = "id") |>
+  filter(month_sched < 12) |>
+  group_by(arm, month_sched) |>
+  mutate(dev_from_mean = sbp - mean(sbp)) |>
+  ungroup() |>
+  mutate(last = month_sched == last_month_sched) |>
+  group_by(last) |>
+  summarise(n = n(), mean_dev = mean(dev_from_mean))
+dev_drop <- dropout_last_sbp$mean_dev[dropout_last_sbp$last]
+
+complete <- load_walk("complete")
+m_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+                  control = lmer_ctrl)
+em_visits <- as.data.frame(emmeans(m_primary, ~ visit_f | arm))
+means_compare <- complete |>
+  group_by(arm, visit_f) |>
+  summarise(complete_mean = mean(sbp), observed_mean = mean(sbp[observed])) |>
+  left_join(em_visits |> select(arm, visit_f, model_mean = emmean),
+            by = c("arm", "visit_f")) |>
+  ungroup() |>
+  mutate(obs_bias = observed_mean - complete_mean,
+         model_bias = model_mean - complete_mean)
+fu <- means_compare |> filter(visit_f != "0")
+```
+
+## What this module covers
+
+- Long and wide formats; reshaping with `tidyr`
+- Joining participant-level and visit-level files, and validating the join
+- Cleaning a messy visit export, with every decision documented
+- Missing visits, summary tables and participant flow
+- Exploratory plots for longitudinal data
+- Why observed means at each visit are not the trajectory we want to estimate
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.notes}
+Open by saying that this module is where most real analysis time goes. Nothing here is glamorous, but mistakes in data preparation cannot be fixed by a clever model. Point out the last bullet: the module ends with a result that motivates much of the rest of the course. Remind participants that WALK is simulated, which is why we can later compare with values a real study would never have.
+:::
+
+## Learning outcomes
+
+- **2.1** Reshape between long and wide formats with `tidyr`
+- **2.2** Join visit- and participant-level files and validate the result
+- **2.3** Detect and resolve duplicates, missing visits and timing discrepancies, and document each decision
+- **2.4** Produce baseline summaries, visit summaries and a participant-flow table
+- **2.5** Construct and interpret spaghetti, trajectory, mean and missingness plots
+- **2.6** Explain why observed means differ from model-estimated trajectories under outcome-related dropout
+
+::: {.notes}
+Read through quickly. Tell participants that the practical assessment for this module (pa02) tests outcomes 2.1 to 2.5 directly on a new messy file, and 2.6 in a short written answer.
+:::
+
+# Long and wide formats
+
+## Long format has one row per observation; wide has one row per participant
+
+```{r}
+#| echo: false
+walk |> filter(id %in% c("W001", "W002")) |>
+  select(id, arm, visit, month_sched, month, sbp) |> print(n = 8)
+```
+
+```{r}
+#| echo: false
+wide |> filter(id %in% c("W001", "W002")) |> select(id, arm, starts_with("sbp_m"))
+```
+
+::: {.notes}
+Point to W002: two rows in long format, but six columns in wide format, four of them NA. Ask: where is the actual visit time in the wide file? (It is not there. Wide format can only use the scheduled visit as column names.) Models in this course need long format; some summaries and imputation methods need wide format.
+:::
+
+## `pivot_longer()` stacks the visit columns and records the visit
+
+```{r}
+long_from_wide <- wide |>
+  pivot_longer(cols = starts_with("sbp_m"),
+               names_to = "month_sched", names_prefix = "sbp_m",
+               names_transform = list(month_sched = as.numeric),
+               values_to = "sbp")
+c(rows = nrow(long_from_wide), missing = sum(is.na(long_from_wide$sbp)))
+```
+
+- `r nrow(wide)` participants × 6 visits = `r nrow(long_from_wide)` rows
+- Dropping the `r sum(is.na(long_from_wide$sbp))` `NA` rows leaves `r sum(!is.na(long_from_wide$sbp))`: the number of rows in `walk_long.csv`
+
+::: {.notes}
+Walk through the three arguments: which columns, how to turn the names into time, what to call the values. Stress names_transform: without it month_sched is text, and "12" sorts before "3". The check against walk_long is the habit to build: count rows before and after every reshape.
+:::
+
+## `pivot_wider()` goes back, if only constant columns stay in
+
+```{r}
+wide_again <- walk |>
+  select(id, clinic, arm, age, sex, bmi, month_sched, sbp) |>
+  pivot_wider(names_from = month_sched, values_from = sbp,
+              names_prefix = "sbp_m")
+all.equal(as.data.frame(wide_again), as.data.frame(wide),
+          check.attributes = FALSE)
+```
+
+- Leave `month` or `steps` in and you get one row per visit, full of `NA`
+- "Values are not uniquely identified" means duplicate keys: fix them, do not average them
+
+::: {.notes}
+Live demo suggestion: add month to the select() and show the broken result. Ask the group why it happens (month varies within participant, so every row is unique). The warning about values not uniquely identified is a data problem, not a coding problem.
+:::
+
+## Try it
+
+Workbook **Exercise 1**: reshape `walk_wide.csv` to long format, check it against `walk_long.csv`, and reshape steps to wide format.
+
+::: {.notes}
+Allow participants to work through the exercise. Circulate and check that they use names_transform and that they count rows.
+:::
+
+# Joining files
+
+## A many-to-one join copies participant data onto every visit
+
+```{r}
+walk_joined <- walk |>
+  left_join(baseline |> select(id, rand_date, sbp0, dropout),
+            by = "id", relationship = "many-to-one")
+c(before = nrow(walk), after = nrow(walk_joined),
+  unmatched_visits = nrow(anti_join(walk, baseline, by = "id")),
+  never_seen = nrow(anti_join(baseline, walk, by = "id")))
+```
+
+- Select only new columns: otherwise `arm.x` and `arm.y`
+- Count rows and unmatched keys in both directions
+
+::: {.notes}
+The four numbers are the validation. Row count unchanged means no duplication. Zero unmatched visits means every visit belongs to a randomised participant. Zero never seen means everyone attended baseline. In a real trial the last one is often not zero, and those participants still count in the flow table.
+:::
+
+## `relationship =` turns a silent duplication into an error
+
+```{r}
+baseline_bad <- bind_rows(baseline, baseline |> filter(id == "W001"))
+tryCatch(
+  left_join(walk, baseline_bad |> select(id, rand_date),
+            by = "id", relationship = "many-to-one"),
+  error = function(e) cat(conditionMessage(e)))
+```
+
+::: {.notes}
+Without the relationship argument dplyr only warns about a many-to-many relationship, and W001's visits are doubled. Warnings scroll past; errors stop the analysis. State your expectation in the code so that the code checks it for you.
+:::
+
+## Try it
+
+Workbook **Exercise 2**: join baseline data to the visits and validate the join.
+
+::: {.notes}
+Encourage participants to write the checks as stopifnot() lines so that they run every time the script runs.
+:::
+
+# Cleaning a raw export
+
+## The raw export has the problems real exports have
+
+```{r}
+raw <- read_csv(here("data", "walk_visits_raw.csv"),
+                col_types = cols(.default = col_character()))
+head(raw, 4)
+```
+
+- `r nrow(raw)` rows, but only `r nrow(walk)` attended visits
+- Lower-case IDs, text visit labels, SBP as text, a blank, a typing error, duplicates
+
+::: {.notes}
+Explain why we read everything as text: if read_csv guesses types, one bad cell can turn a column into text or a value into NA with only a warning. Reading as text and converting deliberately lets us count every problem. Ask participants to guess where the extra rows come from.
+:::
+
+## Order matters: standardise first, then look for duplicates
+
+```{r}
+#| eval: false
+step1 <- raw |>
+  mutate(id = toupper(trimws(participant)),          # w004 -> W004
+         month_sched = as.numeric(sub("^M", "", visit_label)),
+         visit = match(month_sched, sched_months),
+         visit_date = as.Date(visit_date, format = "%Y-%m-%d"),
+         sbp = parse_double(sbp_mmhg),
+         steps = parse_double(steps_k))
+stopifnot(all(grepl("^W[0-9]{3}$", step1$id)), !anyNA(step1$visit))
+```
+
+1. IDs and labels, 2. dates and numbers, 3. exact duplicates, 4. conflicting duplicates, 5. actual time, 6. plausibility, 7. visit windows
+
+::: {.notes}
+Emphasise the order. If you look for duplicates before converting IDs to upper case, a copy recorded as w004 is missed. If you count conflicts before removing exact copies, identical pairs look like conflicts. The stopifnot lines are the checks after each step.
+:::
+
+## Exact duplicates are removed; conflicting duplicates need a rule
+
+```{r}
+#| echo: false
+conflicts |> select(id, visit, visit_date, sbp, steps)
+```
+
+- `r n_exact_dup` exact duplicate rows: removed with `distinct()`
+- `r n_distinct(paste(conflicts$id, conflicts$visit))` visits with two different records
+- WALK rule: **keep the earliest-dated record and flag the visit**
+
+::: {.notes}
+Ask: which record would you keep? Collect answers (earliest, closest to target date, average, ask the clinic). All are defensible. What is not defensible is choosing after looking at which choice helps which arm. The best answer is a query to the clinic; the rule is the fallback, and it must be in the analysis plan.
+:::
+
+## The rule must be fixed without looking at outcomes by arm
+
+- A rule chosen after seeing its effect is part of the analysis
+- It can move the treatment effect in the direction the analyst prefers
+- Same for outlier rules and visit windows
+- Write data-handling rules in the statistical analysis plan before unblinding [@gamble2017]
+
+::: {.notes}
+With three pairs the effect is tiny. The principle is what matters. Give an example: in a trial with 200 conflicting pairs, choosing "keep the lower value" in one arm and "keep the higher" in another would manufacture an effect. Blind data review, before unblinding, is the standard safeguard.
+:::
+
+## Actual time comes from dates, not from the visit label
+
+$$
+t_{ij} = \frac{D_{ij} - D^{\text{rand}}_i}{30.44}, \qquad
+d_{ij} = D_{ij} - \bigl(D^{\text{rand}}_i + \operatorname{round}(30.44\, s_j)\bigr)
+$$
+
+```{r}
+#| echo: false
+walk_clean |> filter(visit > 1) |> group_by(month_sched) |>
+  summarise(window = first(window_days[as.character(month_sched)]),
+            sd_dev = round(sd(dev_days), 1), max_abs = max(abs(dev_days)),
+            n_out = sum(out_of_window))
+```
+
+::: {.notes}
+D is the visit date, D rand the randomisation date, s_j the scheduled month. A month is 30.44 days. The table shows timing getting more variable with follow-up. Out-of-window visits are kept and flagged: they are valid measurements taken at a different time, and the models use actual time.
+:::
+
+## One blank and one impossible value
+
+```{r}
+#| echo: false
+walk_clean |> filter(sbp_flag != "ok") |>
+  select(id, visit, visit_date, sbp_raw, sbp_flag, steps)
+```
+
+- Blank: a **missing value at an attended visit**, not a missed visit
+- `r walk_clean$sbp_raw[walk_clean$sbp_flag == "implausible"]` mmHg: probably `r walk_clean$sbp_raw[walk_clean$sbp_flag == "implausible"] / 10` typed with an extra zero
+- WALK rule: set to missing, keep the raw value, send a query
+
+::: {.notes}
+Some data management plans allow obvious transcription errors to be corrected. WALK's does not, so we do not guess. If the clinic confirms 119, the database is corrected and the code rerun. Note that range checks catch only gross errors: 160 typed for 150 will never be found.
+:::
+
+## The cleaned file agrees with `walk_long.csv`, with two explained exceptions
+
+```{r}
+#| echo: false
+tibble(check = c("Rows (cleaned / walk_long)", "Keys in only one file",
+                 "SBP differs", "Rows where month differs",
+                 "Largest month difference"),
+       value = c(paste(nrow(walk_clean), "/", nrow(walk)),
+                 sum(is.na(agreement$month) | is.na(agreement$month_ref)),
+                 sum(is.na(agreement$sbp) | agreement$sbp != agreement$sbp_ref, na.rm = TRUE),
+                 sum(abs(month_diff) > 0.001), round(max(abs(month_diff)), 2)))
+```
+
+- SBP: our two `NA` values (blank, implausible)
+- Month: dates were rounded to whole days, so differences of up to 0.02 months are expected
+
+::: {.notes}
+Be honest about small differences rather than forcing agreement. The raw dates were built as randomisation date plus round(month times 30.44) days, so the two-decimal month cannot be recovered exactly. Our month is the correct time for the recorded date. In a real study the equivalent check is double data entry or source verification.
+:::
+
+## Try it
+
+Workbook **Exercises 3 and 4**: clean the raw export step by step and write the cleaning log.
+
+::: {.notes}
+These are the longest exercises. Participants should produce a cleaning log table with counts at each step, matching the one in the notes.
+:::
+
+# Missing visits and summaries
+
+## Build the visit grid from the design, not from the data
+
+```{r}
+#| eval: false
+grid <- baseline |> select(id, arm) |>
+  crossing(visit = 1:6) |>
+  mutate(month_sched = sched_months[visit]) |>
+  left_join(walk |> select(id, visit, sbp), by = c("id", "visit")) |>
+  mutate(observed = !is.na(sbp))
+```
+
+```{r}
+#| echo: false
+grid |> count(arm, miss_type) |> pivot_wider(names_from = miss_type, values_from = n)
+```
+
+::: {.notes}
+The long file has no rows for missed visits, so you cannot count them there. The grid is the randomisation list crossed with the protocol schedule: 360 times 6 = 2160 rows. Intermittent means missed and came back; after dropout means never seen again. Do not use walk_complete.csv: no real study has it.
+:::
+
+## Participant flow uses the randomised number as denominator
+
+```{r}
+#| echo: false
+visit_flow(walk, id, month_sched, arm) |>
+  left_join(count(baseline, arm, name = "randomised"), by = "arm") |>
+  mutate(cell = sprintf("%d (%.0f%%)", n_seen, 100 * n_seen / randomised)) |>
+  select(arm, month_sched, cell) |>
+  pivot_wider(names_from = arm, values_from = cell)
+```
+
+::: {.notes}
+visit_flow() is a course helper. Percentages are of those randomised, not of those seen at the previous visit. This table goes into the CONSORT-style flow section of a trial report.
+:::
+
+## Baseline tables describe the arms; they are not tested
+
+```{r}
+#| echo: false
+mean_sd <- function(x) sprintf("%.1f (%.1f)", mean(x), sd(x))
+baseline |> group_by(arm) |>
+  summarise(`Age` = mean_sd(age),
+            `Female, %` = sprintf("%.0f", 100 * mean(sex == "Female")),
+            `BMI` = mean_sd(bmi), `SBP` = mean_sd(sbp0)) |>
+  pivot_longer(-arm, names_to = "Characteristic") |>
+  pivot_wider(names_from = arm, values_from = value)
+```
+
+::: {.notes}
+Ask: should we test whether the proportion of women differs between arms? No. Randomisation guarantees that any difference is chance. The relevant question is whether a variable is prognostic, in which case adjusting for it improves precision. That is decided in the analysis plan, not from this table.
+:::
+
+## Try it
+
+Workbook **Exercise 5**: build the grid, classify missing visits and produce the flow table.
+
+::: {.notes}
+Check that participants build the grid from walk_baseline, not from walk_long.
+:::
+
+# Exploratory plots
+
+## Spaghetti plots: differences between people dominate
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+plot_spaghetti(walk_lab, month, sbp, id, group = arm_lab, alpha = 0.15) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+```
+
+::: {.notes}
+All 360 participants. The cloud is wide (roughly 40 to 45 mmHg for the middle 90% at each visit) compared with the few mmHg by which the arms differ. Time on the x axis is actual time, so points do not line up exactly at the scheduled months.
+:::
+
+## A random subset shows individual shapes
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+plot_spaghetti(walk_lab, month, sbp, id, group = arm_lab, n_show = 30,
+               seed = 2, alpha = 0.7) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+```
+
+::: {.notes}
+Thirty participants chosen at random with a fixed seed. Never pick "interesting" participants by hand. Point out the visit-to-visit fluctuation around each person's level and the lines that stop early (dropout). Try another seed to check the picture is typical.
+:::
+
+## Observed means suggest an early fall, largest in the enhanced programme
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+plot_observed_means(walk_lab, month_sched, sbp, arm_lab) +
+  scale_x_continuous(breaks = sched_months) +
+  labs(x = "Scheduled month", y = "Observed mean SBP (mmHg), 95% CI")
+```
+
+::: {.notes}
+Each mean uses only the participants seen at that visit, so the denominators shrink. The shape is not linear: a fall over the first three months, then a plateau. This is why the primary model treats visit as a factor. Warn that we will soon see that these means are biased.
+:::
+
+## The missingness map shows dropout as a staircase
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+plot_missing_map(grid, id, visit, observed, order_by = last_seen) +
+  facet_wrap(~ arm, scales = "free_y", labeller = as_labeller(walk_arm_labels)) +
+  scale_x_discrete(labels = sched_months) + labs(x = "Scheduled month")
+```
+
+::: {.notes}
+Rows are participants sorted by last attended visit. The staircase at the bottom is monotone dropout; the isolated gaps above are intermittent missed visits. Ask: from this plot alone, can we tell whether dropout is related to SBP? No: we need the pattern plots or the summary on the next slide.
+:::
+
+## Participants who dropped out had higher SBP before they left
+
+```{r}
+#| echo: false
+dropout_last_sbp |>
+  mutate(status = if_else(last, "Last visit before dropout", "Seen again later")) |>
+  select(status, n, mean_dev)
+```
+
+- SBP minus the arm mean at the same visit
+- Dropouts: on average `r round(dev_drop, 1)` mmHg above their arm's mean just before leaving
+
+::: {.notes}
+This is the key exploratory result. Dropout depends on observed SBP. In the simulation that is by design: the probability of leaving rises with the last observed SBP. That makes the dropout missing at random given the observed data, which is the case Module 10 covers in detail. The pattern plot in the notes shows the same thing less cleanly, because most patterns contain fewer than ten people.
+:::
+
+## Try it
+
+Workbook **Exercise 6**: spaghetti plots, individual panels, mean plot, missingness map and pattern plots.
+
+::: {.notes}
+Ask participants to write one sentence of interpretation under each plot. That is the skill being tested in the practical assessment.
+:::
+
+# Observed means versus model estimates
+
+## When higher-SBP participants leave, observed means drift down
+
+$$
+E(Y_{ij} \mid R_{ij} = 1) \neq E(Y_{ij})
+$$
+
+- Left: mean of those still measured. Right: mean of everyone randomised
+- Under MAR, dropout depends on earlier observed SBP, which is correlated with later SBP
+- Those who remain are a selected, healthier group
+
+::: {.notes}
+R_ij is 1 if the measurement is observed. MAR means the probability of being missing depends on observed data only, here the last observed SBP and arm. Even then the observed mean is biased, because the earlier SBP that drives dropout is correlated with the later SBP that we fail to see.
+:::
+
+## Simulated data let us check: observed means are too low, the mixed model is close
+
+```{r}
+#| echo: false
+#| fig-height: 4
+means_compare |>
+  select(arm, visit_f, `All scheduled visits (teaching only)` = complete_mean,
+         `Observed visits only` = observed_mean,
+         `Mixed model, observed data` = model_mean) |>
+  pivot_longer(-c(arm, visit_f), names_to = "source", values_to = "mean") |>
+  mutate(month = as.numeric(as.character(visit_f))) |>
+  ggplot(aes(month, mean, linetype = source, shape = source)) +
+  geom_line() + geom_point() +
+  facet_wrap(~ arm, labeller = as_labeller(walk_arm_labels)) +
+  scale_x_continuous(breaks = sched_months) +
+  labs(x = "Scheduled month", y = "Mean SBP (mmHg)", linetype = NULL, shape = NULL)
+```
+
+::: {.notes}
+Say clearly: this comparison is possible only because the data are simulated; walk_complete.csv holds the values that went missing. Observed means are below the complete-data means at `r sum(fu$obs_bias < 0)` of `r nrow(fu)` follow-up visits. The primary mixed model, fitted to the same observed data, has mean absolute error `r round(mean(abs(fu$model_bias)), 2)` mmHg against `r round(mean(abs(fu$obs_bias)), 2)` for the observed means. Module 10 explains why: under MAR, likelihood-based analysis of all observed data is valid.
+:::
+
+## The mixed model uses each participant's early values
+
+```{r}
+#| eval: false
+m_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+                  data = walk, control = lmer_ctrl)
+emmeans(m_primary, ~ visit_f | arm)
+```
+
+- Early measurements tell the model about each participant's level
+- Correlation between visits carries that information forward to missing visits
+- Valid under MAR **and** a correct model; not under MNAR (Module 10)
+
+::: {.notes}
+This is a preview only. Modules 4 to 6 build the model; Module 10 explains the missing-data theory and sensitivity analyses for missing not at random. The message for now: report observed means descriptively, with their n, but estimate trajectories and treatment effects with a model that uses all observed data.
+:::
+
+## Summary
+
+- Reshape and join with checks: row counts, keys, `relationship =`
+- Clean in a fixed order and log every decision; fix rules before looking at outcomes by arm
+- Build the visit grid from the design to see missing visits
+- Plot individuals, means, missingness and dropout patterns
+- Observed visit means are biased when dropout depends on the outcome; use models fitted to all observed data
+
+::: {.notes}
+Close by linking forward: Module 3 shows why traditional methods struggle with these data, and Module 4 introduces the mixed model previewed here. The practical assessment pa02 repeats this whole workflow on a new messy file.
+:::
+
+## Try it
+
+Workbook **independent exercises 7–10**, then the practical assessment `pa02`.
+
+::: {.notes}
+The independent exercises have no scaffolding. Encourage participants to reuse their code from the guided exercises and to write the cleaning log as they go.
+:::

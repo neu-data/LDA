@@ -1,0 +1,288 @@
+---
+title: "Module 10. Missing data and dropout"
+subtitle: "Practical assessment"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.callout-note title="For instructors"}
+Sections 1 to 3 are the participant brief. Section 4 is the marking guide and Section 5 the executed model solution. Distribute the brief and the data file `assessments/pa10-data/pa10_walk_long.csv` (created when this document is rendered). Remove Sections 4 and 5 before giving the document to participants.
+:::
+
+```{r}
+#| label: gen-data
+#| include: false
+# Assessment data: the complete WALK outcomes with a NEW dropout process,
+# heavier than in walk_long.csv. Dropout before each post-baseline visit
+# depends on the change in SBP from baseline at the last observed visit
+# (MAR) and is more frequent in the enhanced programme. Intermittent missed
+# visits are taken from the original WALK pattern (MCAR).
+set.seed(20261010)
+wc <- load_walk("complete") |> arrange(id, visit)
+sbp  <- matrix(wc$sbp, ncol = 6, byrow = TRUE)
+arm  <- matrix(as.character(wc$arm), ncol = 6, byrow = TRUE)[, 1]
+orig <- matrix(wc$observed, ncol = 6, byrow = TRUE)
+keep <- matrix(TRUE, nrow(sbp), 6)
+last <- sbp[, 1]
+for (k in 2:6) {
+  lp <- -2.4 + 0.14 * (last - sbp[, 1]) + 0.5 * (arm == "EP")
+  keep[, k] <- keep[, k - 1] & !(runif(nrow(sbp)) < plogis(lp))
+  seen <- keep[, k] & orig[, k]          # intermittent gaps from the original data
+  last[seen] <- sbp[seen, k]
+}
+wc$in_study <- as.vector(t(keep))
+wc$observed_pa <- wc$in_study & wc$observed
+pa_long <- wc |>
+  filter(observed_pa) |>
+  select(id, arm, age, sex, bmi, visit, month_sched, month, sbp)
+dir.create(here("assessments", "pa10-data"), showWarnings = FALSE)
+write_csv(pa_long, here("assessments", "pa10-data", "pa10_walk_long.csv"))
+```
+
+## Task brief
+
+You are the trial statistician for a re-analysis of the WALK trial (three arms: usual care, standard programme, enhanced programme; SBP measured at months 0, 1, 3, 6, 9 and 12). In this data cut, more participants dropped out than in the main WALK data. The trial team wants to know whether the conclusions about the programmes depend on how missing data are handled.
+
+The primary estimand is the difference in mean change in SBP from baseline to month 12 between each programme and usual care, for all randomised participants, as if all had been followed up.
+
+Your tasks:
+
+1. **Describe the missing data.** Classify the missingness (intermittent, dropout), show the pattern by arm, and investigate whether dropout is related to observed SBP.
+2. **Primary analysis.** Estimate the primary estimand with a linear mixed model of all observed data: `sbp ~ visit_f * arm + (1 + month | id)`. State the conditions under which this analysis is valid and discuss whether they are plausible here.
+3. **Alternative analyses.** Estimate the estimand by complete-case analysis (the same model fitted to participants seen at month 12) and by LOCF. Explain the differences from the primary analysis.
+4. **Multiple imputation.** Carry out multiple imputation that respects the longitudinal structure and the arm-by-visit design (at least 20 imputations), analyse each completed data set, and combine with Rubin's rules. Show the components of Rubin's rules for one contrast.
+5. **Sensitivity analysis.** Perform a delta-adjustment analysis in which imputed post-dropout month-12 SBP in the programme arms is increased by δ, over a grid you justify. Present a tipping-point display and identify the tipping points.
+6. **Summary.** Write a summary of at most 300 words for the trial team, suitable for the results section of a paper, covering the missing data, the primary result and the sensitivity analysis.
+
+## Data
+
+`assessments/pa10-data/pa10_walk_long.csv`: one row per attended visit, with `id`, `arm` (UC, SP, EP), `age`, `sex`, `bmi`, `visit` (1–6), `month_sched` (0, 1, 3, 6, 9, 12), `month` (actual time) and `sbp` (mmHg). Missed visits have no row.
+
+```{r}
+#| label: show-data
+pa <- read_csv(here("assessments", "pa10-data", "pa10_walk_long.csv"),
+               show_col_types = FALSE) |>
+  mutate(arm = factor(arm, levels = c("UC", "SP", "EP")),
+         sex = factor(sex, levels = c("Male", "Female")),
+         visit_f = factor(month_sched, levels = c(0, 1, 3, 6, 9, 12)))
+glimpse(pa)
+```
+
+## Deliverables
+
+- A reproducible Quarto document or R script that runs from the project root with `source(here::here("R", "setup.R"))` and produces every number reported.
+- A short report (rendered HTML) with: the missing-data description (table and figure), the dropout model, a table of the four estimates (mixed model, complete cases, LOCF, MI) with 95% CIs, the Rubin's-rules components for EP versus usual care, the tipping-point figure, and the 300-word summary.
+
+## Marking guide
+
+Total 100 points.
+
+| Criterion | Points | Full marks require |
+|---|---|---|
+| 1. Description of missingness | 15 | Numbers of complete, intermittent and dropout participants by arm (5); missingness map or visit-flow table (4); a model or comparison relating dropout to observed SBP, correctly interpreted as evidence against MCAR but not as proof of MAR (6) |
+| 2. Primary analysis | 20 | Correct model and emmeans contrast for both programmes with CIs (8); the four validity conditions stated: MAR, separability/ignorability, correct mean and covariance model, dropout drivers in the model (8); a reasoned plausibility judgement (4) |
+| 3. Complete cases and LOCF | 15 | Both estimates correct (6); explanation that complete cases require MCAR and that LOCF assumes no change after dropout and is biased even under MCAR, with SEs too small (6); direction of differences discussed with reference to the dropout pattern (3) |
+| 4. Multiple imputation | 20 | Imputation model that includes arm (separate by arm or with arm-by-visit interactions) and all visits (8); at least 20 imputations, correct analysis of each data set (4); correct pooling with Rubin's rules and the components shown ($\bar U$, $B$, $T$, df) (6); comparison with the mixed model (2) |
+| 5. Delta adjustment | 20 | Shift applied to post-dropout imputed values in programme arms only, with a justified δ grid (8); tipping-point figure with CIs (6); tipping points identified and their clinical plausibility discussed (6) |
+| 6. Summary | 10 | Accurate numbers with CIs; MAR assumption stated; sensitivity result stated; no causal over-reach or claims that MAR was "shown" (10) |
+
+Deduct up to 10 points for code that does not run from the project root, unlabelled figures, or numbers in the text that do not match the output. Common errors to penalise: imputing without arm; pooling by averaging data sets; calling LOCF conservative; claiming the data are MAR because a test was significant.
+
+## Model solution (for instructors) {#model-solution}
+
+### 1. Description
+
+```{r}
+#| label: sol-describe
+grid <- expand.grid(id = unique(pa$id), visit = 1:6, stringsAsFactors = FALSE) |>
+  left_join(distinct(pa, id, arm), by = "id") |>
+  left_join(pa |> select(id, visit, sbp), by = c("id", "visit")) |>
+  mutate(observed = !is.na(sbp), month_sched = c(0, 1, 3, 6, 9, 12)[visit]) |>
+  arrange(id, visit)
+pat <- grid |> group_by(id, arm) |>
+  summarise(n_obs = sum(observed), last = max(visit[observed])) |> ungroup() |>
+  mutate(type = case_when(n_obs == 6 ~ "Complete", n_obs == last ~ "Dropout only",
+                          last == 6 ~ "Intermittent only",
+                          TRUE ~ "Intermittent and dropout"))
+table(pat$type, pat$arm)
+visit_flow(pa, id, month_sched, arm) |> tidyr::pivot_wider(names_from = arm, values_from = n_seen)
+```
+
+```{r}
+#| label: sol-map
+#| fig-cap: "Missingness map of the assessment data, by arm."
+#| fig-height: 4.5
+plot_missing_map(grid, id, month_sched, observed, order_by = as.numeric(observed) * visit) +
+  facet_wrap(~ arm, scales = "free_y", labeller = as_labeller(walk_arm_labels))
+```
+
+```{r}
+#| label: sol-dropout
+risk <- grid |> group_by(id) |>
+  mutate(base = sbp[1],
+         last_sbp = sapply(seq_along(visit), function(k) sbp[max(which(observed[1:k]))]),
+         last_seen = max(visit[observed])) |>
+  ungroup() |>
+  group_by(id) |>
+  mutate(prev_change = lag(last_sbp) - base, prev_visit = lag(visit)) |> ungroup() |>
+  filter(visit > 1, prev_visit <= last_seen, last_seen < 6 | prev_visit < 6) |>
+  mutate(drop_now = as.integer(prev_visit == last_seen),
+         prev_change10 = prev_change / 10)
+m_drop <- glm(drop_now ~ prev_change10 + arm, family = binomial, data = risk)
+dt <- fixef_table(m_drop, exponentiate = TRUE); dt
+```
+
+```{r}
+#| label: sol-desc-values
+#| include: false
+n_drop <- sum(pat$last < 6); n_int <- sum(pat$type == "Intermittent only")
+drop_arm <- pat |> group_by(arm) |> summarise(p = mean(last < 6))
+```
+
+`r n_drop` of 360 participants (`r round(100 * n_drop / 360)`%) dropped out before month 12 (`r paste0(drop_arm$arm, " ", round(100 * drop_arm$p), "%", collapse = ", ")`), and `r n_int` had only intermittent gaps. The odds of dropping out were `r f2(dt$estimate[2])` times higher per 10 mmHg rise in SBP since baseline at the last visit (95% CI `r f2(dt$lower[2])` to `r f2(dt$upper[2])`), and higher in EP (odds ratio `r f2(dt$estimate[4])`). The data are therefore not MCAR. Whether they are MAR cannot be determined from the data.
+
+### 2. Primary analysis
+
+```{r}
+#| label: sol-primary
+diff_change <- function(m) {
+  e  <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+  ch <- contrast(e, list(change = c(-1, 1)), by = "arm")
+  as.data.frame(summary(contrast(ch, "trt.vs.ctrl", by = NULL), infer = TRUE,
+                        adjust = "none"))
+}
+m_lmm <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = pa, control = lmer_ctrl)
+d_lmm <- diff_change(m_lmm); d_lmm
+```
+
+Validity: (1) MAR given observed SBP and arm; plausible because dropout here is driven by the observed change at the last visit (a participant who sees a rise in their reading leaves), but untestable; (2) separability of outcome and dropout parameters, a standard assumption; (3) correct mean (saturated visit-by-arm means) and covariance model (random intercept and slope; Module 5 checks); (4) the drivers of dropout (previous SBP, arm) are in the model.
+
+### 3. Complete cases and LOCF
+
+```{r}
+#| label: sol-alt
+completers <- pa$id[pa$month_sched == 12]
+m_cc <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = filter(pa, id %in% completers),
+             control = lmer_ctrl)
+d_cc <- diff_change(m_cc)
+locf <- pa |> group_by(id, arm) |>
+  summarise(base = sbp[visit == 1], last = sbp[which.max(visit)]) |> ungroup()
+lt <- fixef_table(lm(I(last - base) ~ arm, data = locf)) |> filter(term != "(Intercept)")
+```
+
+### 4. Multiple imputation
+
+```{r}
+#| label: sol-mi
+pa_w <- pa |> select(id, arm, age, sex, bmi, month_sched, sbp) |>
+  tidyr::pivot_wider(names_from = month_sched, values_from = sbp, names_prefix = "sbp_m") |>
+  mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+imp_vars <- c("age10", "sex", "bmi_c", paste0("sbp_m", c(0, 1, 3, 6, 9, 12)))
+m_imp <- 30
+imps <- lapply(levels(pa_w$arm), function(a) {
+  d <- pa_w |> filter(arm == a) |> select(id, all_of(imp_vars))
+  pm <- make.predictorMatrix(d); pm[, "id"] <- 0
+  mice(d, m = m_imp, method = "norm", predictorMatrix = pm, maxit = 10,
+       seed = 1010, printFlag = FALSE)
+})
+names(imps) <- levels(pa_w$arm)
+last_seen <- pat |> select(id, last)
+pool_delta <- function(delta) {
+  r <- lapply(seq_len(m_imp), function(k) {
+    d <- bind_rows(lapply(names(imps), function(a) mice::complete(imps[[a]], k) |>
+                            mutate(arm = a))) |>
+      mutate(arm = factor(arm, levels = c("UC", "SP", "EP"))) |>
+      left_join(last_seen, by = "id") |>
+      mutate(sbp_m12 = sbp_m12 + ifelse(arm != "UC" & last < 6, delta, 0))
+    f <- lm(I(sbp_m12 - sbp_m0) ~ arm, data = d)
+    data.frame(term = c("SP", "EP"), est = coef(f)[2:3], se = sqrt(diag(vcov(f)))[2:3])
+  }) |> bind_rows()
+  bind_rows(lapply(c("SP", "EP"), function(tm) {
+    x <- filter(r, term == tm)
+    p <- mice::pool.scalar(x$est, x$se^2, n = 360, k = 3)
+    q <- qt(0.975, p$df)
+    data.frame(term = tm, delta = delta, estimate = p$qbar, Ubar = p$ubar, B = p$b,
+               T = p$t, df = p$df, fmi = p$fmi,
+               lower = p$qbar - q * sqrt(p$t), upper = p$qbar + q * sqrt(p$t))
+  }))
+}
+mi0 <- pool_delta(0)
+mi0 |> mutate(across(where(is.numeric), ~ round(., 2)))
+```
+
+```{r}
+#| label: sol-table
+res_tab <- data.frame(
+  Analysis = rep(c("Mixed model, all data", "Complete cases", "LOCF", "Multiple imputation"), each = 2),
+  Contrast = rep(c("SP vs UC", "EP vs UC"), 4),
+  Estimate = c(fmt_ci(d_lmm$estimate, d_lmm$lower.CL, d_lmm$upper.CL),
+               fmt_ci(d_cc$estimate, d_cc$lower.CL, d_cc$upper.CL),
+               fmt_ci(lt$estimate, lt$lower, lt$upper),
+               fmt_ci(mi0$estimate, mi0$lower, mi0$upper)))
+knitr::kable(res_tab)
+```
+
+The mixed model and MI give similar estimates, as both assume MAR; the remaining difference (under 1 mmHg) reflects their different models (MI uses visit-to-visit regressions within each arm) and Monte Carlo error. Complete-case analysis discards participants who left after a rise in SBP; such rises are more common under usual care, so usual-care completers look better than usual care as a whole, the completers in each arm are a selected group and the estimates shift. LOCF carries early values forward before the programme effect has developed and treats them as observed.
+
+### 5. Delta adjustment
+
+```{r}
+#| label: sol-delta
+#| fig-cap: "Tipping-point display for the assessment data."
+tip <- bind_rows(lapply(seq(0, 30, by = 2), pool_delta))
+ggplot(tip, aes(delta, estimate, colour = term, fill = term)) +
+  geom_hline(yintercept = 0) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, colour = NA) +
+  geom_line() + geom_point() +
+  scale_colour_arm(name = NULL) + scale_fill_arm(name = NULL) +
+  labs(x = "δ (mmHg)", y = "Difference in mean change at month 12 (mmHg)")
+tp <- function(tm) { x <- filter(tip, term == tm); if (any(x$upper >= 0)) min(x$delta[x$upper >= 0]) else NA }
+c(SP = tp("SP"), EP = tp("EP"))
+```
+
+```{r}
+#| label: sol-values
+#| include: false
+t6 <- tip |> filter(delta == 6)
+```
+
+The SP interval first includes zero at δ = `r tp("SP")` mmHg and the EP interval at `r ifelse(is.na(tp("EP")), "more than 30", tp("EP"))` mmHg. A grid up to about 1.5 times the expected programme effect, with δ ≤ 6 mmHg regarded as plausible, is a reasonable justification.
+
+### 6. Model summary
+
+> Of 360 participants, `r n_drop` (`r round(100 * n_drop / 360)`%) dropped out before month 12 (`r paste0(drop_arm$arm, " ", round(100 * drop_arm$p), "%", collapse = ", ")`), and dropout was more likely after a rise in SBP. The primary analysis, a linear mixed model of all observed data valid under missing at random, estimated differences in mean change from baseline to month 12 versus usual care of `r fmt_ci(d_lmm$estimate[1], d_lmm$lower.CL[1], d_lmm$upper.CL[1])` mmHg for the standard programme and `r fmt_ci(d_lmm$estimate[2], d_lmm$lower.CL[2], d_lmm$upper.CL[2])` mmHg for the enhanced programme. Multiple imputation by arm gave similar results (`r f2(mi0$estimate[1])` and `r f2(mi0$estimate[2])` mmHg). When imputed month-12 SBP of programme dropouts was increased by 6 mmHg above the MAR prediction, the differences were `r fmt_ci(t6$estimate[1], t6$lower[1], t6$upper[1])` and `r fmt_ci(t6$estimate[2], t6$lower[2], t6$upper[2])` mmHg; the conclusions changed only at δ = `r tp("SP")` mmHg (SP) and `r ifelse(is.na(tp("EP")), "beyond 30", tp("EP"))` mmHg (EP).
+
+### Instructor note: comparison with the complete data
+
+Because the assessment data were created from the complete WALK outcomes, the answer without any missing data is known (not to be shared with participants):
+
+```{r}
+#| label: sol-benchmark
+m_full <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = load_walk("complete"),
+               control = lmer_ctrl)
+d_full <- diff_change(m_full)
+data.frame(contrast = c("SP vs UC", "EP vs UC"), complete_data = round(d_full$estimate, 2),
+           mixed_model = round(d_lmm$estimate, 2), complete_cases = round(d_cc$estimate, 2),
+           locf = round(lt$estimate, 2), mi = round(mi0$estimate, 2))
+```
+
+This is one realisation, so differences combine bias and chance; the simulation in the Module 10 notes shows the systematic pattern.
+
+### Code used to generate the assessment data
+
+```{r}
+#| label: gen-data-show
+#| ref.label: gen-data
+#| eval: false
+```

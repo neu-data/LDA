@@ -1,0 +1,416 @@
+---
+title: "Module 2. Preparing and exploring longitudinal data in R"
+subtitle: "Practical assessment"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.callout-note title="For instructors"}
+Sections 1 to 4 are the participant brief. Section 5 is the marking guide and Section 6 the executed model solution. Distribute the brief and the data file `assessments/pa02-data/pa02_walk_visits.csv` (created when this document is rendered) together with `data/walk_baseline.csv`. Remove Sections 5 and 6 before giving the document to participants.
+:::
+
+```{r}
+#| label: gen-data
+#| include: false
+# Build a new messy export from the WALK visits with a fixed seed.
+# The problems differ from walk_visits_raw.csv used in the notes.
+set.seed(20260202)
+baseline <- load_walk("baseline")
+sched_months <- c(0, 1, 3, 6, 9, 12)
+
+base_rows <- walk |>
+  left_join(baseline |> select(id, rand_date), by = "id") |>
+  mutate(visit_date = rand_date + round(month * 30.44),
+         row_id = row_number())
+
+# rows reserved for single-row problems (never duplicated)
+special <- sample(base_rows$row_id[base_rows$visit > 1], 3)
+dup_pool <- setdiff(base_rows$row_id, special)
+dup_exact <- sample(dup_pool, 8)
+dup_conf  <- sample(setdiff(dup_pool, dup_exact), 4)
+
+pa <- bind_rows(
+  base_rows |> mutate(copy = "original"),
+  base_rows |> filter(row_id %in% dup_exact) |> mutate(copy = "exact"),
+  base_rows |> filter(row_id %in% dup_conf) |> mutate(copy = "conflict") |>
+    mutate(sbp = sbp + c(-8, 5, 12, -4),
+           visit_date = visit_date + c(1, 3, 2, 1))
+) |>
+  mutate(sbp_txt = as.character(sbp),
+         steps_txt = as.character(steps),
+         date_txt = format(visit_date, "%Y-%m-%d"),
+         label = paste0("M", month_sched))
+
+# single-row problems
+pa$sbp_txt[pa$row_id == special[1]][1] <- paste0(pa$sbp[pa$row_id == special[1]][1], "0")  # x10 typo
+pa$sbp_txt[pa$row_id == special[2]][1] <- "missing"                                      # text code
+pa$date_txt[pa$row_id == special[3]][1] <-
+  format(pa$visit_date[pa$row_id == special[3]][1] - 365, "%Y-%m-%d")                     # wrong year
+
+# formatting problems applied at random to all rows
+n <- nrow(pa)
+i_case  <- sample(n, 25); i_space <- sample(n, 12); i_hyph <- sample(n, 6)
+pa$id_txt <- pa$id
+pa$id_txt[i_case]  <- tolower(pa$id_txt[i_case])
+pa$id_txt[i_space] <- paste0(" ", pa$id_txt[i_space], " ")
+pa$id_txt[i_hyph]  <- sub("^([Ww])", "\\1-", trimws(pa$id_txt[i_hyph]))
+i_lab <- sample(n, 60)
+pa$label[i_lab] <- ifelse(pa$month_sched[i_lab] == 0, "Baseline",
+                          paste("Month", pa$month_sched[i_lab]))
+i_date <- sample(which(pa$date_txt == format(pa$visit_date, "%Y-%m-%d")), 40)
+pa$date_txt[i_date] <- format(pa$visit_date[i_date], "%d/%m/%Y")
+i_unit <- sample(which(grepl("^[0-9]+$", pa$sbp_txt)), 15)
+pa$sbp_txt[i_unit] <- paste(pa$sbp_txt[i_unit], "mmHg")
+i_comma <- sample(which(grepl("\\.", pa$steps_txt)), 10)
+pa$steps_txt[i_comma] <- sub("\\.", ",", pa$steps_txt[i_comma])
+
+# five of the eight exact copies differ from their original only in format
+ix <- which(pa$copy == "exact")
+pa$id_txt[ix[1:2]] <- tolower(pa$id[ix[1:2]])
+pa$date_txt[ix[3:4]] <- format(pa$visit_date[ix[3:4]], "%d/%m/%Y")
+pa$label[ix[5]] <- ifelse(pa$month_sched[ix[5]] == 0, "Baseline",
+                          paste("Month", pa$month_sched[ix[5]]))
+
+# two records from a participant ID that was never randomised
+orphan <- pa |> filter(id == "W050", visit %in% c(1, 2)) |>
+  distinct(row_id, .keep_all = TRUE) |>
+  mutate(id_txt = "W377", sbp_txt = as.character(sbp + 3))
+
+pa_raw <- bind_rows(pa, orphan) |>
+  slice_sample(prop = 1) |>
+  transmute(subject = id_txt, visit = label, date = date_txt,
+            sbp = sbp_txt, steps = steps_txt)
+
+dir.create(here("assessments", "pa02-data"), showWarnings = FALSE)
+write_csv(pa_raw, here("assessments", "pa02-data", "pa02_walk_visits.csv"))
+```
+
+## Task brief
+
+You are the data analyst for the WALK trial. The trial database has produced a new visit-level export, `pa02_walk_visits.csv`. Your task is to turn it into a checked analysis file, describe the data, and explain to the trial team what the exploratory analysis implies for the main analysis. Work in a single Quarto document or R script that runs from top to bottom from the course project root.
+
+The export has `r nrow(pa_raw)` rows and five columns, all to be treated as text:
+
+| Column | Content |
+|---|---|
+| `subject` | Participant identifier; the protocol format is `W` followed by three digits |
+| `visit` | Visit label |
+| `date` | Visit date |
+| `sbp` | Systolic blood pressure, mmHg |
+| `steps` | Average daily steps, thousands per day |
+
+The participant-level file is `data/walk_baseline.csv` (randomisation date, arm and baseline covariates for the `r nrow(baseline)` randomised participants). Scheduled visits are at months 0, 1, 3, 6, 9 and 12, and a month is 30.44 days. The protocol windows are ±7 days (month 1), ±14 days (month 3) and ±28 days (months 6, 9 and 12). The data management plan states:
+
+- SBP outside 70–250 mmHg is implausible: set it to missing, keep the raw value and log a query.
+- When two different records exist for the same participant and visit, keep the earliest-dated record and flag the visit.
+- Records that cannot be linked to a randomised participant are excluded from the analysis file and queried.
+- Visits outside the window are kept and flagged.
+
+You may use `walk_long.csv` **only** for a final agreement check (deliverable 3). Do not use it, or `walk_complete.csv`, at any other stage.
+
+## Data
+
+```{r}
+#| label: show-data
+pa_preview <- read_csv(here("assessments", "pa02-data", "pa02_walk_visits.csv"),
+                       col_types = cols(.default = col_character()))
+head(pa_preview, 8)
+```
+
+## Deliverables
+
+1. **Cleaning code and cleaned file.** Code that reads the export as text and produces an analysis file with one row per participant and visit, containing `id`, `visit` (1–6), `month_sched`, `visit_date`, actual time `month`, `sbp`, `steps`, and flags for conflicting duplicates, SBP problems, date problems and out-of-window visits. Use `stopifnot()` or equivalent checks after each major step.
+2. **Cleaning log and query log.** A table with the number of records affected at each step, and a table with one row per queried record (participant, visit, issue, raw value, action).
+3. **Validation.** A check of the cleaned file against `walk_baseline.csv` (unmatched keys in both directions, `relationship =`), and an agreement check against `walk_long.csv`, with every difference explained.
+4. **Description.** A baseline table by arm; SBP by arm and scheduled visit (n, mean, SD); a participant-flow table with n (% of randomised); counts of intermittent missing visits and visits missing after dropout by arm, based on a grid built from the design.
+5. **Plots.** A spaghetti plot of a random subset of participants, observed mean SBP by arm and visit, a missingness map, and a plot or table that shows whether participants who drop out differ from those who stay.
+6. **Short report (at most 600 words).** Summarise the cleaning decisions, describe the data, and explain to the trial team why the observed mean SBP at each visit should not be presented as the estimated trajectory in each arm.
+
+## Marking guide
+
+Total 100 marks. A pass requires 50 marks, including at least 10 of the 15 marks for criterion C.
+
+| Criterion | What earns full marks | Marks |
+|---|---|---|
+| A. Reproducible reading and structure (LO 2.1) | Reads all columns as text; code runs top to bottom with relative paths; clear sections; long format with a unique `id`–`visit` key | 8 |
+| B. Identifiers, labels, dates and numbers (LO 2.2, 2.3) | IDs standardised (case, spaces, hyphen) before any duplicate check; all visit-label variants mapped; both date formats parsed with no silent `NA`; "mmHg" suffix, the text code "missing" and decimal commas handled; counts reported | 15 |
+| C. Duplicates and the duplicate rule (LO 2.3) | Exact duplicates found after standardisation and removed (count given); conflicting duplicates listed, resolved by the stated rule and flagged; a clear explanation of why the rule must be fixed without looking at outcomes by arm | 15 |
+| D. Plausibility, dates and timing (LO 2.3) | Implausible SBP set to missing with raw value kept; the visit dated before randomisation detected and handled with a query; actual time derived from dates; out-of-window visits flagged and kept, with a summary by visit | 12 |
+| E. Linkage and validation (LO 2.2) | Join with `relationship = "many-to-one"`; unmatched IDs identified in both directions; the non-randomised ID excluded and queried; agreement with `walk_long.csv` checked and each difference explained (including month rounding) | 12 |
+| F. Logs (LO 2.3) | Cleaning log with counts that add up; query log with one row per issue | 8 |
+| G. Descriptive tables (LO 2.4) | Baseline table by arm without p-values; visit summary; flow table with randomised denominator; missing-visit types from a design-based grid | 10 |
+| H. Plots (LO 2.5) | Random subset with a seed; actual time for individual lines; observed means with n or CI; missingness map; dropout comparison; correct units and labels | 10 |
+| I. Report and interpretation (LO 2.6) | States that dropout is related to earlier SBP, that observed means are therefore biased (direction stated), and that trajectories should be estimated from a model using all observed data; honest about limitations (MAR is an assumption) | 10 |
+
+**Common deductions.** Duplicates sought before IDs are standardised (−4 from C). Out-of-window visits deleted (−4 from D). Implausible value "corrected" without a documented rule (−3 from D). The non-randomised participant left in the analysis file (−4 from E). Grid built from the observed data (−3 from G). Hand-picked subset in the spaghetti plot (−2 from H). Report describes observed means as the treatment effect (−5 from I).
+
+## Model solution (for instructors) {#model-solution}
+
+The solution below is executed when this document is rendered, so its numbers are the reference values for marking.
+
+### Reading and standardising
+
+```{r}
+#| label: sol-read
+raw <- read_csv(here("assessments", "pa02-data", "pa02_walk_visits.csv"),
+                col_types = cols(.default = col_character()))
+
+parse_label <- function(x) {
+  x <- tolower(trimws(x))
+  x <- ifelse(x == "baseline", "0", gsub("month|m|\\s", "", x))
+  as.numeric(x)
+}
+step1 <- raw |>
+  mutate(id          = toupper(gsub("[[:space:]-]", "", subject)),
+         month_sched = parse_label(visit),
+         visit       = match(month_sched, sched_months),
+         visit_date  = coalesce(as.Date(date, format = "%Y-%m-%d"),
+                                as.Date(date, format = "%d/%m/%Y")),
+         sbp_num     = parse_number(sbp, na = c("", "NA", "missing")),
+         steps_num   = parse_double(sub(",", ".", steps, fixed = TRUE)))
+stopifnot(all(grepl("^W[0-9]{3}$", step1$id)), !anyNA(step1$visit),
+          !anyNA(step1$visit_date), !anyNA(step1$steps_num))
+
+format_counts <- c(
+  ids_changed      = sum(step1$id != raw$subject),
+  labels_not_Mx    = sum(!grepl("^M[0-9]+$", raw$visit)),
+  dates_dd_mm_yyyy = sum(grepl("/", raw$date)),
+  sbp_with_unit    = sum(grepl("mmHg", raw$sbp)),
+  sbp_text_code    = sum(raw$sbp == "missing", na.rm = TRUE),
+  steps_comma      = sum(grepl(",", raw$steps)))
+format_counts
+```
+
+### Duplicates
+
+```{r}
+#| label: sol-dups
+step2 <- step1 |> select(id, visit, month_sched, visit_date,
+                         sbp = sbp_num, steps = steps_num)
+n_exact <- sum(duplicated(step2))
+n_exact_naive <- sum(duplicated(raw))
+step3 <- distinct(step2)
+
+conflicts <- step3 |> add_count(id, visit, name = "n_records") |>
+  filter(n_records > 1) |> arrange(id, visit, visit_date)
+conflicts
+
+step4 <- step3 |>
+  group_by(id, visit) |>
+  mutate(conflict_flag = n() > 1) |>
+  arrange(visit_date, .by_group = TRUE) |>
+  slice(1) |> ungroup()
+stopifnot(nrow(count(step4, id, visit) |> filter(n > 1)) == 0)
+c(exact_after_standardising = n_exact, exact_in_raw_text = n_exact_naive,
+  conflicting_visits = n_distinct(paste(conflicts$id, conflicts$visit)))
+```
+
+Only `r n_exact_naive` of the `r n_exact` exact duplicates are identical in the raw text. The other `r n_exact - n_exact_naive` differ from their original only in formatting (ID case or spacing, label or date format) and are found only after standardisation. A participant who removes duplicates before standardising will find `r n_exact_naive` and may then misreport the rest as conflicting duplicates.
+
+### Linkage, time, plausibility and windows
+
+```{r}
+#| label: sol-link
+orphans <- anti_join(step4, baseline, by = "id")
+orphans
+never_seen <- anti_join(baseline, step4, by = "id")
+nrow(never_seen)
+
+window_days <- c(`0` = 0, `1` = 7, `3` = 14, `6` = 28, `9` = 28, `12` = 28)
+clean <- step4 |>
+  semi_join(baseline, by = "id") |>
+  left_join(baseline |> select(id, arm, rand_date), by = "id",
+            relationship = "many-to-one", unmatched = "error") |>
+  mutate(days = as.numeric(visit_date - rand_date),
+         date_flag = if_else(days < 0, "before randomisation", "ok"),
+         visit_date = if_else(date_flag == "ok", visit_date, as.Date(NA)),
+         month = round(as.numeric(visit_date - rand_date) / 30.44, 2),
+         dev_days = as.numeric(visit_date - (rand_date + round(month_sched * 30.44))),
+         out_of_window = abs(dev_days) > window_days[as.character(month_sched)],
+         sbp_flag = case_when(is.na(sbp) ~ "missing",
+                              sbp < 70 | sbp > 250 ~ "implausible",
+                              TRUE ~ "ok"),
+         sbp_raw = sbp,
+         sbp = if_else(sbp_flag == "implausible", NA_real_, sbp)) |>
+  select(id, arm, visit, month_sched, visit_date, month, dev_days,
+         out_of_window, sbp, sbp_raw, sbp_flag, steps, conflict_flag,
+         date_flag) |>
+  arrange(id, visit)
+clean |> filter(sbp_flag != "ok" | date_flag != "ok") |>
+  select(id, visit, month_sched, sbp_raw, sbp_flag, date_flag)
+```
+
+The visit dated before randomisation has an impossible date, most likely a wrong year. Its date and actual time are set to missing and a query is raised. Its SBP is kept, because the visit took place, but a model that uses actual time cannot use it until the date is resolved.
+
+```{r}
+#| label: sol-windows
+clean |> filter(visit > 1, !is.na(dev_days)) |>
+  group_by(month_sched) |>
+  summarise(window = first(window_days[as.character(month_sched)]), n = n(),
+            sd_dev = round(sd(dev_days), 1), n_out = sum(out_of_window))
+```
+
+### Logs
+
+```{r}
+#| label: sol-logs
+cleaning_log <- tibble(
+  step = c("Records read", "Exact duplicates removed (after standardising)",
+           "Visits with conflicting records (earliest kept)",
+           "Records from non-randomised IDs excluded",
+           "Records in analysis file", "SBP missing (text code)",
+           "Implausible SBP set to missing", "Dates before randomisation",
+           "Out-of-window visits (kept, flagged)"),
+  n = c(nrow(raw), n_exact, n_distinct(paste(conflicts$id, conflicts$visit)),
+        nrow(orphans), nrow(clean), sum(clean$sbp_flag == "missing"),
+        sum(clean$sbp_flag == "implausible"),
+        sum(clean$date_flag != "ok"), sum(clean$out_of_window, na.rm = TRUE)))
+knitr::kable(cleaning_log)
+stopifnot(nrow(raw) - n_exact - n_distinct(paste(conflicts$id, conflicts$visit)) -
+            nrow(orphans) == nrow(clean))
+
+query_log <- bind_rows(
+  conflicts |> transmute(id, visit, issue = "conflicting duplicate",
+                         raw_value = paste0(visit_date, ", SBP ", sbp),
+                         action = "earliest-dated record kept"),
+  orphans |> transmute(id, visit, issue = "ID not randomised",
+                       raw_value = as.character(sbp), action = "excluded"),
+  clean |> filter(sbp_flag != "ok") |>
+    transmute(id, visit, issue = paste("SBP", sbp_flag),
+              raw_value = as.character(sbp_raw), action = "set to missing"),
+  clean |> filter(date_flag != "ok") |>
+    transmute(id, visit, issue = "date before randomisation",
+              raw_value = raw$date[match(paste(id, visit),
+                                         paste(step1$id, step1$visit))],
+              action = "date and month set to missing"))
+knitr::kable(query_log)
+```
+
+The row counts reconcile: records read minus exact duplicates, minus the extra record of each conflicting pair, minus the non-randomised records equals the number of rows in the analysis file.
+
+### Agreement with `walk_long.csv`
+
+```{r}
+#| label: sol-agree
+agree <- clean |>
+  full_join(walk |> select(id, visit, month_ref = month, sbp_ref = sbp,
+                           steps_ref = steps), by = c("id", "visit"))
+c(only_clean = sum(is.na(agree$steps_ref)),
+  only_walk_long = sum(is.na(agree$steps)),
+  steps_differ = sum(agree$steps != agree$steps_ref, na.rm = TRUE))
+agree |> filter(is.na(sbp) | sbp != sbp_ref) |> select(id, visit, sbp, sbp_raw, sbp_ref)
+table(round(agree$month - agree$month_ref, 2), useNA = "ifany")
+```
+
+The keys agree exactly, steps agree everywhere, and SBP differs only where the cleaning set a value to missing (the text code and the ×10 typo). Month differs by at most 0.02 months because the export's dates are whole days, and is missing for the visit with the impossible date.
+
+### Description
+
+```{r}
+#| label: sol-describe
+mean_sd <- function(x) sprintf("%.1f (%.1f)", mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
+baseline |>
+  group_by(arm) |>
+  summarise(n = as.character(n()), Age = mean_sd(age),
+            `Female, n (%)` = sprintf("%d (%.0f%%)", sum(sex == "Female"),
+                                      100 * mean(sex == "Female")),
+            BMI = mean_sd(bmi), `Baseline SBP` = mean_sd(sbp0)) |>
+  pivot_longer(-arm, names_to = "Characteristic") |>
+  pivot_wider(names_from = arm, values_from = value) |>
+  knitr::kable()
+
+clean |> group_by(arm, month_sched) |>
+  summarise(n = sum(!is.na(sbp)), mean = round(mean(sbp, na.rm = TRUE), 1),
+            sd = round(sd(sbp, na.rm = TRUE), 1)) |>
+  print(n = 18)
+
+visit_flow(clean, id, month_sched, arm) |>
+  left_join(count(baseline, arm, name = "randomised"), by = "arm") |>
+  mutate(cell = sprintf("%d (%.0f%%)", n_seen, 100 * n_seen / randomised)) |>
+  select(arm, month_sched, cell) |>
+  pivot_wider(names_from = arm, values_from = cell) |>
+  knitr::kable()
+
+grid <- baseline |> select(id, arm) |>
+  crossing(visit = 1:6) |>
+  mutate(month_sched = sched_months[visit]) |>
+  left_join(clean |> select(id, visit) |> mutate(attended = TRUE),
+            by = c("id", "visit")) |>
+  mutate(observed = !is.na(attended)) |>
+  group_by(id) |>
+  mutate(last_seen = max(visit[observed]),
+         miss_type = case_when(observed ~ "attended",
+                               visit < last_seen ~ "intermittent",
+                               TRUE ~ "after dropout")) |>
+  ungroup()
+count(grid, arm, miss_type) |> pivot_wider(names_from = miss_type, values_from = n)
+```
+
+### Plots
+
+```{r}
+#| label: sol-plots
+#| fig-width: 9
+#| fig-height: 8
+clean_lab <- clean |>
+  mutate(arm_lab = factor(walk_arm_labels[as.character(arm)], levels = walk_arm_labels))
+p_spag <- plot_spaghetti(clean_lab |> filter(!is.na(sbp), !is.na(month)),
+                         month, sbp, id, group = arm_lab, n_show = 30, seed = 11,
+                         alpha = 0.7) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+p_mean <- plot_observed_means(clean_lab |> filter(!is.na(sbp)), month_sched, sbp,
+                              arm_lab) +
+  scale_x_continuous(breaks = sched_months) +
+  labs(x = "Scheduled month", y = "Observed mean SBP (mmHg)")
+p_map <- plot_missing_map(grid, id, visit, observed, order_by = last_seen) +
+  facet_wrap(~ arm, scales = "free_y") +
+  scale_x_discrete(labels = sched_months) + labs(x = "Scheduled month")
+p_spag / (p_mean | p_map)
+```
+
+```{r}
+#| label: sol-dropout
+last_info <- grid |> distinct(id, last_seen)
+drop_cmp <- clean |>
+  filter(!is.na(sbp), visit < 6) |>
+  left_join(last_info, by = "id") |>
+  group_by(arm, visit) |>
+  mutate(dev = sbp - mean(sbp)) |>
+  ungroup() |>
+  mutate(status = if_else(visit == last_seen, "Last visit before dropout",
+                          "Seen again later")) |>
+  group_by(status) |>
+  summarise(n = n(), mean_dev = round(mean(dev), 2))
+drop_cmp
+```
+
+### Model report (abridged)
+
+```{r}
+#| label: sol-report-numbers
+#| include: false
+dd <- drop_cmp$mean_dev[drop_cmp$status == "Last visit before dropout"]
+n_miss_grid <- sum(!grid$observed)
+```
+
+The export contained `r nrow(raw)` records. After standardising identifiers, visit labels, date formats and number formats, `r n_exact` exact duplicate records were removed (only `r n_exact_naive` of them were identical before standardisation). `r n_distinct(paste(conflicts$id, conflicts$visit))` visits had conflicting records; by the prespecified rule the earliest-dated record was kept and the visit flagged. This rule was fixed in the data management plan and applied without reference to arm or outcomes, so that the choice cannot favour either arm. `r nrow(orphans)` records from an identifier not on the randomisation list were excluded and queried. One SBP value was coded as text ("missing"), one was implausible (`r query_log$raw_value[query_log$issue == "SBP implausible"]` mmHg) and one visit was dated before randomisation. All are queried. The analysis file has `r nrow(clean)` visits from `r n_distinct(clean$id)` participants and agrees with the reference file apart from these documented changes and sub-day rounding of actual time.
+
+Of the `r nrow(grid)` scheduled visits, `r n_miss_grid` were not attended, mostly after dropout. Participants who dropped out had SBP on average `r dd` mmHg above their arm's mean at their last visit. Because participants with higher SBP leave, those still measured at later visits are a selected, lower-SBP group, and the observed visit means drift below the means of all randomised participants. They should be reported descriptively with their numbers of participants. The trajectories and treatment effects should be estimated with a mixed model fitted to all observed data, which is valid if dropout depends only on observed data (MAR). That assumption cannot be checked from the data and will be explored in sensitivity analyses.
+
+### Code used to generate the assessment data
+
+```{r}
+#| label: gen-data-show
+#| ref.label: gen-data
+#| eval: false
+```

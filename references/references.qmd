@@ -1,0 +1,18 @@
+---
+title: "References"
+subtitle: "Verified reference list"
+bibliography: references.bib
+nocite: |
+  @*
+format:
+  html:
+    number-sections: false
+    toc: false
+---
+
+Every reference below was checked against the publisher, a DOI record (Crossref), PubMed or CRAN on 26 October 2026. The evidence for each item, and the few details that could not be fully confirmed, are recorded in `references/verification_report.md`. Package versions are those current on CRAN on that date. The versions used to run the course are recorded in `renv.lock`.
+
+The course follows the approach of Verbeke and Molenberghs [-@verbeke2000] for linear mixed models and Molenberghs and Verbeke [-@molenberghs2005] for discrete outcomes. Molenberghs and Verbeke [-@molenberghs2017] give a compact overview of the field in *Wiley StatsRef*.
+
+::: {#refs}
+:::

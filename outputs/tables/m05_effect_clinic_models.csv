@@ -1,0 +1,7 @@
+model,contrast,estimate,se
+Primary model,SP - UC,-5.3768202392135995,1.4215089909511809
+Primary model,EP - UC,-8.968974250506779,1.436699028064045
++ clinic intercept,SP - UC,-5.349607160452879,1.42154716560249
++ clinic intercept,EP - UC,-8.938605752950984,1.4368498285071234
++ clinic intercept and slope (singular),SP - UC,-5.62867458368978,1.407124061398067
++ clinic intercept and slope (singular),EP - UC,-9.058952322675985,1.4218639419990784

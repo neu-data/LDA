@@ -1,0 +1,208 @@
+---
+title: "Module 13. Advanced extensions"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+suppressPackageStartupMessages({
+  library(ordinal); library(survival); library(JMbayes2)
+})
+slice <- dplyr::slice; lme <- nlme::lme; coxph <- survival::coxph
+walk  <- load_walk()
+clear <- load_clear() |> mutate(id = factor(id))
+```
+
+```{r}
+#| label: helpers
+#| include: false
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+pct <- function(x) paste0(formatC(100 * x, format = "f", digits = 0), "%")
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This knowledge check covers the <span class="advanced-tag">ADVANCED</span> material of Module 13. There are 13 questions: multiple choice, true/false with a justification, and short interpretations of real output produced in this document. Each question lists the learning outcome it addresses. Answers and explanations are at the end.
+
+## Questions
+
+### Question 1 (LO 13.1)
+
+The cumulative-logit mixed model below was fitted to the CLEAR itch severity data.
+
+```{r}
+#| label: q1
+m_q1 <- clmm(severity_f ~ week * arm + (1 | id), data = clear, nAGQ = 7)
+round(coef(summary(m_q1)), 4)
+```
+
+```{r}
+#| label: q1-extract
+#| include: false
+b_wa <- coef(summary(m_q1))["week:armActive", 1]
+```
+
+In the `ordinal` package, $\operatorname{logit} P(Y \le k) = \theta_k - \eta$. Which statement about the `week:armActive` coefficient (`r f3(b_wa)`) is correct?
+
+a. Severity falls more slowly with active treatment than with placebo.
+b. For a given participant, the odds of being in a more severe category fall faster over time with active treatment than with placebo.
+c. The proportion of participants with severe itch is `r f1(abs(100 * b_wa))` percentage points lower per week with active treatment.
+d. It is a population-average log odds ratio.
+
+### Question 2 (LO 13.1)
+
+True or false, with a one-sentence justification: "Under the proportional odds assumption, the treatment effect on the odds of 'mild or worse versus none' equals its effect on the odds of 'severe versus not severe'."
+
+### Question 3 (LO 13.1)
+
+A study records, at each visit, which of four pain-relief strategies a participant mainly used (none, paracetamol, opioid, non-drug therapy). Which model is appropriate for this repeated outcome?
+
+a. A cumulative-logit mixed model with the strategies ordered by cost.
+b. A linear mixed model for the strategy code 0 to 3.
+c. A baseline-category (multinomial) logit model with correlated random intercepts for the non-reference categories.
+d. A Poisson GLMM for the strategy code.
+
+### Question 4 (LO 13.2)
+
+The output below is from a three-level random-intercept model for WALK SBP.
+
+```{r}
+#| label: q4
+m_q4 <- lmer(sbp ~ visit_f * arm + (1 | clinic) + (1 | id), data = walk,
+             control = lmer_ctrl)
+vc <- as.data.frame(VarCorr(m_q4))
+v  <- setNames(vc$vcov[match(c("clinic", "id", "Residual"), vc$grp)],
+               c("clinic", "participant", "residual"))
+round(v, 2)
+```
+
+Calculate (i) the correlation between SBP measurements of two different participants at the same clinic, and (ii) the correlation between two measurements of the same participant.
+
+### Question 5 (LO 13.2)
+
+WALK randomised participants within each of its 8 clinics. Adding a random clinic intercept to the primary model changes the EP versus UC difference in mean change by less than 0.1 mmHg and leaves its standard error unchanged. Which explanation is correct?
+
+a. The clinic variance is zero.
+b. Treatment varies within clinics, so clinic effects cancel from the between-arm comparison.
+c. Eight clinics are too few for `lmer` to estimate a clinic variance, so it is ignored.
+d. Random effects never change fixed-effect estimates in linear mixed models.
+
+### Question 6 (LO 13.2, LO 13.6)
+
+True or false, with justification: "In a cluster-randomised trial with 8 clinics (4 per arm), treating clinic as a fixed effect is the safest choice."
+
+### Question 7 (LO 13.3)
+
+An asymptotic exponential model $y_{ij} = \phi_{0i} - \phi_{1i}(1 - e^{-t_{ij}/\kappa}) + \varepsilon_{ij}$ was fitted to WALK.
+
+```{r}
+#| label: q7-start
+#| include: false
+# same data-derived starting values as the notes
+obs <- walk |> group_by(arm, month_sched) |> summarise(sbp = mean(sbp))
+start_A <- obs |> group_by(arm) |>
+  summarise(A = sbp[month_sched == 0] - sbp[month_sched == 12]) |> pull(A)
+start_vals <- c(base = mean(walk$sbp[walk$visit == 1]), A = round(start_A, 1),
+                tau = 2)
+```
+
+```{r}
+#| label: q7
+m_q7 <- nlme(sbp ~ base - A * (1 - exp(-month / tau)),
+             data = as.data.frame(walk),
+             fixed = list(base ~ 1, A ~ arm - 1, tau ~ 1),
+             random = list(id = pdDiag(base + A ~ 1)),
+             start = start_vals)
+round(nlme::fixef(m_q7), 2)
+```
+
+```{r}
+#| label: q7-extract
+#| include: false
+fe7 <- nlme::fixef(m_q7)
+```
+
+By how many months after randomisation has the enhanced programme achieved about 95% of its plateau fall, and how large is that 95% fall?
+
+### Question 8 (LO 13.3)
+
+Which of the following is **not** a sensible response when `nlme()` fails to converge?
+
+a. Derive better starting values from plots of observed means.
+b. Reparameterise the time constant on the log scale.
+c. Remove the random effect on the plateau and refit.
+d. Switch to `lmer()` with the same formula.
+
+### Question 9 (LO 13.4)
+
+```{r}
+#| label: q9
+#| include: false
+jm_tab <- read_csv(here("outputs", "tables", "m13_jm_vs_naive.csv"),
+                   show_col_types = FALSE)
+```
+
+In the KIDNEY joint model (Section 4 of the notes) the association parameter for the current value of eGFR has posterior mean `r f3(jm_tab$estimate[1])`, and a time-dependent Cox model using the last observed eGFR gives `r f3(jm_tab$estimate[2])`. Why is the naive estimate closer to zero?
+
+### Question 10 (LO 13.4)
+
+True or false, with justification: "Because `JMbayes2` reports a posterior mean and credible interval for every parameter, there is no need to check convergence if the intervals look reasonable."
+
+### Question 11 (LO 13.5)
+
+In the DAG of the notes, $L_1$ is affected by $A_0$ and affects both $A_1$ and $Y$. Why does `lm(Y ~ A0 + A1 + L0 + L1)` give a biased estimate of the effect of $A_0$? Give two reasons.
+
+### Question 12 (LO 13.5)
+
+The stabilised weight for one participant at one time is $P(A_1 = a_1 \mid A_0) / P(A_1 = a_1 \mid A_0, L_0, L_1)$. A participant had $A_1 = 1$, with $P(A_1 = 1 \mid A_0) = 0.40$ and $P(A_1 = 1 \mid A_0, L_0, L_1) = 0.10$. What is the time-1 contribution to their weight, and what does a large value tell you about this participant?
+
+### Question 13 (LO 13.6)
+
+For each situation, say whether an analyst who has completed this course could reasonably do the analysis alone, or should involve a specialist:
+
+a. A random-intercept cumulative-logit model for a 5-point satisfaction rating in a parallel-group trial, with proportional odds supported.
+b. A stepped-wedge trial in 6 hospitals.
+c. Estimating the effect of starting dialysis earlier versus later from routinely collected eGFR data.
+d. Adding a random clinic intercept to a trial analysis where randomisation was stratified by clinic.
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers-extract
+#| include: false
+icc_c <- v[1] / sum(v)
+icc_p <- (v[1] + v[2]) / sum(v)
+```
+
+**Question 1.** **b.** A negative coefficient in `ordinal`'s parameterisation means lower (less severe) categories become more likely; `week:armActive` = `r f3(b_wa)` is the extra change per week in the log cumulative odds of more severe itch with active treatment, conditional on the participant's random intercept. (a) has the direction wrong; (c) confuses a log odds ratio with a probability difference; (d) is wrong because mixed-model coefficients are subject-specific (conditional).
+
+**Question 2.** **True.** Proportional odds means one coefficient applies to every cumulative split, so the odds ratio is the same for every cut-point; the probabilities differ between splits, but the odds ratio does not.
+
+**Question 3.** **c.** The categories have no natural order, so ordinal and linear models impose a meaningless order, and a Poisson model treats an arbitrary code as a count. A baseline-category logit model gives each strategy its own coefficients and lets the random intercepts of the same participant be correlated.
+
+**Question 4.** (i) $\tau_c^2 / (\tau_c^2 + \tau_0^2 + \sigma^2)$ = `r f2(v[1])` / `r f2(sum(v))` = `r f3(icc_c)`. (ii) $(\tau_c^2 + \tau_0^2) / (\tau_c^2 + \tau_0^2 + \sigma^2)$ = `r f2(v[1] + v[2])` / `r f2(sum(v))` = `r f2(icc_p)`. Two measurements of the same participant share both the clinic and the participant effect. Common error: omitting the clinic variance from the numerator of (ii).
+
+**Question 5.** **b.** Every clinic contributes participants to every arm, so the clinic effect is common to the arms within a clinic and cancels from the comparison. (a) is false: the clinic SD is about 3 mmHg. (c) is false: `lmer` estimates it, imprecisely. (d) is false in general: random effects can change fixed effects when the design is unbalanced.
+
+**Question 6.** **False.** When whole clinics are randomised, the treatment is constant within clinic, so clinic fixed effects are completely confounded with treatment and the treatment effect cannot be estimated. A random clinic effect (with small-sample degrees of freedom) or a cluster-level analysis is needed, and with 8 clinics a specialist should be involved.
+
+**Question 7.** About 95% of the plateau is reached at $3\kappa$ = 3 × `r f2(fe7["tau"])` = `r f1(3 * fe7["tau"])` months, when the fall is 0.95 × `r f2(fe7["A.armEP"])` = `r f1(0.95 * fe7["A.armEP"])` mmHg. (Since $1 - e^{-3} = 0.950$.) Accept answers using $1 - e^{-3}$ exactly.
+
+**Question 8.** **d.** `lmer()` fits linear mixed models; the asymptotic model is nonlinear in $\kappa$, so it cannot be written as an `lmer` formula. The other three are standard remedies.
+
+**Question 9.** The last observed eGFR is measured with error and becomes out of date as time passes after the visit; both make it a noisy proxy for the current true eGFR, which attenuates the estimated association towards zero (regression dilution). The joint model links the hazard to the error-free current value estimated from each participant's whole trajectory. (In the simulation the true value is −0.13.)
+
+**Question 10.** **False.** MCMC summaries are valid only if the chains have converged to the posterior distribution. Report the number of chains, iterations and burn-in, check Rhat (values near 1, below about 1.05) and inspect trace plots; plausible-looking intervals from unconverged chains can still be wrong.
+
+**Question 11.** (1) $L_1$ is a mediator of $A_0$: adjusting for it removes the part of the effect of $A_0$ that acts through $L_1$, so the total effect is not estimated. (2) $L_1$ is a collider on the path $A_0 \to L_1 \leftarrow U \to Y$: conditioning on it creates an association between $A_0$ and the unmeasured $U$, which also affects $Y$. In the notes this made the estimate positive although the true effect is −3.2.
+
+**Question 12.** 0.40 / 0.10 = 4. The participant was treated although, given their covariates, treatment was unlikely (10%), so they "stand in" for several similar participants who were not treated. Large weights signal near-violations of positivity; many of them make the MSM estimate unstable, and the weight distribution should be inspected and reported.
+
+**Question 13.** (a) Alone: this is the standard case covered in Section 1. (b) Specialist: stepped-wedge designs with few clusters need specialist modelling of time trends and cluster effects. (c) Specialist: this is a time-varying treatment decision driven by eGFR, which earlier treatment affects; it needs g-methods and target trial thinking. (d) Alone: treatment varies within clinic and the clinic term is a nuisance.

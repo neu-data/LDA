@@ -1,0 +1,116 @@
+---
+title: "Module 1. Foundations of longitudinal data"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+This knowledge check has 13 questions covering the six learning outcomes of Module 1. Answers and explanations are at the end.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Questions
+
+**Q1 (LO 1.1).** Thirty schools are randomised to a reading programme, and the reading score of every pupil is measured once at the end of the year. Which description fits best?
+
+A. Longitudinal, because the programme lasted a year.
+B. Clustered, with the school as the independent unit.
+C. Cross-sectional with independent pupils.
+D. Repeated measures, because there are many pupils per school.
+
+**Q2 (LO 1.1). True or false, with justification:** "All repeated-measures data are longitudinal."
+
+**Q3 (LO 1.2).** Here are three rows of WALK.
+
+```{r}
+#| label: q3
+walk |> filter(id == "W001") |> select(id, visit, month_sched, month, sbp) |> slice(4:6)
+```
+
+Name (a) the subject, (b) the visit, (c) the measurement occasion, for the last row, and (d) say what one observation is.
+
+**Q4 (LO 1.2, 1.4).** Why does WALK store both `month_sched` and `month`? Give one use for each.
+
+**Q5 (LO 1.4).** Which feature of KIDNEY is most likely to bias a naive summary of eGFR that averages all measurements?
+
+A. Participants have different numbers of visits.
+B. Visits are more frequent after a low eGFR.
+C. eGFR is a continuous outcome.
+D. Time is recorded in years.
+
+**Q6 (LO 1.4).** Give one reason why repeated-measures ANOVA is poorly suited to WALK and one feature of mixed models that addresses it.
+
+Questions 7 and 8 refer to this output.
+
+```{r}
+#| label: q7
+m_ri <- lmer(sbp ~ visit_f * arm + (1 | id), data = walk, control = lmer_ctrl)
+VarCorr(m_ri)
+round(icc_lmer(m_ri), 3)
+```
+
+**Q7 (LO 1.3).** Interpret the two standard deviations and the ICC in words.
+
+**Q8 (LO 1.3).** The observed correlation of SBP is `r round(visit_correlation(walk, id, month_sched, sbp)["0", "1"], 2)` between baseline and month 1 and `r round(visit_correlation(walk, id, month_sched, sbp)["0", "12"], 2)` between baseline and month 12. What does this say about the random-intercept model above?
+
+**Q9 (LO 1.5).** Write the estimand for: "Does the standard programme reduce SBP from baseline to month 12 more than usual care?"
+
+**Q10 (LO 1.5).** A report says: "SBP fell by 9 mmHg in the enhanced programme, so the programme reduces SBP by 9 mmHg." What is wrong?
+
+**Q11 (LO 1.6).** In a trial with five measurements per person and an ICC of 0.8, a naive OLS analysis is used. For each comparison, say whether the OLS standard error is likely to be too small or too large: (a) the difference between arms at baseline; (b) the mean change over time in the whole sample; (c) the difference in mean SBP between men and women.
+
+**Q12 (LO 1.6).** A simulation with 1,000 replicates gives these results for a between-arm difference (true value 0):
+
+```{r}
+#| label: q12
+sim <- read_csv(here("outputs", "tables", "m01_sim_summary.csv"), show_col_types = FALSE)
+sim |> slice(1) |>
+  select(empirical_sd, mcse_sd, mean_se_ols, mean_se_lmm, coverage_ols, coverage_lmm) |>
+  round(3)
+```
+
+Interpret `coverage_ols`, and explain what it implies for the false-positive rate of a naive test.
+
+**Q13 (LO 1.6). True or false, with justification:** "Ignoring within-subject correlation always makes standard errors too small, so it is always anti-conservative."
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| include: false
+vc <- as.data.frame(VarCorr(m_ri))
+icc <- icc_lmer(m_ri)
+```
+
+**Q1. B.** Pupils are measured once, but pupils in the same school resemble each other and the programme was allocated to schools. The independent unit is the school (30 units). A ignores the single measurement per pupil; C ignores clustering; D misuses "repeated measures", which refers to more than one measurement on the same unit.
+
+**Q2. False.** Repeated measures means more than one measurement per unit; it includes designs with no time axis, such as blood pressure in both arms at one visit or measurements under several postures in random order. Longitudinal data are repeated measures in which time order is of interest.
+
+**Q3.** (a) Participant W001. (b) The scheduled visit: visit 6, month 12 (`month_sched`). (c) The actual time of the measurement, `month` = `r walk$month[walk$id == "W001" & walk$visit == 6]` months. (d) One row: one SBP measurement on one participant at one attended visit.
+
+**Q4.** `month_sched` defines the protocol visit and so the estimand ("mean at month 12"), and is used as a categorical time variable in the primary model. `month` records when the measurement actually happened and is used where the model needs a continuous clock, such as the random slope, or to check how far visits deviated from schedule.
+
+**Q5. B.** Outcome-dependent visit timing gives sicker participants more measurements, so a simple average over all measurements over-represents low eGFR. A alone need not cause bias if the number of visits is unrelated to the outcome; C and D are irrelevant.
+
+**Q6.** Repeated-measures ANOVA requires complete, balanced data at common occasions, so it would drop every participant with a missed visit or dropout (`r 360 - sum(table(walk$id) == 6)` of 360 in WALK), and it cannot use actual visit times. Mixed models use every available observation, allow different numbers and timings of measurements per person, and give valid inference under missing at random.
+
+**Q7.** Participants' personal SBP levels vary around the mean for their arm and visit with an SD of about `r round(vc$sdcor[1], 1)` mmHg; a participant's measurements vary around their own level with an SD of about `r round(vc$sdcor[2], 1)` mmHg. The ICC of `r round(icc, 2)` means that `r round(100 * icc)`% of the variance not explained by visit and arm is between participants, and is the correlation the model implies between any two measurements on the same participant.
+
+**Q8.** The model implies the same correlation (about `r round(icc, 2)`) for every pair of visits (compound symmetry). The observed correlations decline as visits get further apart, so the model is an approximation: it captures the high, persistent correlation but not its decay. Random slopes or serial correlation (Modules 4 and 5) address this.
+
+**Q9.** $[\mu_{\text{SP}}(12) - \mu_{\text{SP}}(0)] - [\mu_{\text{UC}}(12) - \mu_{\text{UC}}(0)]$: the difference between the two arms in mean change from baseline to month 12, in the population randomised. (True value −4.6 mmHg, known because the data are simulated.)
+
+**Q10.** Change within one arm is not a treatment effect: SBP also changes in usual care (regression to the mean, study effects and so on). The effect is the difference in mean change between EP and usual care. Also, the observed change among those still attending may be biased by dropout.
+
+**Q11.** (a) Too small: a between-subject comparison. (b) Too large: change over time is a within-subject comparison, and OLS wrongly counts the between-person variance as noise (assuming individual slopes do not vary much). (c) Too small: sex is a between-subject characteristic.
+
+**Q12.** Only `r round(100 * sim$coverage_ols[1], 1)`% of nominal 95% OLS intervals contained the true value, because the OLS SE (`r round(sim$mean_se_ols[1], 2)`) is about half the true sampling SD (`r round(sim$empirical_sd[1], 2)`). Since the true difference is 0, a naive 5% test would reject in about `r round(100 * (1 - sim$coverage_ols[1]))`% of trials, roughly seven times the nominal rate. The mixed model's coverage (`r round(100 * sim$coverage_lmm[1], 1)`%) is close to 95%, within Monte Carlo error.
+
+**Q13. False.** For between-subject comparisons the naive SEs are too small. For within-subject comparisons, such as change over time, they are usually too large (conservative), because OLS counts between-person variance as noise. When individual slopes vary a lot the error for slope comparisons can shrink or reverse, so the direction must be checked rather than assumed.

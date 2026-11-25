@@ -1,0 +1,555 @@
+---
+title: "Module 11. Diagnostics and troubleshooting"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk  <- load_walk()
+clear <- load_clear()
+diary <- load_diary()
+
+# Same specifications and seeds as notes/11-diagnostics.qmd; slow results
+# are read from the caches written by scripts/11_diagnostics.R.
+cache_or_run <- function(name, expr) {
+  f <- here("outputs", "models", paste0(name, ".rds"))
+  if (file.exists(f)) return(readRDS(f))
+  x <- expr; save_model(x, name); x
+}
+m_pri <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+walk_res <- walk |>
+  mutate(fit_cond = fitted(m_pri), fit_marg = predict(m_pri, re.form = NA),
+         res_cond = resid(m_pri), res_cond_std = resid(m_pri, scaled = TRUE),
+         res_marg = sbp - fit_marg)
+chol_resid <- function(model, data) {
+  G <- as.matrix(VarCorr(model)$id); s2 <- sigma(model)^2
+  r <- data$sbp - predict(model, re.form = NA); out <- numeric(nrow(data))
+  for (g in unique(data$id)) {
+    rows <- which(data$id == g); Z <- cbind(1, data$month[rows])
+    V <- Z %*% G %*% t(Z) + diag(s2, length(rows))
+    out[rows] <- forwardsolve(t(chol(V)), r[rows])
+  }
+  out
+}
+walk_res$res_chol <- chol_resid(m_pri, walk_res)
+lag_tab <- walk_res |> arrange(id, month) |> group_by(id) |>
+  mutate(lag_chol = lag(res_chol), lag_cond = lag(res_cond)) |> ungroup() |>
+  summarise(r_chol = cor(res_chol, lag_chol, use = "complete.obs"),
+            r_cond = cor(res_cond, lag_cond, use = "complete.obs"))
+```
+
+# Why diagnostics are different here
+
+## Each assumption matters for some conclusions more than others {.smaller}
+
+| Assumption | Main check | Matters for the treatment effect? |
+|---|---|---|
+| Mean model | Residuals vs time, fitted; observed vs fitted means | Yes: bias |
+| Covariance model | Cholesky-scaled residuals; implied vs observed covariance | SEs; MAR validity |
+| Normal residuals | Q–Q plot | Little (prediction intervals) |
+| Normal random effects | BLUP Q–Q plot (with care) | Little (individual predictions) |
+| No dominant participant | Leave-one-participant-out | Fragility |
+| GLMM distribution | DHARMa: dispersion, zeros | SEs, possible bias |
+
+::: {.notes}
+Open by asking: which of these would worry you most for the WALK primary estimand? Steer them to the mean and covariance models. Normality matters least for fixed effects with 360 participants. Emphasise that diagnostics are checks of specific assumptions, judged by their effect on the reported estimate, not significance tests of the model's truth. With nearly 1,900 observations, formal tests reject trivial departures.
+:::
+
+## Decide in advance what each answer would make you do
+
+- A check is useful only if you know what you would do with each result
+- Write the responses in the analysis plan (Module 12) and the analysis log
+- Diagnostic work blind to arm protects against choosing the "best" model
+
+::: {.notes}
+This is the theme of the whole module. Ask the group for an example of a check whose result they would not act on: then why run it? Mention that the analysis log template is in admin/templates and we will fill an entry at the end.
+:::
+
+# Residuals for the linear mixed model
+
+## Two residuals: distance from the arm mean, distance from your own line
+
+$$
+\hat r_{ij} = y_{ij} - \mathbf{x}_{ij}^\top\hat{\boldsymbol\beta}\ \ \text{(marginal)}
+\qquad
+\hat e_{ij} = y_{ij} - \mathbf{x}_{ij}^\top\hat{\boldsymbol\beta} - \hat b_{0i} - \hat b_{1i}t_{ij}\ \ \text{(conditional)}
+$$
+
+- Marginal: checks mean and covariance together; correlated within participant
+- Conditional: checks residual error; shrunk and negatively correlated within participant
+
+```{r}
+#| eval: false
+fitted(m_pri)                      # X beta + Z b
+predict(m_pri, re.form = NA)       # X beta only
+resid(m_pri, scaled = TRUE)        # standardised conditional residual
+```
+
+::: {.notes}
+Draw one participant's points, the arm mean curve and the participant's own line on the board. The marginal residual is the vertical distance to the arm mean; the conditional residual the distance to the participant's own line. Point out that re.form = NA removes the random effects from the prediction.
+:::
+
+## The WALK primary model passes the standard checks
+
+```{r}
+#| echo: false
+#| fig-height: 5
+p_rf <- ggplot(walk_res, aes(fit_cond, res_cond_std)) +
+  geom_point(alpha = 0.2, size = 0.7) + geom_hline(yintercept = 0, linetype = 2) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = "#B2182B") +
+  labs(x = "Conditional fitted (mmHg)", y = "Std. residual")
+p_rt <- ggplot(walk_res, aes(month, res_cond_std)) +
+  geom_point(alpha = 0.2, size = 0.7) + geom_hline(yintercept = 0, linetype = 2) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = "#B2182B") +
+  labs(x = "Actual time (months)", y = "Std. residual")
+p_qq <- ggplot(walk_res, aes(sample = res_cond_std)) +
+  stat_qq(size = 0.6, alpha = 0.5) + stat_qq_line(colour = "#B2182B") +
+  labs(x = "Normal quantile", y = "Std. residual")
+p_sl <- ggplot(walk_res, aes(fit_cond, sqrt(abs(res_cond_std)))) +
+  geom_point(alpha = 0.2, size = 0.7) +
+  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, colour = "#B2182B") +
+  labs(x = "Conditional fitted (mmHg)", y = "sqrt(|std. residual|)")
+(p_rf | p_rt | p_qq | p_sl)
+```
+
+Range `r round(min(walk_res$res_cond_std), 2)` to `r round(max(walk_res$res_cond_std), 2)`; `r round(100 * mean(abs(walk_res$res_cond_std) > 2), 1)`% beyond ±2 (fewer than 5%, because of shrinkage).
+
+::: {.notes}
+Walk through the four panels left to right: no curvature against fitted, no trend in time, straight Q–Q plot, flat scale-location. Ask why fewer than 5% exceed 2: the BLUPs absorb part of the error, so conditional residuals are smaller than the true errors. Likely question: should we test normality formally? No; with this many observations it would reject trivial departures and the fixed effects do not depend on it.
+:::
+
+## Marginal residuals need scaling before they can be read
+
+Cholesky scaling: $\hat V_i = L_iL_i^\top$, $\ \hat{\mathbf{r}}^*_i = L_i^{-1}\hat{\mathbf{r}}_i$, approximately independent $N(0,1)$ if the model is right.
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+p_marg <- ggplot(walk_res, aes(visit_f, res_marg, fill = arm)) +
+  geom_boxplot(outlier.size = 0.5, linewidth = 0.3) + scale_fill_arm(name = NULL) +
+  labs(x = "Scheduled month", y = "Marginal residual (mmHg)")
+p_chol <- ggplot(walk_res, aes(sample = res_chol)) +
+  stat_qq(size = 0.6, alpha = 0.5) + stat_qq_line(colour = "#B2182B") +
+  labs(x = "Normal quantile", y = "Cholesky-scaled residual")
+p_marg | p_chol
+```
+
+::: {.notes}
+Marginal residuals have SD `r round(sd(walk_res$res_marg), 1)` mmHg because they include each participant's level. After Cholesky scaling the SD is `r formatC(sd(walk_res$res_chol), format = "f", digits = 2)` and the Q–Q plot is straight. Mention that the scaling uses the fitted covariance, so it checks the covariance model too.
+:::
+
+## Conditional residuals cannot detect serial correlation; scaled marginal residuals can
+
+| Lag-1 correlation within participant | Value |
+|---|---|
+| Conditional residuals | `r round(lag_tab$r_cond, 2)` |
+| Cholesky-scaled marginal residuals | `r round(lag_tab$r_chol, 2)` |
+
+- Conditional: negative by construction (the random line is fitted through the points)
+- Scaled marginal: small positive value, a trace of the serial correlation in the simulated truth
+- Response: a planned sensitivity analysis with exponential correlation (Module 5), not a silent change of model
+
+::: {.notes}
+This is the most surprising slide for most participants. The negative value is an artefact: fitting a line through four or five points forces residuals to alternate. The positive scaled value is real: the simulated WALK data have residual correlation exp(-|dt|/3), which only a simulation lets us know. The random slope absorbs most of it, so the effect on the primary contrast is small.
+:::
+
+## Try it
+
+Workbook 11, **Exercise G1**: conditional and marginal residuals for the linear-time WALK model.
+
+::: {.notes}
+Participants compute both residuals and the Cholesky-scaled version for the linear-time model, and compare the plots with the primary model. Circulate and check they use re.form = NA for the marginal fit.
+:::
+
+# Influential participants
+
+## Leave out one participant at a time and watch the estimate that matters
+
+$$
+\text{DFBETA}_i = \hat\delta - \hat\delta_{(-i)},\qquad
+D_i = \frac{(\hat{\boldsymbol\beta} - \hat{\boldsymbol\beta}_{(-i)})^\top \widehat{\text{Var}}(\hat{\boldsymbol\beta})^{-1}(\hat{\boldsymbol\beta} - \hat{\boldsymbol\beta}_{(-i)})}{p}
+$$
+
+```{r}
+#| eval: false
+m_g <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+            data = walk[walk$id != g, ], control = lmer_ctrl,
+            start = getME(m_pri, "theta"))   # warm start
+fixef(m_g)["visit_f12:armEP"]               # = EP - UC change at month 12
+```
+
+::: {.notes}
+Stress that the unit is the participant, not the observation. In the primary model the month-12 EP minus UC difference in mean change equals the coefficient visit_f12:armEP, so fixef is enough. The 360 refits take about a minute and are cached in outputs/models/m11_loo.rds.
+:::
+
+## No WALK participant moves the primary estimate by more than a fifth of a standard error
+
+```{r}
+#| echo: false
+#| fig-height: 4
+loo <- readRDS(here("outputs", "models", "m11_loo.rds")) |>
+  left_join(walk |> distinct(id, arm), by = "id") |>
+  mutate(dfbeta = fixef(m_pri)["visit_f12:armEP"] - ep12)
+se_ep12 <- sqrt(vcov(m_pri)["visit_f12:armEP", "visit_f12:armEP"])
+ggplot(loo, aes(reorder(id, ep12), ep12, colour = arm)) +
+  geom_point(size = 0.9) +
+  geom_hline(yintercept = fixef(m_pri)["visit_f12:armEP"], linetype = 2) +
+  scale_colour_arm(name = NULL) +
+  labs(x = "Participant omitted (ordered)", y = "EP − UC at month 12 (mmHg)") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
+
+Full data `r round(fixef(m_pri)["visit_f12:armEP"], 2)` (SE `r round(se_ep12, 2)`); range `r round(min(loo$ep12), 2)` to `r round(max(loo$ep12), 2)`; largest shift `r round(100 * max(abs(loo$dfbeta)) / se_ep12)`% of an SE.
+
+::: {.notes}
+Point out that SP participants (blue) sit on the line: they affect the EP versus UC contrast only through the shared variance parameters. Ask: what would you do if one participant moved the estimate by a whole SE? Check the source data, look at the trajectory, report a sensitivity analysis without them, keep them in the primary analysis unless the data are wrong.
+:::
+
+## Try it
+
+Workbook 11, **Exercise G2**: find the most influential participants and look at their trajectories.
+
+::: {.notes}
+The exercise uses the cached leave-one-out results, so it runs quickly. Participants plot the trajectories of the top participants against their arm means and refit without the most influential one.
+:::
+
+# Random-effects assumptions
+
+## BLUPs are shrunk, so their plots are weak evidence
+
+$$
+\hat b_{0i} = \lambda_i(\bar y_i - \hat\mu),\qquad \lambda_i = \frac{\tau_0^2}{\tau_0^2 + \sigma^2/n_i}
+$$
+
+```{r}
+#| echo: false
+#| fig-height: 3.4
+set.seed(1101)
+n_sh <- 400
+true_b <- ifelse(runif(n_sh) < 0.5, -10, 10) + rnorm(n_sh, 0, 3)
+sh_dat <- data.frame(id = factor(rep(seq_len(n_sh), each = 2)),
+                     y = 140 + rep(true_b, each = 2) + rnorm(2 * n_sh, 0, 15))
+m_sh <- lmer(y ~ 1 + (1 | id), data = sh_dat, control = lmer_ctrl)
+bind_rows(data.frame(value = true_b, what = "True random intercepts"),
+          data.frame(value = ranef(m_sh)$id[, 1], what = "BLUPs")) |>
+  mutate(what = factor(what, levels = c("True random intercepts", "BLUPs"))) |>
+  ggplot(aes(value)) + geom_histogram(bins = 35, fill = "grey60", colour = "white") +
+  facet_wrap(~what) + labs(x = "Random intercept (mmHg)", y = "Participants")
+```
+
+::: {.notes}
+Simulated: true intercepts are clearly bimodal, but with two noisy measurements each the BLUPs look unimodal and roughly normal. A Q–Q plot of the BLUPs would reassure you wrongly. In WALK the slope BLUPs are shrunk much more than the intercepts because slopes are estimated from few points.
+:::
+
+## Non-normal random effects barely affect the fixed effects {.smaller}
+
+```{r}
+#| echo: false
+re_sim <- readRDS(here("outputs", "models", "m11_re_shape_sim.rds"))
+re_sum <- re_sim |> group_by(shape) |>
+  summarise(bias = mean(est) + 0.5, emp_se = sd(est), model_se = mean(se),
+            coverage = mean(abs(est + 0.5) <= qnorm(0.975) * se))
+knitr::kable(re_sum, digits = 3,
+             col.names = c("Random effects", "Bias", "Empirical SE",
+                           "Mean model SE", "95% CI coverage"))
+```
+
+300 simulated trials per row, 60 per arm, true difference in slopes −0.5 mmHg/month. Monte Carlo SE of coverage about 0.015.
+
+::: {.notes}
+All three distributions have the same variances. Bias is negligible; coverage is within Monte Carlo error of 95%, the bimodal case being the least favourable. Where non-normality matters: individual predictions, the proportion of people with a slope beyond a threshold, and GLMMs with large random-effect variances.
+:::
+
+## Try it
+
+Workbook 11, **Exercise G3**: shrinkage factors and BLUP spread in WALK.
+
+::: {.notes}
+Participants compute lambda_i for participants with different numbers of visits and compare the SD of the BLUPs with the estimated tau.
+:::
+
+# GLMMs and GEE
+
+## Simulated residuals put every model on the same uniform scale
+
+$$
+u_k = \Pr\nolimits_{\text{sim}}(y_k^{(s)} < y_k) + V_k \Pr\nolimits_{\text{sim}}(y_k^{(s)} = y_k),\qquad u_k \sim \text{U}(0,1) \text{ if the model is right}
+$$
+
+```{r}
+#| eval: false
+m_pois <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                  family = poisson, data = diary)
+sim_pois <- simulateResiduals(m_pois, n = 1000, seed = 1104)
+plot(sim_pois); testDispersion(sim_pois); testZeroInflation(sim_pois)
+```
+
+::: {.notes}
+Explain DHARMa in one sentence: simulate from the fitted model, see where the observed value falls. For binary outcomes Pearson residuals produce two bands that mean nothing; scaled residuals avoid this.
+:::
+
+## The Poisson model for DIARY is overdispersed; the negative binomial shows no clear misfit
+
+```{r}
+#| echo: false
+m_pois <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                  family = poisson, data = diary)
+m_nb <- glmmTMB(migraine_days ~ arm * post + offset(log(days)) + (1 | id),
+                family = nbinom2, data = diary)
+sim_pois <- simulateResiduals(m_pois, n = 1000, seed = 1104)
+sim_nb <- simulateResiduals(m_nb, n = 1000, seed = 1104)
+tab <- data.frame(
+  Model = c("Poisson GLMM", "Negative binomial GLMM"),
+  Dispersion = c(testDispersion(sim_pois, plot = FALSE)$statistic,
+                 testDispersion(sim_nb, plot = FALSE)$statistic),
+  `Zero ratio` = c(testZeroInflation(sim_pois, plot = FALSE)$statistic,
+                   testZeroInflation(sim_nb, plot = FALSE)$statistic),
+  `SE of armActive:post` = c(fixef_table(m_pois)$se[4], fixef_table(m_nb)$se[4]),
+  check.names = FALSE)
+knitr::kable(tab, digits = 3)
+```
+
+The "excess zeros" of the Poisson model disappear once overdispersion is modelled: no zero-inflation model is needed.
+
+::: {.notes}
+Dispersion ratio 1 means as expected. The Poisson model underestimates the SE of the treatment effect. Ask: why did the Poisson model predict too few zeros? Because a Poisson with the right mean has too little variance; the negative binomial spreads mass to zero and to large counts. In this simulation no excess zeros were generated, which only a simulation lets us know.
+:::
+
+## Participant-level checks need unconditional simulation
+
+```{r}
+#| echo: false
+grp_calib <- readRDS(here("outputs", "models", "m11_dharma_grouped_calibration.rds"))
+```
+
+- DHARMa 0.5.0 simulates **conditional** on the fitted random effects by default
+- In 20 datasets from a *correct* logistic random-intercept model, the participant-level dispersion test rejected `r round(100 * mean(grp_calib$p_conditional < 0.05))`% of the time (conditional) and `r round(100 * mean(grp_calib$p_unconditional < 0.05))`% (unconditional)
+
+```{r}
+#| eval: false
+s_u <- simulateResiduals(m_clear, n = 1000, simulateREs = "unconditional")
+testDispersion(recalculateResiduals(s_u, group = clear$id))
+```
+
+::: {.notes}
+This is a recent change in DHARMa and an easy trap. Conditional simulations fix each participant's BLUP, so they cannot reproduce the spread of participant totals. Use unconditional simulation for anything aggregated by participant. For CLEAR the unconditional participant-level test gives no evidence of misfit.
+:::
+
+## For GEE, check the mean model against observed proportions
+
+```{r}
+#| echo: false
+#| fig-height: 3.6
+clear_gee <- clear |> mutate(id_f = factor(id)) |> arrange(id_f, week)
+g_lin <- geeglm(itch ~ week * arm, id = id_f, family = binomial,
+                corstr = "exchangeable", data = clear_gee)
+g_cat <- geeglm(itch ~ week_f * arm, id = id_f, family = binomial,
+                corstr = "exchangeable", data = clear_gee)
+clear_gee <- clear_gee |> mutate(fit_lin = fitted(g_lin)[, 1], fit_cat = fitted(g_cat)[, 1])
+gee_check <- clear_gee |> group_by(arm, week) |>
+  summarise(observed = mean(itch), linear = mean(fit_lin), categorical = mean(fit_cat))
+ggplot(gee_check, aes(week, observed, colour = arm)) +
+  geom_point(size = 2) + geom_line(aes(y = linear), linewidth = 0.7) +
+  geom_line(aes(y = categorical), linetype = 2) + scale_colour_arm(name = NULL) +
+  labs(x = "Week", y = "Proportion moderate/severe itch")
+```
+
+QIC: linear `r round(QIC(g_lin)["QIC"], 1)`, categorical week `r round(QIC(g_cat)["QIC"], 1)` (lower is better).
+
+::: {.notes}
+Points are observed proportions, solid lines the linear-in-week GEE, dashed lines the categorical-week GEE. The largest discrepancy is in placebo at week 2. Remind them GEE assumes MCAR with unweighted equations; agreement between observed and fitted does not rule out dropout bias.
+:::
+
+## Try it
+
+Workbook 11, **Exercise G4**: DHARMa for DIARY, including a participant-level check.
+
+::: {.notes}
+Participants fit both models, run the tests and repeat the participant-level test with conditional and unconditional simulation.
+:::
+
+# Convergence, singular fits and separation
+
+## A convergence warning is an invitation to investigate
+
+1. Read the warning and look at the estimates (zero variances, ±1 correlations, huge coefficients)
+2. Rescale time and covariates
+3. Check the gradient; compare optimisers with `allFit()`
+4. If singular, simplify in a pre-specified order
+5. Binary GLMMs: compare Laplace with adaptive quadrature
+6. Separation: penalised likelihood, and report the sparse table
+
+::: {.notes}
+Give this as the checklist they should take away. Each later slide is one step. Warn against silencing warnings by changing tolerances without doing any of this.
+:::
+
+## Time in days and age in years: a warning that is a scaling artefact
+
+```{r}
+#| echo: false
+walk_sc <- walk |> mutate(day = month * 30.44)
+m_bad <- suppressWarnings(lmer(sbp ~ day * arm + age + (1 + day | id),
+                               data = walk_sc, control = lmer_ctrl))
+m_good <- lmer(sbp ~ month * arm + I((age - 60) / 10) + (1 + month | id),
+               data = walk_sc, control = lmer_ctrl)
+```
+
+- Badly scaled fit: "Model is nearly unidentifiable: very large eigenvalue. Rescale variables?"
+- Random-slope SD `r signif(attr(VarCorr(m_bad)$id, "stddev")[2], 2)` mmHg/day against intercept SD `r round(attr(VarCorr(m_bad)$id, "stddev")[1], 1)` mmHg
+- After rescaling: no warning, and the EP slope difference is identical: `r round(fixef(m_bad)["day:armEP"] * 30.44, 3)` vs `r round(fixef(m_good)["month:armEP"], 3)` mmHg/month
+
+::: {.notes}
+The two models are the same model in different units, so their ML log-likelihoods are identical (REML criteria are not comparable after rescaling). You only know the warning was harmless after rescaling. Time in days and raw covariates are the commonest cause of warnings in practice.
+:::
+
+## `allFit()`: if all optimisers agree, the warning is a false alarm {.smaller}
+
+```{r}
+#| echo: false
+m_pri_def <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk)
+af_def <- summary(suppressWarnings(allFit(m_pri_def, verbose = FALSE)))
+knitr::kable(data.frame(logLik = af_def$llik,
+                        `EP - UC` = af_def$fixef[, "visit_f12:armEP"],
+                        warning = vapply(af_def$msgs, function(x) !is.null(x), logical(1)),
+                        check.names = FALSE), digits = 3)
+```
+
+::: {.notes}
+Fitted with lme4's default control settings: one optimiser warns about a gradient just above 0.002, but every optimiser gives the same log-likelihood and the same estimate. Record this in the analysis log. Practical point: allFit() could not evaluate the shared lmer_ctrl object stored in the model call, so write the control argument out in full (or omit it) before calling allFit().
+:::
+
+## Eight clinics cannot support a random slope: singular fit {.smaller}
+
+```{r}
+#| echo: false
+m_sing <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 + month | clinic),
+               data = walk, control = lmer_ctrl)
+VarCorr(m_sing)
+```
+
+`isSingular()` is `r isSingular(m_sing)`: the clinic intercept-slope correlation is at −1. Simplify to `(1 | clinic)`.
+
+::: {.notes}
+Link back to Module 5. The fixed effects are still estimated, but the clinic covariance matrix is not meaningful. Simplify in the order written in the analysis plan.
+:::
+
+## Separation: a coefficient of −16 with SE 1,388 is not an estimate {.smaller}
+
+```{r}
+#| echo: false
+set.seed(1106)
+n_sep <- 40
+sep <- expand.grid(visit = 0:3, id = seq_len(n_sep)) |>
+  mutate(active = as.integer(id > n_sep / 2), post = as.integer(visit > 0))
+b_sep <- rnorm(n_sep, 0, 0.5)
+sep$event <- rbinom(nrow(sep), 1, plogis(-2 + b_sep[sep$id] - 3 * sep$active * sep$post))
+sep$event[sep$active == 1 & sep$post == 1] <- 0
+sep$id <- factor(sep$id)
+m_sep_glm <- glm(event ~ active * post, family = binomial, data = sep)
+m_sep_prior <- glmmTMB(event ~ active * post + (1 | id), family = binomial, data = sep,
+                       priors = data.frame(prior = "normal(0, 2.5)", class = "fixef"))
+firth_logit <- function(X, y, maxit = 100, tol = 1e-8) {
+  b <- rep(0, ncol(X))
+  for (it in seq_len(maxit)) {
+    p <- as.vector(plogis(X %*% b)); w <- p * (1 - p)
+    XtWX <- crossprod(X, w * X); h <- w * rowSums((X %*% solve(XtWX)) * X)
+    step <- solve(XtWX, crossprod(X, y - p + h * (0.5 - p))); b <- b + as.vector(step)
+    if (max(abs(step)) < tol) break
+  }
+  p <- as.vector(plogis(X %*% b))
+  data.frame(estimate = b, se = sqrt(diag(solve(crossprod(X, p * (1 - p) * X)))))
+}
+ff <- firth_logit(model.matrix(~ active * post, data = sep), sep$event)
+knitr::kable(data.frame(
+  Method = c("glm (ML)", "Firth penalised likelihood", "glmmTMB, normal(0, 2.5) prior"),
+  Estimate = c(coef(m_sep_glm)["active:post"], ff$estimate[4],
+               fixef(m_sep_prior)$cond["active:post"]),
+  SE = c(sqrt(vcov(m_sep_glm)[4, 4]), ff$se[4],
+         sqrt(vcov(m_sep_prior)$cond[4, 4]))), digits = 2)
+```
+
+No events in `r sum(sep$active == 1 & sep$post == 1)` post-baseline active-arm visits: report this table too [@heinze2002].
+
+::: {.notes}
+Simulated sparse trial: 40 participants, 4 visits. The ML estimate is minus infinity; the optimiser just stopped. Firth adds half the log-determinant of the information to the log-likelihood. The course does not load logistf, so the notes write it out in a few lines. For clustered data a weakly informative prior in glmmTMB plays the same role.
+:::
+
+## Binary GLMMs: Laplace underestimates a large random-intercept SD {.smaller}
+
+```{r}
+#| echo: false
+agq <- bind_rows(lapply(c(1, 5, 10, 25), function(q) {
+  m <- glmer(itch ~ week * arm + (1 | id), family = binomial, data = clear, nAGQ = q)
+  data.frame(nAGQ = q, `week:armActive` = fixef(m)["week:armActive"],
+             `Random-intercept SD` = attr(VarCorr(m)$id, "stddev")[[1]], check.names = FALSE)
+}))
+knitr::kable(agq, digits = 3, row.names = FALSE)
+```
+
+::: {.notes}
+The treatment effect hardly moves, but the random-intercept SD rises from Laplace to quadrature and stabilises by 10 points. The simulation used SD 2.0. Pre-specify adaptive quadrature for random-intercept binary GLMMs.
+:::
+
+## Try it
+
+Workbook 11, **Exercise G5**: rescaling, `allFit()` and a separation table.
+
+::: {.notes}
+Participants fit the WALK linear-time model with time in weeks, compare it with months, run allFit() and tabulate a sparse outcome.
+:::
+
+# Responding to problems and recording decisions
+
+## Fix the problem the diagnostic found, not a different one {.smaller}
+
+| Problem | Principled response | Not this |
+|---|---|---|
+| Curvature over time | More flexible time, all arms | Terms only where they help the effect |
+| Serial correlation | Add a structure; compare SEs | Ignore it because the SE is small |
+| Influential participant | Verify data; sensitivity analysis | Drop from the primary analysis |
+| Overdispersed counts | Negative binomial | Try models until p < 0.05 |
+| Convergence warning | Rescale, `allFit()`, planned simplification | Keep the fit with the best effect |
+
+::: {.notes}
+Many reasonable-looking choices, each made after seeing the result, inflate the false-positive rate well above 5%. The protection is to decide rules in advance and report changes as changes, with both results.
+:::
+
+## An analysis log makes every decision traceable {.smaller}
+
+| Field | Entry |
+|---|---|
+| Observed | "Nearly unidentifiable" warning, time in days |
+| Status | Data-driven, blind to comparison |
+| Decision | Time in months, age per 10 years; `allFit()` for the primary model |
+| Effect on estimates | None: EP slope difference `r round(fixef(m_good)["month:armEP"], 3)` mmHg/month in both fits |
+
+Template: `admin/templates/analysis_log_template.md`
+
+::: {.notes}
+Show the template briefly: study details with data and software versions, numbered entries, running checklists, deviations from the SAP, sign-off. Entries are written at the time and never rewritten; a reversed decision gets a new entry.
+:::
+
+## Try it
+
+Workbook 11, **Exercise G6**: write two analysis-log entries; then the independent exercises.
+
+::: {.notes}
+Ask participants to write entries for two decisions they made during the earlier exercises, including the status field. Then move on to the independent exercises I1 to I4.
+:::
+
+## Summary
+
+- Conditional residuals check the within-participant model; Cholesky-scaled marginal residuals check mean and covariance
+- Influence is measured by leaving out participants and watching the reported estimate
+- BLUP plots are weak evidence; fixed effects are robust to non-normal random effects
+- DHARMa puts GLMMs on a uniform scale; use unconditional simulation for participant-level checks
+- Warnings: rescale, compare optimisers, simplify as planned, penalise under separation
+- Decide responses in advance and log every decision
+
+::: {.notes}
+Close by connecting to Module 12: the responses to diagnostics belong in the statistical analysis plan, written before the data are seen.
+:::

@@ -1,0 +1,324 @@
+---
+title: "Module 2. Preparing and exploring longitudinal data in R"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+These exercises take you through the full preparation of the WALK data: reshaping, joining, cleaning a messy export, describing missing visits and drawing the standard exploratory plots. The guided exercises give partly completed code. Replace each `___` with the right code, run the chunk and answer the questions in words. The independent exercises give a task with no scaffolding. Solutions are in the answer key `answer-key/ak02-data-preparation.qmd`.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+```{r}
+#| label: load-other
+baseline <- load_walk("baseline")
+wide     <- load_walk("wide")
+sched_months <- c(0, 1, 3, 6, 9, 12)
+```
+
+## Guided exercises
+
+### Exercise 1. Reshaping between wide and long (LO 2.1)
+
+(a) Convert `walk_wide.csv` to long format, with a numeric column `month_sched` and a column `sbp`.
+
+```{r}
+#| label: ex1a
+#| eval: false
+long_from_wide <- wide |>
+  pivot_longer(cols = starts_with(___),
+               names_to = "month_sched", names_prefix = ___,
+               names_transform = list(month_sched = ___),
+               values_to = "sbp")
+nrow(long_from_wide)
+sum(is.na(long_from_wide$sbp))
+```
+
+(b) Drop the rows with missing SBP and check that the result agrees with `walk_long.csv`: same number of rows, and no SBP value that differs when the two are matched by `id` and `month_sched`.
+
+```{r}
+#| label: ex1b
+#| eval: false
+check <- long_from_wide |>
+  filter(___) |>
+  full_join(walk |> select(id, month_sched, sbp_long = sbp),
+            by = c(___, ___))
+nrow(check)
+sum(is.na(check$sbp) | is.na(check$sbp_long) | check$sbp != check$sbp_long)
+```
+
+(c) Reshape the **steps** values in `walk` to wide format, with columns `steps_m0` to `steps_m12`.
+
+```{r}
+#| label: ex1c
+#| eval: false
+steps_wide <- walk |>
+  select(id, arm, ___, steps) |>
+  pivot_wider(names_from = ___, values_from = ___, names_prefix = "steps_m")
+dim(steps_wide)
+```
+
+**Questions.**
+
+1. How many rows does the long version of the wide file have, and why that number?
+2. What happens in (c) if you also keep `month` in the `select()`? Try it and explain.
+3. The wide file cannot hold the actual visit time. Why not, and what would you have to do to keep it?
+
+### Exercise 2. Joining and validating (LO 2.2)
+
+(a) Join `rand_date`, `sbp0` and `dropout` from `baseline` to `walk`, stating the relationship you expect.
+
+```{r}
+#| label: ex2a
+#| eval: false
+walk_joined <- walk |>
+  left_join(baseline |> select(id, ___, ___, ___),
+            by = "id", relationship = ___)
+c(before = nrow(walk), after = nrow(walk_joined))
+nrow(anti_join(walk, baseline, by = "id"))
+nrow(anti_join(baseline, walk, by = "id"))
+```
+
+(b) Make a copy of `walk` in which participant W004's ID is written in lower case. Join again and use `anti_join()` to find the problem.
+
+```{r}
+#| label: ex2b
+#| eval: false
+walk_bad <- walk |> mutate(id = if_else(id == "W004", ___, id))
+joined_bad <- walk_bad |>
+  left_join(baseline |> select(id, rand_date), by = "id")
+sum(is.na(joined_bad$rand_date))
+anti_join(walk_bad, baseline, by = "id") |> distinct(id)
+```
+
+**Questions.**
+
+1. What do the four numbers in (a) tell you?
+2. In (b), did the join produce an error or a warning? How would you have noticed the problem without `anti_join()`?
+3. What would happen if you joined the whole `baseline` file, including `arm`, `age` and `sex`, by `id` only?
+
+### Exercise 3. Cleaning the raw export, part 1 (LO 2.3)
+
+Read `walk_visits_raw.csv` with every column as text.
+
+```{r}
+#| label: ex3-read
+#| eval: false
+raw <- read_csv(here("data", "walk_visits_raw.csv"),
+                col_types = cols(.default = col_character()))
+```
+
+(a) Standardise the participant IDs and visit labels, parse the date and convert SBP and steps to numbers.
+
+```{r}
+#| label: ex3a
+#| eval: false
+step2 <- raw |>
+  mutate(id          = ___(trimws(participant)),
+         month_sched = as.numeric(sub("^M", "", ___)),
+         visit       = match(month_sched, sched_months),
+         visit_date  = as.Date(visit_date, format = ___),
+         sbp         = parse_double(___),
+         steps       = parse_double(steps_k)) |>
+  select(id, visit, month_sched, visit_date, sbp, steps)
+stopifnot(all(grepl("^W[0-9]{3}$", step2$id)), !anyNA(step2$visit))
+```
+
+(b) Count and remove the exact duplicates.
+
+```{r}
+#| label: ex3b
+#| eval: false
+sum(duplicated(___))
+step3 <- ___(step2)
+nrow(step3)
+```
+
+(c) Find the conflicting duplicates and apply the rule "keep the earliest-dated record and flag the visit".
+
+```{r}
+#| label: ex3c
+#| eval: false
+conflicts <- step3 |>
+  add_count(id, visit, name = "n_records") |>
+  filter(___ > 1)
+conflicts
+
+step4 <- step3 |>
+  group_by(id, visit) |>
+  mutate(conflict_flag = n() > 1) |>
+  arrange(___, .by_group = TRUE) |>
+  slice(___) |>
+  ungroup()
+nrow(step4)
+```
+
+**Questions.**
+
+1. Why must IDs be standardised before you look for duplicates?
+2. How many exact duplicate rows and how many conflicting visits did you find?
+3. Explain in two or three sentences why the rule for conflicting duplicates must be decided without looking at the outcomes by arm.
+
+### Exercise 4. Cleaning the raw export, part 2 (LO 2.3)
+
+(a) Join the randomisation date and derive actual time in months (a month is 30.44 days) and the deviation from the target date in days.
+
+```{r}
+#| label: ex4a
+#| eval: false
+step5 <- step4 |>
+  left_join(baseline |> select(id, rand_date), by = "id",
+            relationship = "many-to-one") |>
+  mutate(days     = as.numeric(___ - ___),
+         month    = round(days / 30.44, 2),
+         dev_days = as.numeric(visit_date - (rand_date + round(month_sched * ___))))
+range(step5$days)
+```
+
+(b) Flag blank and implausible SBP values (outside 70 to 250 mmHg); set implausible values to missing but keep the raw value.
+
+```{r}
+#| label: ex4b
+#| eval: false
+step6 <- step5 |>
+  mutate(sbp_flag = case_when(is.na(sbp) ~ "blank",
+                              sbp < ___ | sbp > ___ ~ "implausible",
+                              TRUE ~ "ok"),
+         sbp_raw = sbp,
+         sbp = if_else(sbp_flag == ___, NA_real_, sbp))
+step6 |> filter(sbp_flag != "ok")
+```
+
+(c) Flag out-of-window visits. The windows are ±7 days (month 1), ±14 days (month 3) and ±28 days (months 6, 9, 12).
+
+```{r}
+#| label: ex4c
+#| eval: false
+window_days <- c(`0` = 0, `1` = 7, `3` = 14, `6` = 28, `9` = 28, `12` = 28)
+walk_clean <- step6 |>
+  mutate(out_of_window = abs(dev_days) > window_days[as.character(___)])
+walk_clean |> count(month_sched, out_of_window)
+```
+
+(d) Compare `walk_clean` with `walk_long.csv`: keys, SBP and actual time.
+
+```{r}
+#| label: ex4d
+#| eval: false
+agreement <- walk_clean |>
+  full_join(walk |> select(id, visit, month_ref = month, sbp_ref = sbp),
+            by = c("id", "visit"))
+sum(is.na(agreement$month_ref)); sum(is.na(agreement$month))
+agreement |> filter(is.na(sbp) | sbp != sbp_ref) |> select(id, visit, sbp, sbp_raw, sbp_ref)
+table(round(agreement$month - agreement$month_ref, 2))
+```
+
+**Questions.**
+
+1. Which SBP values did you flag, and what did you decide to do with each? Justify the decision.
+2. How many visits are out of window? Would you exclude them? Why or why not?
+3. Your `month` differs slightly from `month` in `walk_long.csv` in many rows. Explain why, and say whether it matters.
+4. Write a cleaning log: a table with one row per step and the number of records affected.
+
+### Exercise 5. Missing visits, summaries and flow (LO 2.3, LO 2.4)
+
+(a) Build the complete grid of randomised participants × scheduled visits from the design and classify each missing visit as intermittent or after dropout.
+
+```{r}
+#| label: ex5a
+#| eval: false
+grid <- ___ |>
+  select(id, arm) |>
+  crossing(visit = 1:6) |>
+  mutate(month_sched = sched_months[visit]) |>
+  left_join(walk |> select(id, visit, sbp), by = c("id", "visit")) |>
+  mutate(observed = ___) |>
+  group_by(id) |>
+  mutate(last_seen = max(visit[observed]),
+         miss_type = case_when(observed ~ "observed",
+                               visit < ___ ~ "intermittent",
+                               TRUE ~ "after dropout")) |>
+  ungroup()
+count(grid, arm, miss_type)
+```
+
+(b) Produce a participant-flow table with `visit_flow()`, showing n (% of randomised) by arm and visit.
+
+```{r}
+#| label: ex5b
+#| eval: false
+visit_flow(walk, id, month_sched, arm) |>
+  left_join(count(baseline, arm, name = "randomised"), by = "arm") |>
+  mutate(cell = sprintf("%d (%.0f%%)", n_seen, 100 * n_seen / ___)) |>
+  select(arm, month_sched, cell) |>
+  pivot_wider(names_from = ___, values_from = cell)
+```
+
+(c) Produce a baseline table by arm (age, sex, BMI, baseline SBP and steps) and a table of SBP by arm and visit (n, mean, SD).
+
+**Questions.**
+
+1. Why must the grid be built from `walk_baseline.csv` and the schedule rather than from `walk_long.csv`?
+2. What proportion of scheduled visits are missing, and how much of it is due to dropout?
+3. A colleague suggests a chi-squared test of sex by arm in the baseline table. What do you reply?
+
+### Exercise 6. Exploratory plots (LO 2.5)
+
+```{r}
+#| label: ex6-lab
+#| eval: false
+walk_lab <- walk |>
+  mutate(arm_lab = factor(walk_arm_labels[as.character(arm)],
+                          levels = walk_arm_labels))
+```
+
+(a) Draw a spaghetti plot of all participants by arm, and one of a random subset of 30 participants. Use actual time on the horizontal axis.
+
+```{r}
+#| label: ex6a
+#| eval: false
+plot_spaghetti(walk_lab, ___, sbp, id, group = arm_lab, alpha = 0.15) +
+  labs(x = "Months since randomisation", y = "SBP (mmHg)")
+plot_spaghetti(walk_lab, month, sbp, id, group = arm_lab, n_show = ___, seed = 2)
+```
+
+(b) Draw individual trajectory panels for four randomly chosen participants per arm.
+
+(c) Draw the observed means by arm and scheduled visit with `plot_observed_means()`.
+
+(d) Draw a missingness map from your grid with `plot_missing_map()`, ordered by the last attended visit and faceted by arm.
+
+(e) Draw mean SBP profiles by dropout pattern (the scheduled month of the last attended visit, `last_month_sched` in `walk_baseline.csv`) for each arm.
+
+**Questions.**
+
+1. From the spaghetti plots, do participants differ more in their level of SBP or in how it changes?
+2. Describe the shape of the observed mean profiles. Is change linear in time?
+3. What does the missingness map show about the type of missingness?
+4. What does the pattern plot suggest about who drops out? Why should you be cautious in reading it?
+
+## Independent exercises
+
+### Exercise 7. How much does the duplicate rule matter? (LO 2.3)
+
+Starting from the data after removing exact duplicates (`step3`), apply two other rules for the conflicting duplicates: (i) keep the record whose date is closest to the target date; (ii) average the two SBP values. For each rule, report the SBP values retained for the three conflicting visits and the resulting mean SBP at the affected visits by arm. Then write a short paragraph, as if for a data management plan, stating the rule you would prespecify and why, and explaining why the choice must be made before unblinding.
+
+### Exercise 8. Steps over time (LO 2.4, LO 2.5)
+
+Daily steps (`steps`, thousands per day) are a time-varying covariate in WALK. Produce a table of steps by arm and scheduled visit (n, mean, SD), a plot of observed mean steps by arm, and a spaghetti plot of steps for a random subset of participants. Describe in three or four sentences how steps change in each arm and how much participants differ.
+
+### Exercise 9. Who drops out? (LO 2.5, LO 2.6)
+
+Divide participants into thirds of baseline SBP (`sbp0`). Tabulate the percentage who dropped out (`dropout` in `walk_baseline.csv`) by third and arm. Then compare, for each arm, the observed mean SBP at month 12 with the observed mean at month 12 of the complete data in `walk_complete.csv` (teaching only). Explain the direction of the difference using your table.
+
+### Exercise 10. Out-of-window visits (LO 2.3, LO 2.5)
+
+Using your cleaned data from Exercise 4, plot the deviation from the target date (in days) against scheduled month, with the protocol windows marked. Then recompute the observed mean SBP by arm at month 12 excluding out-of-window visits and compare it with the mean including them. State whether excluding them changes your description of the data, and explain why the course models use actual time.

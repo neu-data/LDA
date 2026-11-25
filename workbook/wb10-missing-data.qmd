@@ -1,0 +1,236 @@
+---
+title: "Module 10. Missing data and dropout"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk   <- load_walk()
+walk_b <- load_walk("baseline")
+walk_w <- load_walk("wide")
+walk_c <- load_walk("complete")
+kidney <- load_kidney()
+```
+
+These exercises practise describing missing data, reasoning about missing-data mechanisms, analysing WALK under MAR with a mixed model and with multiple imputation, showing why LOCF fails, and carrying out a delta-adjustment sensitivity analysis. The independent exercises add multilevel imputation and informative visit timing in KIDNEY. Fill in the blanks (`___`) and answer the questions in words.
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Guided exercises
+
+### Exercise 1. Describing the missingness pattern
+
+*Learning outcome 10.1.*
+
+(a) Using `walk_c` (all scheduled visits, with the `observed` flag), build the pattern string for each participant and count the most common patterns.
+
+```{r}
+#| eval: false
+pattern <- walk_c |>
+  arrange(id, visit) |>
+  group_by(id, arm) |>
+  summarise(pattern = paste(ifelse(___, "O", "."), collapse = "")) |>
+  ungroup()
+count(pattern, pattern, sort = TRUE)
+```
+
+(b) Count, by arm, the number of participants seen at each scheduled visit with `visit_flow()`.
+
+```{r}
+#| eval: false
+visit_flow(walk, id, ___, arm)
+```
+
+(c) Draw the missingness map with `plot_missing_map()`.
+
+Questions:
+
+1. How many participants have complete data? How many have only intermittent gaps? How many drop out?
+2. Does retention at month 12 differ noticeably between arms?
+
+### Exercise 2. Mechanisms and what the data can show
+
+*Learning outcome 10.2.*
+
+(a) Classify each scenario as MCAR, MAR or MNAR, assuming the analysis includes SBP at all observed visits and arm:
+
+1. A participant misses the month-6 visit because of a train strike.
+2. A participant is withdrawn by the study doctor after a recorded SBP above 180 mmHg at month 3.
+3. A participant stops attending because she feels dizzy, which is caused by a rise in blood pressure since her last visit.
+4. Participants in the enhanced programme are more likely to drop out, regardless of their blood pressure.
+
+(b) Fit the discrete-time dropout model from the notes (probability of dropping out before each visit, given the last observed SBP and arm).
+
+```{r}
+#| eval: false
+risk <- walk_c |>
+  arrange(id, visit) |>
+  group_by(id) |>
+  mutate(last_sbp = sapply(seq_along(visit),
+                           function(k) sbp[max(which(observed[1:k]))])) |>
+  ungroup() |>
+  left_join(walk_b |> select(id, last_month_sched), by = "id") |>
+  group_by(id) |>
+  mutate(prev_sbp = lag(last_sbp), prev_sched = lag(month_sched)) |>
+  ungroup() |>
+  filter(visit > 1, prev_sched <= last_month_sched) |>
+  mutate(drop_now = as.integer(prev_sched == ___),
+         prev_sbp10 = (prev_sbp - 150) / 10)
+m_drop <- glm(drop_now ~ prev_sbp10 + arm, family = ___, data = risk)
+fixef_table(m_drop, exponentiate = TRUE)
+```
+
+Questions:
+
+1. What does the odds ratio for `prev_sbp10` show?
+2. Does this result show that the data are MAR? Explain.
+
+### Exercise 3. Mixed model, completers and LOCF
+
+*Learning outcomes 10.3, 10.4.*
+
+(a) Fit the primary model to all observed data and to completers only, and compute the difference in mean change at month 12.
+
+```{r}
+#| eval: false
+diff_change <- function(m) {
+  e  <- emmeans(m, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+  ch <- contrast(e, list(change = c(-1, 1)), by = "arm")
+  summary(contrast(ch, "trt.vs.ctrl", by = NULL), infer = TRUE, adjust = "none")
+}
+m_lmm <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = ___, control = lmer_ctrl)
+completers <- walk_b$id[!walk_b$___]
+m_cc  <- lmer(sbp ~ visit_f * arm + (1 + month | id),
+              data = filter(walk, id %in% completers), control = lmer_ctrl)
+diff_change(m_lmm); diff_change(m_cc)
+```
+
+(b) Compute the LOCF estimate: regress each participant's last observed SBP minus baseline SBP on arm.
+
+(c) Because the data are simulated, fit the same model to `walk_c` (complete data) for comparison.
+
+Questions:
+
+1. List the four estimates for EP versus UC. Which analysis is valid under MAR?
+2. State the four conditions under which the mixed-model analysis of the observed data is valid.
+3. In this data set, why might the four analyses agree fairly closely even though some are biased in principle?
+
+### Exercise 4. Why LOCF fails: a simulation
+
+*Learning outcome 10.4.*
+
+`sim_two_arm()` simulates a two-arm trial with a linear decline and optional dropout that is **completely at random**. The true difference in mean change at month 12 is `delta * 12`.
+
+```{r}
+#| eval: false
+one_rep <- function() {
+  d <- sim_two_arm(n_per_arm = 60, times = c(0, 3, 6, 9, 12), delta = -0.5,
+                   dropout = 0.15)
+  # LOCF: last value minus first value, regressed on treatment
+  l <- d |> group_by(id, trt) |> summarise(ch = y[which.max(time)] - y[time == 0]) |>
+    ungroup()
+  locf <- coef(lm(ch ~ trt, data = l))["trt"]
+  # mixed model on all observed data: slope difference x 12
+  m <- lmer(y ~ time * trt + (time | id), data = d,
+            control = lmerControl(calc.derivs = FALSE))
+  c(locf = unname(locf), lmm = unname(fixef(m)["time:trt"] * ___))
+}
+set.seed(1)
+res <- replicate(100, one_rep())
+rowMeans(res) - (-0.5 * 12)            # bias
+apply(res, 1, sd) / sqrt(100)          # Monte Carlo SE of the bias
+```
+
+Questions:
+
+1. Which method is biased, and in which direction?
+2. Dropout here is MCAR. Why is LOCF still biased?
+3. Why is "LOCF is conservative" not a safe general statement?
+
+### Exercise 5. Multiple imputation in wide format
+
+*Learning outcome 10.5.*
+
+(a) Impute the wide data separately within each arm (`method = "norm"`), using SBP at all visits, age, sex and BMI, with 20 imputations.
+
+```{r}
+#| eval: false
+walk_w <- walk_w |> mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+imp_vars <- c("age10", "sex", "bmi_c", paste0("sbp_m", c(0, 1, 3, 6, 9, 12)))
+imp_wide <- lapply(levels(walk_w$arm), function(a) {
+  d  <- walk_w |> filter(arm == ___) |> select(id, all_of(imp_vars))
+  pm <- make.predictorMatrix(d); pm[, "id"] <- 0
+  mice(d, m = 20, method = "___", predictorMatrix = pm, maxit = 10,
+       seed = 2026, printFlag = FALSE)
+})
+names(imp_wide) <- levels(walk_w$arm)
+```
+
+(b) For each imputation, stack the arms, regress the change from month 0 to month 12 on arm, and store the EP estimate and its SE. Combine with `mice::pool.scalar()`.
+
+```{r}
+#| eval: false
+res <- t(sapply(1:20, function(k) {
+  d <- bind_rows(lapply(names(imp_wide), function(a)
+    mice::complete(imp_wide[[a]], k) |> mutate(arm = a))) |>
+    mutate(arm = factor(arm, levels = c("UC", "SP", "EP")))
+  f <- lm(I(sbp_m12 - sbp_m0) ~ arm, data = d)
+  c(est = coef(f)["armEP"], se = sqrt(vcov(f)["armEP", "armEP"]))
+}))
+p <- mice::pool.scalar(Q = res[, 1], U = res[, 2]^2, n = 360, k = 3)
+c(estimate = p$qbar, se = sqrt(p$t), df = p$df, fmi = p$fmi)
+```
+
+(c) Compute Rubin's total variance by hand from `res` and check it against `p$t`.
+
+Questions:
+
+1. Why is the imputation done separately by arm?
+2. What do the within-imputation and between-imputation variances represent?
+3. How does the pooled estimate compare with the mixed model of Exercise 3?
+
+### Exercise 6. Delta adjustment and tipping point
+
+*Learning outcome 10.6.*
+
+Using the imputations from Exercise 5, add δ mmHg to the imputed month-12 SBP of SP and EP participants who dropped out (`last_month_sched < 12` in `walk_b`), for δ = 0, 4, 8, ..., 28. Pool the EP and SP estimates at each δ and plot them with their confidence intervals.
+
+Questions:
+
+1. At what δ does the confidence interval for SP first include zero? For EP?
+2. Is that δ clinically plausible? What information would help you decide?
+3. Why are usual-care dropouts left at their MAR imputations?
+
+## Independent exercises
+
+### Exercise 7. Multilevel imputation in long format
+
+*Learning outcome 10.5.*
+
+Impute the missing SBP values in long format with `mice` method `2l.norm`, using visit-by-arm fixed effects and a random intercept and slope on time (see the notes for the data layout and predictor matrix). Analyse each completed data set with the primary mixed model and pool the `visit_f12:armEP` coefficient with Rubin's rules. Compare with the wide-format result and explain any difference.
+
+### Exercise 8. Informative visit timing in KIDNEY
+
+*Learning outcome 10.7.*
+
+(a) Show that the time to the next visit depends on the last eGFR.
+(b) Compute the naive mean of all eGFR values within 3 months of years 1, 2, 3 and 4, and the corresponding population means from a mixed model with a quadratic time trend, diabetes (and its interaction with time) and age.
+(c) Compare both with the true values (simulation only, from `kidney_truth.rds`; see the notes for the formula).
+(d) Explain why the naive means can be biased in both directions in KIDNEY, and what assumption protects the mixed model.
+
+### Exercise 9. Writing the missing-data section of an analysis plan
+
+*Learning outcomes 10.2, 10.3, 10.6.*
+
+Write a missing-data section (about 200 words) for the WALK statistical analysis plan, covering: how missingness will be described; the assumption of the primary analysis and why it is plausible; why LOCF and complete-case analysis will not be used; the supporting MI analysis; and the delta-adjustment sensitivity analysis including the δ values and the reason for them.
+
+### Exercise 10. A different departure from MAR
+
+*Learning outcome 10.6.*
+
+Repeat the delta adjustment of Exercise 6 but apply δ to dropouts in **all three** arms. Explain why the estimated treatment effects now change much less with δ, and what kind of departure from MAR this scenario represents.

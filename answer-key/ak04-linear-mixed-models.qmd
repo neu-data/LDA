@@ -1,0 +1,315 @@
+---
+title: "Module 4. Linear mixed-effects models"
+subtitle: "Answer key"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+```{r}
+#| label: helpers
+#| include: false
+f0 <- function(x) formatC(x, format = "f", digits = 0)
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This answer key follows the workbook exercise by exercise. All output is produced when the document is rendered. Marking notes list acceptable alternatives and common errors.
+
+# Guided exercises
+
+## Exercise 1. A random-intercept model and the ICC
+
+```{r}
+#| label: ex1
+m_ri <- lmer(sbp ~ month * arm + (1 | id), data = walk, control = lmer_ctrl)
+summary(m_ri)
+vc <- as.data.frame(VarCorr(m_ri))
+vc
+tau0_sq  <- vc$vcov[1]
+sigma_sq <- vc$vcov[2]
+tau0_sq / (tau0_sq + sigma_sq)
+icc_lmer(m_ri)
+obs_cor <- round(visit_correlation(walk, id, month_sched, sbp), 2)
+obs_cor
+```
+
+```{r}
+#| label: ex1-values
+#| include: false
+icc <- icc_lmer(m_ri)
+ft_ri <- fixef_table(m_ri)
+```
+
+**Q1.1** $y_{ij} = \beta_0 + \beta_1 t_{ij} + \beta_2\text{SP}_i + \beta_3\text{EP}_i + \beta_4 t_{ij}\text{SP}_i + \beta_5 t_{ij}\text{EP}_i + b_{0i} + \varepsilon_{ij}$, with $b_{0i} \sim N(0, \tau_0^2)$ and $\varepsilon_{ij} \sim N(0, \sigma^2)$, independent of each other and across participants. $t_{ij}$ is actual months since randomisation. The coefficient $\beta_5$ (`month:armEP`, estimate `r f3(fixef(m_ri)["month:armEP"])` mmHg/month, 95% CI `r f3(ft_ri$lower[6])` to `r f3(ft_ri$upper[6])`) is the difference in mean slope between EP and UC.
+
+**Q1.2** $\hat\tau_0 =$ `r f1(sqrt(tau0_sq))` mmHg: participants' average levels vary around their arm's mean line with an SD of about `r f0(sqrt(tau0_sq))` mmHg. $\hat\sigma =$ `r f1(sqrt(sigma_sq))` mmHg: single measurements vary around the participant's own line with this SD. The ICC of `r f2(icc)` means that `r round(100 * icc)`% of the variance around the arm mean lines is between participants; it is also the correlation the model implies between any two measurements of the same participant.
+
+**Q1.3** The model implies `r f2(icc)` for every pair of visits, including months 0 and 12. The observed correlation between months 0 and 12 is `r f2(obs_cor[1, 6])`, and between months 0 and 1 it is `r f2(obs_cor[1, 2])`. The observed correlations decay with distance, which compound symmetry cannot reproduce.
+
+*Marking notes.* Accept the equation in matrix form. A common error is to describe the ICC as "the proportion of variance explained by the model". Another is to omit the independence assumptions.
+
+## Exercise 2. The random-slope (linear-time reference) model
+
+```{r}
+#| label: ex2
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+summary(m_lin)
+VarCorr(m_lin)
+fixef_table(m_ri)[5:6, c("term", "estimate", "se")]
+fixef_table(m_lin)[5:6, c("term", "estimate", "se")]
+```
+
+```{r}
+#| label: ex2-values
+#| include: false
+G <- as.matrix(VarCorr(m_lin)$id)
+vcl <- as.data.frame(VarCorr(m_lin))
+ft_lin <- fixef_table(m_lin)
+```
+
+**Q2.1** $\hat G = \begin{pmatrix} `r f1(G[1,1])` & `r f3(G[1,2])` \\ `r f3(G[1,2])` & `r f3(G[2,2])` \end{pmatrix}$ (mmHg², mmHg²/month, (mmHg/month)²). The intercept-slope correlation is `r f2(vcl$sdcor[3])`: participants with higher SBP at month 0 tend to have slightly more negative slopes, that is, to fall faster. The correlation is modest.
+
+**Q2.2** $12 \times$ `r f3(vcl$sdcor[2])` = `r f1(12 * vcl$sdcor[2])` mmHg. Individual 12-month changes vary around the arm mean change with an SD of about `r f0(12 * vcl$sdcor[2])` mmHg, which is as large as the treatment effects.
+
+**Q2.3** The SEs of the slope differences rise from `r f3(ft_ri$se[5])` and `r f3(ft_ri$se[6])` to `r f3(ft_lin$se[5])` and `r f3(ft_lin$se[6])`. When participants have different slopes, the mean slope of an arm is estimated from a sample of slopes that vary, and that variation is part of its uncertainty. The random-intercept model assumes it away and so understates the SE. The random-slope model's SEs should be trusted.
+
+*Marking notes.* Accept the correlation interpreted as "higher starters decline slightly faster". Penalise answers that say the slope SD is the SE of the slope.
+
+## Exercise 3. Implied covariance and testing the random slope
+
+```{r}
+#| label: ex3
+V <- implied_cov_lmer(m_lin, c(0, 1, 3, 6, 9, 12))
+round(V, 1)
+cov_to_cor(V)
+G <- as.matrix(VarCorr(m_lin)$id)
+tmin <- -G[1, 2] / G[2, 2]
+tmin
+anova(m_ri, m_lin, refit = FALSE)
+lrt <- lr_test(m_ri, m_lin)
+p_boundary_mixture(lrt$chisq, df_mix = c(1, 2))
+```
+
+**Q3.1** The implied variance is `r f0(V[1, 1])` mmHg² at month 0, falls to its minimum near month `r f1(tmin)` and rises to `r f0(V[6, 6])` mmHg² at month 12. The implied correlations decline with the distance between visits, from `r f2(cov2cor(V)[1, 2])` (months 0 and 1) to `r f2(cov2cor(V)[1, 6])` (months 0 and 12). Because both variance and covariance are functions of the times involved, the correlation is not one number; it must be given for specific pairs of times.
+
+**Q3.2** The two models have identical fixed effects, so their REML likelihoods are comparable. The null hypothesis $\tau_1^2 = 0$ is on the boundary of the parameter space (a variance cannot be negative), so the LR statistic follows a 50:50 mixture of $\chi^2_1$ and $\chi^2_2$ rather than $\chi^2_2$; using $\chi^2_2$ gives a p-value that is too large. Here the statistic is `r f1(lrt$chisq)` and both p-values are tiny.
+
+*Marking notes.* Accept `refit = TRUE` (ML) for this comparison if justified, but the explanation of the boundary is required.
+
+## Exercise 4. Centring time
+
+```{r}
+#| label: ex4
+walk <- walk |> mutate(month12 = month - 12)
+m_c12 <- lmer(sbp ~ month12 * arm + (1 + month12 | id), data = walk, control = lmer_ctrl)
+round(cbind(month0 = fixef(m_lin), month12 = fixef(m_c12)), 3)
+c(logLik(m_lin), logLik(m_c12))
+b <- fixef(m_lin)
+b["armEP"] + 12 * b["month:armEP"]
+VarCorr(m_c12)
+```
+
+**Q4.1** In the uncentred model `armSP` (`r f2(fixef(m_lin)["armSP"])`) and `armEP` (`r f2(fixef(m_lin)["armEP"])`) are the differences in mean SBP from UC at month 0, close to zero as randomisation implies. In the centred model they are the differences at month 12 (`r f2(fixef(m_c12)["armSP"])` and `r f2(fixef(m_c12)["armEP"])` mmHg), equal to $\hat\beta_3 + 12\hat\beta_5$ for EP. The log-likelihoods are identical: centring re-labels the same model.
+
+**Q4.2** The intercept now refers to month 12, so $\hat\tau_0$ is the SD of participants' levels at month 12 (`r f2(as.data.frame(VarCorr(m_c12))$sdcor[1])` mmHg) and the intercept-slope correlation changes sign to `r f2(as.data.frame(VarCorr(m_c12))$sdcor[3])`. The slope SD and the residual SD are unchanged, as are the implied variances and covariances at any given actual time.
+
+*Marking notes.* A common error is to say that centring "created a treatment effect". Another is to forget that the random intercept variance changes meaning.
+
+## Exercise 5. The primary model and the estimand, in `lme4` and `nlme`
+
+```{r}
+#| label: ex5
+m_cat <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+emm   <- emmeans(m_cat, ~ visit_f | arm)
+chg12 <- contrast(emm, list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+dmc12 <- contrast(chg12, "trt.vs.ctrl", by = NULL, adjust = "none")
+summary(chg12, infer = TRUE)
+summary(dmc12, infer = TRUE)
+m_cat_lme <- lme(sbp ~ visit_f * arm, random = ~ 1 + month | id, data = walk, method = "REML")
+max(abs(fixef(m_cat) - nlme::fixef(m_cat_lme)))
+ds_lme <- summary(contrast(contrast(emmeans(m_cat_lme, ~ visit_f | arm),
+                                    list(chg12 = c(-1, 0, 0, 0, 0, 1))),
+                           "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+ds_lme
+truth <- readRDS(here("data", "walk_truth.rds"))
+truth$true_change |> filter(month == 12)
+```
+
+```{r}
+#| label: ex5-values
+#| include: false
+ds <- summary(dmc12, infer = TRUE)
+tc <- with(truth$true_change[truth$true_change$month == 12, ], setNames(change, arm))
+td <- c(tc["SP"] - tc["UC"], tc["EP"] - tc["UC"])
+```
+
+**Q5.1** Compared with usual care, SBP fell from baseline to month 12 by an additional `r f1(-ds$estimate[1])` mmHg (95% CI `r f1(-ds$upper.CL[1])` to `r f1(-ds$lower.CL[1])`) with the standard programme and `r f1(-ds$estimate[2])` mmHg (`r f1(-ds$upper.CL[2])` to `r f1(-ds$lower.CL[2])`) with the enhanced programme, from a linear mixed model with visit-by-arm fixed effects and a random intercept and slope on actual time (REML, all `r n_distinct(walk$id)` participants).
+
+**Q5.2** `visit_f12:armEP` = `r f3(fixef(m_cat)["visit_f12:armEP"])`. With baseline and UC as reference levels, this interaction is (EP month 12 − EP baseline) − (UC month 12 − UC baseline), which is exactly the difference in mean change.
+
+**Q5.3** Estimates and standard errors agree to within numerical tolerance (largest difference `r formatC(max(abs(fixef(m_cat) - nlme::fixef(m_cat_lme))), format = "e", digits = 1)`). Only the degrees of freedom differ: `r f0(ds$df[2])` (Satterthwaite) against `r f0(ds_lme$df[2])` (containment) for EP. With 360 participants this changes the confidence limits only in the second decimal place.
+
+**Q5.4** The true differences are `r f1(td[1])` (SP) and `r f1(td[2])` (EP) mmHg; both lie inside the 95% intervals. One trial gives one estimate subject to sampling error; bias is a property of the average over many repetitions, which only a simulation study with many replicates can assess (and in real data the truth is unknown).
+
+*Marking notes.* Penalise reporting Dunnett-adjusted intervals without saying so, and reading `armEP` as the treatment effect. Accept results that state the sign as "a reduction of 9.0 mmHg".
+
+## Exercise 6. BLUPs and shrinkage
+
+```{r}
+#| label: ex6
+ols <- coef(lme4::lmList(sbp ~ month | id, data = walk)) |>
+  tibble::rownames_to_column("id") |> select(id, ols_slope = month)
+blup <- coef(m_lin)$id |> tibble::rownames_to_column("id")
+shrink <- count(walk, id, arm, name = "n_obs") |>
+  left_join(ols, by = "id") |> left_join(blup, by = "id") |>
+  mutate(blup_slope = month + (arm == "SP") * `month:armSP` + (arm == "EP") * `month:armEP`)
+sh <- shrink |> group_by(n_obs) |>
+  summarise(n = n(), sd_ols = sd(ols_slope, na.rm = TRUE), sd_blup = sd(blup_slope))
+sh
+ggplot(filter(shrink, !is.na(ols_slope)), aes(ols_slope, blup_slope, colour = factor(n_obs))) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey60") +
+  geom_point() + coord_cartesian(xlim = c(-6, 6)) +
+  labs(x = "OLS slope (mmHg/month)", y = "BLUP slope (mmHg/month)", colour = "Visits")
+```
+
+**Q6.1** With two visits, the participant's own slope is the difference of two noisy measurements divided by the time between them; its sampling variance is large compared with the estimated variance of true slopes ($\hat\tau_1^2 =$ `r f3(G[2, 2])`). The BLUP weights the participant's data by its precision relative to the population distribution, so almost all the weight goes to the arm mean. The SD of OLS slopes for two-visit participants is `r f2(sh$sd_ols[sh$n_obs == 2])` mmHg/month against `r f2(sh$sd_blup[sh$n_obs == 2])` for their BLUPs.
+
+**Q6.2** BLUPs are conditional means given the data, so they vary less than the true random effects (SD of BLUP slopes `r f2(sh$sd_blup[sh$n_obs == 6])` among complete participants against $\hat\tau_1 =$ `r f2(sqrt(G[2, 2]))`). Using them as data in another analysis understates variation and attenuates or distorts associations; the second variable should be put in the model instead.
+
+*Marking notes.* Participants with one visit have no OLS slope; an `NA` warning-free answer filters them out.
+
+# Independent exercises
+
+## Exercise 7. The estimand at month 6
+
+```{r}
+#| label: ex7
+dmc6 <- contrast(contrast(emm, list(chg6 = c(-1, 0, 0, 1, 0, 0))),
+                 "trt.vs.ctrl", by = NULL, adjust = "none")
+d6 <- summary(dmc6, infer = TRUE)
+d6
+walk <- walk |> mutate(month6 = month - 6)
+m_c6 <- lmer(sbp ~ month6 * arm + (1 + month6 | id), data = walk, control = lmer_ctrl)
+fixef_table(m_c6)[3:4, ]
+```
+
+```{r}
+#| label: ex7-values
+#| include: false
+f6 <- fixef_table(m_c6)
+```
+
+From the primary model, the differences in mean change from baseline to month 6 are `r fmt_ci(d6$estimate[1], d6$lower.CL[1], d6$upper.CL[1])` mmHg (SP) and `r fmt_ci(d6$estimate[2], d6$lower.CL[2], d6$upper.CL[2])` mmHg (EP). In the linear-time model centred at month 6, `armSP` and `armEP` are the differences in mean SBP *at* month 6 (`r f2(f6$estimate[3])` and `r f2(f6$estimate[4])` mmHg). These are differences in level, not in change, and they assume straight lines; with randomisation the two would agree in expectation if the line were correct. Here they differ markedly because the straight line, fitted to the whole year, understates the fast fall over the first six months. The primary-model estimates should be reported: they target the change from baseline without a shape assumption and reflect the faster early fall seen in @fig-codings below.
+
+```{r}
+#| label: fig-codings
+#| fig-cap: "Model-based means from categorical time (points) and the linear-time model (lines)."
+#| fig-height: 3.6
+nd <- expand.grid(month = seq(0, 12, 0.25), arm = levels(walk$arm))
+nd$lin <- predict(m_lin, newdata = nd, re.form = NA)
+ggplot(nd, aes(month, lin, colour = arm)) + geom_line() +
+  geom_point(data = as.data.frame(emm) |> mutate(month = as.numeric(as.character(visit_f))),
+             aes(month, emmean)) +
+  scale_colour_arm(labels = walk_arm_labels, name = NULL) +
+  labs(x = "Months since randomisation", y = "Mean SBP (mmHg)")
+```
+
+*Marking notes.* Accept a difference-in-change computed from the linear model (`emmeans` at months 0 and 6) as an extra. The key point is the distinction between a difference at month 6 and a difference in change to month 6.
+
+## Exercise 8. ML, REML and the shape of the mean
+
+```{r}
+#| label: ex8
+m_quad <- lmer(sbp ~ (month + I(month^2)) * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+ml <- list(linear = update(m_lin, REML = FALSE), quadratic = update(m_quad, REML = FALSE),
+           categorical = update(m_cat, REML = FALSE))
+sapply(ml, AIC)
+anova(ml$linear, ml$quadratic)
+anova(ml$quadratic, ml$categorical)
+```
+
+```{r}
+#| label: ex8-values
+#| include: false
+aics <- sapply(ml, AIC)
+a1 <- anova(ml$linear, ml$quadratic); a2 <- anova(ml$quadratic, ml$categorical)
+```
+
+Models with different fixed effects must be compared by ML. The quadratic model fits much better than the linear one ($\chi^2$ = `r f1(a1$Chisq[2])` on `r a1$Df[2]` df, `r fmt_p(a1[["Pr(>Chisq)"]][2])`), and the categorical model fits better again ($\chi^2$ = `r f1(a2$Chisq[2])` on `r a2$Df[2]` df, `r fmt_p(a2[["Pr(>Chisq)"]][2])`). AIC is lowest for the `r names(which.min(aics))` model (`r f0(min(aics))`). The linear and quadratic models are nested in the categorical model because any function of the six scheduled times can be represented by six means; strictly, the linear and quadratic models use actual times, so the nesting is approximate, which is another reason to rely on AIC as well as the tests. The chosen model is reported from its REML fit. With `refit = FALSE` the REML likelihoods would be compared, but they are likelihoods of different transformed data (residual contrasts depend on $X$), so the comparison is meaningless.
+
+*Marking notes.* Accept `anova(m_lin, m_quad, m_cat)` with the automatic ML refit. Penalise conclusions drawn from REML AIC values.
+
+## Exercise 9. A small trial: REML, ML and shrinkage with fewer participants
+
+```{r}
+#| label: ex9
+small <- walk |> filter(clinic %in% c("1", "2"))
+c(participants = n_distinct(small$id), observations = nrow(small))
+s_reml <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = small, control = lmer_ctrl)
+s_ml   <- update(s_reml, REML = FALSE)
+vc_cmp <- data.frame(component = c("tau0", "tau1", "cor", "sigma"),
+                     small_REML = varcomp_table(s_reml)$value,
+                     small_ML = varcomp_table(s_ml)$value,
+                     full_REML = varcomp_table(m_cat)$value)
+vc_cmp
+s_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = small, control = lmer_ctrl)
+s_shrink <- count(small, id, arm, name = "n_obs") |>
+  left_join(coef(lme4::lmList(sbp ~ month | id, data = small)) |>
+              tibble::rownames_to_column("id") |> select(id, ols_slope = month), by = "id") |>
+  left_join(coef(s_lin)$id |> tibble::rownames_to_column("id"), by = "id") |>
+  mutate(blup_slope = month + (arm == "SP") * `month:armSP` + (arm == "EP") * `month:armEP`)
+s_ratio <- with(filter(s_shrink, n_obs == 6), sd(blup_slope) / sd(ols_slope))
+f_ratio <- with(filter(shrink, n_obs == 6), sd(blup_slope) / sd(ols_slope))
+c(small = s_ratio, full = f_ratio)
+```
+
+```{r}
+#| label: ex9-values
+#| include: false
+pct_ml <- 100 * (1 - vc_cmp$small_ML / vc_cmp$small_REML)
+```
+
+The subset has `r n_distinct(small$id)` participants. The ML variance components are smaller than the REML ones, for example $\hat\tau_0$ `r f2(vc_cmp$small_ML[1])` against `r f2(vc_cmp$small_REML[1])` (`r f1(pct_ml[1])`% lower) and $\hat\sigma$ `r f3(vc_cmp$small_ML[4])` against `r f3(vc_cmp$small_REML[4])`. The relative gap is larger than in the full data because the 18 fixed effects now use up a larger share of the information. The subset estimates also differ from the full-data estimates through ordinary sampling variation (for example $\hat\tau_1$ = `r f3(vc_cmp$small_REML[2])` against `r f3(vc_cmp$full_REML[2])`). For complete participants the ratio of the SD of BLUP slopes to the SD of OLS slopes is `r f2(s_ratio)` in the subset and `r f2(f_ratio)` in the full data. Shrinkage for an individual depends mainly on their own number of visits and on the ratio of slope variance to residual variance, so it changes with the subset's variance estimates rather than with the number of participants as such.
+
+*Marking notes.* Credit any correct statement that ML underestimates relative to REML and that the gap widens as the number of participants falls relative to the number of fixed effects. Participants may see a singular-fit message for some subsets; that should be reported, not hidden.
+
+## Exercise 10. Writing up the covariate-adjusted model
+
+```{r}
+#| label: ex10
+walk <- walk |> mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+m_adj <- lmer(sbp ~ visit_f * arm + age10 + sex + bmi_c + (1 + month | id),
+              data = walk, control = lmer_ctrl)
+fixef_table(m_adj) |> filter(term %in% c("age10", "sexFemale", "bmi_c"))
+d_adj <- summary(contrast(contrast(emmeans(m_adj, ~ visit_f | arm),
+                                   list(chg12 = c(-1, 0, 0, 0, 0, 1))),
+                          "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+d_adj
+VarCorr(m_adj)
+```
+
+```{r}
+#| label: ex10-values
+#| include: false
+fa <- fixef_table(m_adj)
+va <- as.data.frame(VarCorr(m_adj))
+```
+
+**Equation.** $y_{ij} = \beta_0 + \sum_{k=2}^6\gamma_kV_{kij} + \beta_{\text{SP}}\text{SP}_i + \beta_{\text{EP}}\text{EP}_i + \sum_{k=2}^6(\delta_k^{\text{SP}}V_{kij}\text{SP}_i + \delta_k^{\text{EP}}V_{kij}\text{EP}_i) + \beta_a\,\text{age10}_i + \beta_s\,\text{Female}_i + \beta_b\,\text{bmi\_c}_i + b_{0i} + b_{1i}t_{ij} + \varepsilon_{ij}$, with $\mathbf{b}_i \sim N(\mathbf{0}, G)$, $\varepsilon_{ij} \sim N(0, \sigma^2)$. The terms are as in the primary model; $\beta_a$, $\beta_s$, $\beta_b$ are the differences in mean SBP per 10 years of age, for women versus men, and per kg/m² of BMI, assumed constant over time.
+
+**Model paragraph.** SBP was analysed with a linear mixed model with fixed effects for scheduled visit, arm, their interaction, age, sex and BMI, and a random intercept and slope on actual time (REML; Satterthwaite df). Compared with usual care, mean change from baseline to month 12 was `r fmt_ci(d_adj$estimate[1], d_adj$lower.CL[1], d_adj$upper.CL[1])` mmHg with the standard programme and `r fmt_ci(d_adj$estimate[2], d_adj$lower.CL[2], d_adj$upper.CL[2])` mmHg with the enhanced programme. SBP was `r f1(fa$estimate[fa$term == "age10"])` mmHg higher per 10 years of age. The SD of random intercepts was `r f1(va$sdcor[1])` mmHg, of slopes `r f2(va$sdcor[2])` mmHg/month, and the residual SD `r f1(va$sdcor[4])` mmHg.
+
+**Why.** Age, sex and BMI explain part of the stable between-participant differences in level, so $\hat\tau_0$ falls (`r f2(va$sdcor[1])` against `r f2(as.data.frame(VarCorr(m_cat))$sdcor[1])`). The treatment contrast is a within-participant change, from which stable level differences cancel, so its standard error hardly changes (`r f3(d_adj$SE[2])` against `r f3(ds$SE[2])` for EP).
+
+*Marking notes.* Accept the equation with a generic $\mathbf{x}_i^\top\boldsymbol\beta$ for the covariates if each is described. Common error: interpreting covariate coefficients as causal effects.

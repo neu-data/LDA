@@ -1,0 +1,175 @@
+---
+title: "Module 5. Modelling covariance and choosing a model"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+These exercises practise the main skills of Module 5: fitting residual correlation structures and random-effects structures, computing the marginal covariance they imply, comparing models correctly with REML and ML, dealing with boundary tests and singular fits, and defending a final choice. Code chunks contain blanks (`___`) for you to fill in; they are set to `eval: false` so that the workbook renders before you complete them. Change this to `eval: true` (or run the chunks interactively) once you have filled in the blanks.
+
+Throughout, the mean model is the saturated `sbp ~ visit_f * arm`, so that all covariance comparisons use the same fixed effects. The unstructured model takes around 15 seconds to fit.
+
+Two helper objects are useful in several exercises. Run this chunk first.
+
+```{r}
+#| label: helpers
+sched <- c(0, 1, 3, 6, 9, 12)
+f_mean <- sbp ~ visit_f * arm
+# coefficient vectors for the difference in mean change to month 12
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg12  <- function(a) cell_w(a, "12") - cell_w(a, "0")
+L_dic  <- list("SP - UC" = chg12("SP") - chg12("UC"),
+               "EP - UC" = chg12("EP") - chg12("UC"))
+```
+
+## Guided exercises
+
+### Exercise 1. Residual correlation structures (LO 5.1, 5.3)
+
+(a) Compute the observed correlation between scheduled visits of the residuals from an ordinary least squares fit of the saturated mean model.
+
+```{r}
+#| eval: false
+walk$res_ols <- residuals(lm(___, data = walk))
+obs_cor <- walk |>
+  select(id, visit_f, res_ols) |>
+  pivot_wider(names_from = ___, values_from = res_ols) |>
+  select(-id) |>
+  cov(use = "pairwise.complete.obs") |>
+  cov2cor()
+round(obs_cor, 2)
+```
+
+(b) Fit compound symmetry, AR(1) by visit index and an exponential structure with a nugget in actual time.
+
+```{r}
+#| eval: false
+m_cs  <- gls(f_mean, data = walk, correlation = corCompSymm(form = ~ 1 | ___))
+m_ar1 <- gls(f_mean, data = walk, correlation = corAR1(form = ~ ___ | id))
+m_exp <- gls(f_mean, data = walk,
+             correlation = corExp(form = ~ ___ | id, nugget = ___))
+```
+
+(c) Extract the correlation parameters with `coef(m$modelStruct$corStruct, unconstrained = FALSE)`. For each model, compute by hand the implied correlation between baseline and month 12 for a participant measured exactly on schedule.
+
+```{r}
+#| eval: false
+rho_cs  <- coef(m_cs$modelStruct$corStruct, unconstrained = FALSE)
+phi_ar1 <- coef(m_ar1$modelStruct$corStruct, unconstrained = FALSE)
+p_exp   <- coef(m_exp$modelStruct$corStruct, unconstrained = FALSE)
+c(CS  = rho_cs,
+  AR1 = phi_ar1^___,                                   # visits 1 and 6
+  EXP = (1 - p_exp[["nugget"]]) * exp(-___ / p_exp[["range"]]))
+obs_cor["0", "12"]
+```
+
+**Questions.** (i) Which structure comes closest to the observed baseline to month 12 correlation, and which is furthest? (ii) Why does AR(1) use `visit` and not `month`? (iii) The estimated exponential range is much longer than the 3 months used to simulate the serial process. Explain why.
+
+### Exercise 2. The marginal covariance of a random intercept and slope model (LO 5.3)
+
+The primary model `lmer(sbp ~ visit_f * arm + (1 + month | id))` has independent residuals, so $V_i = Z_iGZ_i^\top + \sigma^2 I$.
+
+(a) Extract $G$ and $\sigma^2$, build $Z$ for the scheduled months, and compute $V$.
+
+```{r}
+#| eval: false
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+G  <- as.matrix(VarCorr(m_prim)$___)
+s2 <- sigma(m_prim)^___
+Z  <- cbind(1, ___)
+V  <- Z %*% G %*% t(Z) + diag(s2, ___)
+round(V, 1)
+round(cov2cor(V), 2)
+```
+
+(b) Check your answer against the course helper `implied_cov_lmer(m_prim, sched)`.
+
+(c) Using the formula $\operatorname{Var}(y_{it}) = \tau_0^2 + 2\tau_{01}t + \tau_1^2t^2 + \sigma^2$, compute the variance at month 12 by hand from the elements of `G` and `s2`.
+
+**Questions.** (i) Does the implied variance increase or decrease over follow-up, and why? (ii) Compare the implied correlation between months 0 and 1 with the observed value from Exercise 1. What feature of the data does this model miss?
+
+### Exercise 3. Heterogeneous variances and REML comparisons (LO 5.2, 5.4)
+
+(a) Add visit-specific variances to the exponential model from Exercise 1.
+
+```{r}
+#| eval: false
+m_exp_het <- update(m_exp, weights = varIdent(form = ~ 1 | ___))
+coef(m_exp_het$modelStruct$varStruct, unconstrained = FALSE, allCoef = TRUE)
+anova(m_exp, m_exp_het)
+```
+
+(b) Now compare the exponential model with a model that has a different **mean** (linear time instead of categorical time), both fitted by REML.
+
+```{r}
+#| eval: false
+m_exp_lin <- gls(sbp ~ month * arm, data = walk,
+                 correlation = corExp(form = ~ month | id, nugget = TRUE))
+anova(m_exp_lin, m_exp)
+```
+
+(c) Refit both models by ML (`update(m, method = "ML")`) and compare again.
+
+**Questions.** (i) Is there evidence that the residual variance differs between visits? (ii) What does nlme say in part (b), and why? (iii) Which comparison in (b) and (c) is valid, and what does it show?
+
+### Exercise 4. A boundary test for the clinic variance (LO 5.5)
+
+(a) Fit the primary model with and without a random intercept for clinic, and compute the LR statistic from the two REML fits.
+
+```{r}
+#| eval: false
+m_clinic <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 | ___),
+                 data = walk, control = lmer_ctrl)
+lt <- lr_test(___, ___)
+lt
+```
+
+(b) Compute the naive p-value from $\chi^2_1$ and the boundary-corrected p-value with `p_boundary_mixture()`.
+
+**Questions.** (i) Why is the naive p-value conservative? (ii) Would you include a clinic random intercept in the primary analysis? Give one statistical and one design-based reason.
+
+### Exercise 5. A singular fit in a small sample (LO 5.5)
+
+(a) Draw a random sample of 30 participants and fit the linear-time model with a correlated random intercept and slope. Repeat with a few different seeds.
+
+```{r}
+#| eval: false
+set.seed(___)
+small <- filter(walk, id %in% sample(unique(walk$id), 30))
+m_small <- lmer(sbp ~ month * arm + (1 + month | id), data = small, control = lmer_ctrl)
+VarCorr(m_small)
+isSingular(m_small)
+```
+
+(b) For a seed that gives a singular fit, refit with uncorrelated random effects, `(1 + month || id)`, and with a random intercept only. Compare the estimated `month:armEP` coefficient and its standard error across the three fits.
+
+**Questions.** (i) Which parameter is on the boundary in your singular fit? (ii) Does the singular fit show that participants do not differ in their slopes? (iii) Which model would you report, and why?
+
+## Independent exercises
+
+### Exercise 6. Choose and defend a covariance model (LO 5.1, 5.4, 5.6)
+
+Using only participants from clinics 1 to 4, fit at least five covariance models with the saturated mean (including compound symmetry, an exponential structure, an unstructured covariance, a random intercept and slope, and a random intercept with exponential serial correlation). Produce a table of AIC and BIC, and a heatmap comparing the implied and observed correlations for two of them. Choose a model and write a short justification (about 150 words) of the kind you would put in a statistical analysis plan.
+
+### Exercise 7. Does the covariance model change the answer? (LO 5.6)
+
+For the models in Exercise 6, estimate the difference in mean change from baseline to month 12 for EP versus UC, with its standard error and 95% confidence interval. Present the results as a table or forest plot and comment on how much the estimate and its precision depend on the covariance model.
+
+### Exercise 8. Variance by arm (LO 5.2, 5.4)
+
+Programmes that change behaviour might also change how variable blood pressure is. Using the full data, test whether the residual variance differs between arms by adding `varIdent(form = ~ 1 | arm)` to the random intercept plus exponential model. Report the estimated SD ratios and the result of the appropriate likelihood-ratio test.
+
+### Exercise 9. Write the methods paragraph (LO 5.6)
+
+Write a methods paragraph (100–150 words) describing the covariance model of the primary WALK analysis, how it was chosen, and the sensitivity analyses that were carried out, using the numbers from the course notes.

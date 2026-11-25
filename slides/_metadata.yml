@@ -1,0 +1,29 @@
+execute:
+  echo: true
+  warning: false
+  message: false
+
+knitr:
+  opts_chunk:
+    comment: "#>"
+    fig.align: center
+    dpi: 150
+    fig.width: 9
+    fig.height: 4.8
+    out.width: "88%"
+
+format:
+  revealjs:
+    theme: [default, ../assets/slides.scss]
+    width: 1280
+    height: 720
+    margin: 0.06
+    slide-number: c/t
+    show-slide-number: all
+    html-math-method: mathml
+    embed-resources: true
+    transition: none
+    center: false
+    footer: "Longitudinal Data Analysis using R"
+    pdf-separate-fragments: false
+lang: en-GB

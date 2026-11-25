@@ -1,0 +1,265 @@
+---
+title: "Module 13. Advanced extensions"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+suppressPackageStartupMessages({
+  library(ordinal); library(survival); library(JMbayes2)
+})
+slice <- dplyr::slice; lme <- nlme::lme; coxph <- survival::coxph
+walk     <- load_walk()
+clear    <- load_clear() |> mutate(id = factor(id), age10 = (age - 45) / 10)
+kid_long <- load_kidney("long") |> mutate(age10 = (age - 60) / 10) |> as.data.frame()
+kid_ev   <- load_kidney("events") |> mutate(age10 = (age - 60) / 10) |> as.data.frame()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+These exercises accompany the Module 13 notes. All of the material is <span class="advanced-tag">ADVANCED</span>, and the five guided exercises are independent: do the ones that match the sections you studied. Each guided exercise has partially completed code with blanks (`___`) to fill in and questions to answer in words. The independent exercises at the end give a task without scaffolding. Because the data are simulated, several exercises ask you to compare estimates with the true generating values; in a real analysis this is impossible.
+
+Some models take a while to fit. The joint model in Exercise 4 uses MCMC and takes several minutes; you may load the saved fit from `outputs/models/m13_jm.rds` (created by `scripts/13d_joint_model.R`) instead.
+
+# Guided exercises
+
+## Exercise 1. A cumulative-logit mixed model for itch severity
+
+*Learning outcomes: LO 13.1, LO 13.6*
+
+CLEAR was simulated from a cumulative-logit model with cut-points −2.5, 0 and 2.5, a placebo week slope of −0.06, an additional active week slope of −0.16, an age effect of 0.2 per 10 years (age centred at 45), a female effect of 0.3 and a random-intercept SD of 2.0.
+
+(a) Fit the model with week, arm, their interaction, centred age (`age10`) and sex, and a random intercept for participant. Use 7 adaptive quadrature points.
+
+```{r}
+#| eval: false
+m1 <- clmm(severity_f ~ ___ * ___ + age10 + ___ + (1 | ___),
+           data = clear, nAGQ = ___)
+summary(m1)
+```
+
+(b) Make a table that places each estimate next to its true value, and say for which parameters the 95% Wald interval contains the truth.
+
+```{r}
+#| eval: false
+cf <- coef(summary(m1))
+data.frame(term = rownames(cf), estimate = cf[, 1],
+           lower = cf[, 1] - 1.96 * cf[, 2], upper = cf[, 1] + 1.96 * cf[, 2],
+           truth = c(-2.5, 0, 2.5, ___, 0, ___, ___, ___))
+```
+
+(c) What is the sign convention of `clmm()`? Does a negative `week:armActive` coefficient mean that itch gets worse or better faster with active treatment?
+
+(d) Compute the cumulative odds ratio for active versus placebo over 12 weeks, with a 95% confidence interval, and interpret it in one sentence. Is it a subject-specific or a population-average quantity?
+
+```{r}
+#| eval: false
+b  <- cf["week:armActive", 1]; se <- cf["week:armActive", 2]
+exp(12 * c(est = b, lower = b - 1.96 * se, upper = b + 1.96 * se))
+```
+
+(e) For a participant with random intercept 0, aged 45, male, compute the predicted probability of each severity category at week 12 in each arm. (Hint: $P(Y \le k) = \operatorname{logit}^{-1}(\theta_k - \eta)$, and the category probabilities are differences of successive cumulative probabilities.)
+
+```{r}
+#| eval: false
+th <- m1$Theta
+eta_pl  <- 12 * m1$beta["week"]
+eta_act <- 12 * (m1$beta["week"] + m1$beta["week:armActive"]) + m1$beta["armActive"]
+cum_pl  <- plogis(th - ___)
+diff(c(0, cum_pl, 1))
+```
+
+(f) In one or two sentences: when would you involve a specialist rather than use this model?
+
+## Exercise 2. Three levels: visits, participants, clinics
+
+*Learning outcomes: LO 13.2, LO 13.6*
+
+(a) Fit a three-level random-intercept model for SBP with the primary model's fixed effects (`visit_f * arm`), a random intercept for clinic and a random intercept for participant.
+
+```{r}
+#| eval: false
+m2 <- lmer(sbp ~ visit_f * arm + (1 | ___) + (1 | ___),
+           data = walk, control = lmer_ctrl)
+VarCorr(m2)
+```
+
+(b) Compute the share of the total variance at each level, the correlation between two participants at the same clinic, and the correlation between two visits of the same participant.
+
+```{r}
+#| eval: false
+vc <- as.data.frame(VarCorr(m2))
+v  <- vc$vcov[match(c("clinic", "id", "Residual"), vc$grp)]
+v / sum(v)
+icc_clinic      <- ___ / sum(v)
+icc_participant <- (___ + ___) / sum(v)
+```
+
+(c) Fit the primary model (random intercept and slope on `month` for participant) three ways: without clinic, with a random clinic intercept, and with clinic as a fixed effect. For each, compute the difference in mean change from baseline to month 12 for EP versus UC with `emmeans`.
+
+```{r}
+#| eval: false
+m_a <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_b <- lmer(sbp ~ visit_f * arm + (1 + month | id) + ___, data = walk, control = lmer_ctrl)
+m_c <- lmer(sbp ~ visit_f * arm + ___ + (1 + month | id), data = walk, control = lmer_ctrl)
+emm <- emmeans(m_b, ~ visit_f | arm, at = list(visit_f = c("0", "12")))
+chg <- contrast(emm, list(change = c(-1, 1)), by = "arm")
+summary(contrast(chg, "trt.vs.ctrl", by = NULL, ref = 1), infer = TRUE)
+```
+
+(d) Why are the three answers so similar? Would they be similar if each clinic had been randomised as a whole to one arm? Explain.
+
+(e) The true between-clinic SD is 3 mmHg. Explain why, with 8 clinics, you should report an interval for the clinic SD rather than only its estimate.
+
+## Exercise 3. An asymptotic exponential model for SBP
+
+*Learning outcomes: LO 13.3*
+
+(a) Compute the observed mean SBP by arm and scheduled month, and use it to choose starting values for the baseline (`base`), the plateau fall in each arm (`A`) and the time constant (`tau`).
+
+```{r}
+#| eval: false
+walk |> group_by(arm, month_sched) |> summarise(sbp = mean(sbp))
+start_vals <- c(base = ___, A = c(___, ___, ___), tau = ___)
+```
+
+(b) Fit the model with arm-specific plateau falls, a common time constant, and independent random effects for baseline and plateau.
+
+```{r}
+#| eval: false
+m3 <- nlme(sbp ~ base - A * (1 - exp(-month / tau)),
+           data   = as.data.frame(walk),
+           fixed  = list(base ~ 1, A ~ ___, tau ~ 1),
+           random = list(id = pdDiag(___ + ___ ~ 1)),
+           start  = start_vals)
+summary(m3)
+```
+
+(c) Interpret `A.armEP` and `tau` in words a clinician would understand.
+
+(d) Refit from a starting value of `tau = 4`. Do the estimates change? What would it mean if they did?
+
+(e) The simulation's plateau falls are 2, 6 and 9 mmHg for the part of the effect that does not act through walking, and about 2.1, 6.7 and 10.2 mmHg in total. Which set should your estimates be compared with, and why?
+
+## Exercise 4. A joint model for eGFR and kidney failure
+
+*Learning outcomes: LO 13.4, LO 13.6*
+
+(a) Fit the longitudinal submodel (natural spline in time with fixed knots, diabetes, a diabetes-by-time interaction, centred age; random intercept and slope) and the survival submodel (Cox model with diabetes).
+
+```{r}
+#| eval: false
+lme_egfr <- lme(egfr ~ ns(years, knots = 2.5, Boundary.knots = c(0, 5)) +
+                  diabetes + diabetes:years + ___,
+                random = ~ ___ | id, data = kid_long,
+                control = lmeControl(opt = "optim"))
+cox_fail <- coxph(Surv(___, ___) ~ diabetes, data = kid_ev)
+```
+
+(b) Load the saved joint model (or fit it with the code in the notes) and print its summary.
+
+```{r}
+#| eval: false
+jm_fit <- readRDS(here("outputs", "models", "m13_jm.rds"))
+summary(jm_fit)
+```
+
+(c) Report the association parameter as a hazard ratio per 10 mL/min/1.73m² **lower** eGFR, with its 95% credible interval. The true value of the association is −0.13 per unit; does the interval contain it?
+
+(d) Fit the naive time-dependent Cox model with the last observed eGFR, and compare its estimate with the joint model's. Explain the direction of the difference.
+
+```{r}
+#| eval: false
+td <- tmerge(kid_ev |> select(id, diabetes, time, failure),
+             kid_ev |> select(id, time, failure), id = id,
+             fail = event(time, failure))
+td <- tmerge(td, kid_long |> select(id, years, egfr), id = id,
+             egfr = tdc(___, ___))
+coxph(Surv(tstart, tstop, fail) ~ egfr + diabetes, data = td)
+```
+
+(e) Which convergence diagnostics would you report for the joint model? Look at the `Rhat` column. What would you do if a value were 1.2?
+
+## Exercise 5. Time-varying confounding and an MSM
+
+*Learning outcomes: LO 13.5, LO 13.6*
+
+Use the simulation function from the notes (copied below).
+
+```{r}
+#| eval: false
+sim_tvc <- function(n, seed) {
+  set.seed(seed)
+  L0 <- rnorm(n); U <- rnorm(n)
+  A0 <- rbinom(n, 1, plogis(-0.3 + 0.8 * L0))
+  L1 <- 0.5 * L0 - 0.8 * A0 + 0.8 * U + rnorm(n, 0, 0.6)
+  A1 <- rbinom(n, 1, plogis(-0.5 + 1.0 * L1 + 1.0 * A0))
+  Y  <- 50 + 3 * L0 + 1.5 * L1 - 2 * A0 - 2 * A1 + 4 * U + rnorm(n, 0, 3)
+  data.frame(id = seq_len(n), L0, A0, L1, A1, Y)
+}
+dat <- sim_tvc(5000, seed = 99)
+```
+
+(a) Using the generating equations, show that the true MSM coefficients are −3.2 for `A0` and −2 for `A1`.
+
+(b) Fit `lm(Y ~ A0 + A1 + L0 + L1)`. Which coefficient is biased, and why? Use the DAG in the notes in your answer.
+
+(c) Compute the stabilised weights by hand.
+
+```{r}
+#| eval: false
+p_received <- function(model, a) { p <- fitted(model); ifelse(a == 1, p, 1 - p) }
+den0 <- glm(A0 ~ ___, family = binomial, data = dat)
+num0 <- glm(A0 ~ 1,   family = binomial, data = dat)
+den1 <- glm(A1 ~ ___ + ___ + ___, family = binomial, data = dat)
+num1 <- glm(A1 ~ ___, family = binomial, data = dat)
+dat$sw <- p_received(num0, dat$A0) / p_received(den0, dat$A0) *
+          p_received(___, dat$A1) / p_received(___, dat$A1)
+summary(dat$sw)
+```
+
+(d) Fit the MSM with `geeglm()` and robust standard errors. Compare its estimates with the truth.
+
+```{r}
+#| eval: false
+geeglm(Y ~ ___ + ___, data = dat, id = id, weights = sw, corstr = "independence")
+```
+
+(e) Name the three identifying assumptions of the MSM. Which of them can the data check?
+
+# Independent exercises
+
+## Exercise 6. Is proportional odds plausible for age?
+
+*Learning outcomes: LO 13.1*
+
+Using `clmm2()` with nominal effects, test whether the effect of age on itch severity differs between cut-points. Report the likelihood-ratio statistic and interpret it. Then fit binary random-intercept GLMMs to the three cumulative splits of severity and compare the age coefficients informally.
+
+## Exercise 7. Population-average probabilities
+
+*Learning outcomes: LO 13.1*
+
+For the unadjusted model `clmm(severity_f ~ week * arm + (1 | id))`, compute the **marginal** probability of moderate or severe itch at week 12 in each arm by averaging the conditional probability over the random-intercept distribution. Use either Gauss-Hermite quadrature (as in the notes) or Monte Carlo integration with 100,000 draws of $b_{0i}$. Compare the marginal risk difference with the conditional one for $b_{0i} = 0$, and explain why they differ.
+
+## Exercise 8. A nonlinear model adjusted for walking
+
+*Learning outcomes: LO 13.3*
+
+Create the within-person deviation of steps from each participant's mean steps (`steps_w = steps - mean(steps)` within participant) and add a linear term `+ beta_s * steps_w` to the asymptotic exponential model (add `beta_s ~ 1` to the `fixed` list, with a starting value of 0). How do the plateau estimates change? Compare them with the simulation's direct plateau values (2, 6, 9 mmHg) and explain what the steps-adjusted plateau now estimates.
+
+## Exercise 9. Current slope as well as current value
+
+*Learning outcomes: LO 13.4*
+
+Refit the joint model with `functional_forms = ~ value(egfr) + slope(egfr)` (use `n_iter = 6000L`, `n_burnin = 2000L` to keep the run short, and record the time it takes). Report both association parameters and their Rhat values. Does the slope add information beyond the current value? (The data were simulated with a current-value association only.)
+
+## Exercise 10. When standard adjustment works again
+
+*Learning outcomes: LO 13.5*
+
+Modify `sim_tvc()` so that treatment at time 0 has no effect on `L1`. Compute the new true MSM coefficients, and show by simulation (200 datasets of 1,000) that the regression adjusted for `L0` and `L1` is now approximately unbiased for both effects. Explain in two sentences what this tells you about when time-varying confounding requires g-methods.

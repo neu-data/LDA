@@ -1,0 +1,546 @@
+---
+title: "Module 5. Modelling covariance and choosing a model"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+sched <- c(0, 1, 3, 6, 9, 12)
+f_mean <- sbp ~ visit_f * arm
+
+cells  <- expand.grid(visit_f = levels(walk$visit_f), arm = levels(walk$arm))
+cell_w <- function(a, v) as.numeric(cells$arm == a & cells$visit_f == v)
+chg12  <- function(a) cell_w(a, "12") - cell_w(a, "0")
+L_dic  <- list("SP - UC" = chg12("SP") - chg12("UC"),
+               "EP - UC" = chg12("EP") - chg12("UC"))
+dic <- function(m) {
+  e <- if (inherits(m, "gls")) emmeans(m, ~ visit_f * arm, mode = "df.error") else
+    emmeans(m, ~ visit_f * arm)
+  summary(contrast(e, L_dic), infer = TRUE)
+}
+
+implied_cov <- function(model, times = sched) {
+  k <- length(times); C <- diag(k)
+  cs <- model$modelStruct$corStruct
+  if (!is.null(cs)) {
+    if (inherits(cs, "corCompSymm")) {
+      C <- matrix(coef(cs, unconstrained = FALSE), k, k); diag(C) <- 1
+    } else if (inherits(cs, c("corAR1", "corARMA"))) {
+      C <- coef(cs, unconstrained = FALSE)^abs(outer(1:k, 1:k, "-"))
+    } else if (inherits(cs, "corExp")) {
+      p <- coef(cs, unconstrained = FALSE)
+      nug <- if ("nugget" %in% names(p)) p[["nugget"]] else 0
+      C <- (1 - nug) * exp(-abs(outer(times, times, "-")) / p[["range"]]); diag(C) <- 1
+    } else if (inherits(cs, "corSymm")) {
+      C[lower.tri(C)] <- coef(cs, unconstrained = FALSE); C <- C + t(C) - diag(k)
+    }
+  }
+  vs <- model$modelStruct$varStruct
+  s <- if (is.null(vs)) rep(1, k) else
+    coef(vs, unconstrained = FALSE, allCoef = TRUE)[as.character(times)]
+  V <- model$sigma^2 * diag(s) %*% C %*% diag(s)
+  if (inherits(model, "lme")) {
+    G <- as.matrix(getVarCov(model)); Z <- cbind(1, times)[, seq_len(ncol(G)), drop = FALSE]
+    V <- Z %*% G %*% t(Z) + V
+  }
+  dimnames(V) <- list(times, times); V
+}
+mat_long <- function(M, label) {
+  data.frame(row = factor(rep(rownames(M), ncol(M)), levels = rownames(M)),
+             col = factor(rep(colnames(M), each = nrow(M)), levels = colnames(M)),
+             value = as.vector(M), model = label)
+}
+plot_heat <- function(d, ncol = 4) {
+  ggplot(d, aes(col, row, fill = value)) +
+    geom_tile(colour = "white") +
+    geom_text(aes(label = sprintf("%.2f", value)), size = 2.6) +
+    scale_fill_gradient(low = "#F7FBFF", high = "#2171B5", limits = c(0.3, 1),
+                        breaks = c(0.4, 0.6, 0.8, 1), name = "Correlation") +
+    scale_y_discrete(limits = rev) + facet_wrap(~ model, ncol = ncol) +
+    labs(x = "Scheduled month", y = "Scheduled month") +
+    theme(panel.grid = element_blank(), legend.key.width = unit(1.4, "cm"))
+}
+
+walk$res_ols <- residuals(lm(f_mean, data = walk))
+obs_cor <- walk |> select(id, visit_f, res_ols) |>
+  pivot_wider(names_from = visit_f, values_from = res_ols) |> select(-id) |>
+  cov(use = "pairwise.complete.obs") |>
+  cov2cor()
+
+m_ind <- gls(f_mean, data = walk)
+m_cs  <- gls(f_mean, data = walk, correlation = corCompSymm(form = ~ 1 | id))
+m_ar1 <- gls(f_mean, data = walk, correlation = corAR1(form = ~ visit | id))
+m_exp <- gls(f_mean, data = walk, correlation = corExp(form = ~ month | id, nugget = TRUE))
+m_un  <- gls(f_mean, data = walk, correlation = corSymm(form = ~ visit | id),
+             weights = varIdent(form = ~ 1 | visit_f))
+m_cs_het <- gls(f_mean, data = walk, correlation = corCompSymm(form = ~ 1 | id),
+                weights = varIdent(form = ~ 1 | visit_f))
+m_ri     <- lme(f_mean, random = ~ 1 | id, data = walk)
+m_rs     <- lme(f_mean, random = ~ 1 + month | id, data = walk)
+m_ri_exp <- lme(f_mean, random = ~ 1 | id, data = walk,
+                correlation = corExp(form = ~ month | id, nugget = TRUE))
+m_rs_exp <- lme(f_mean, random = ~ 1 + month | id, data = walk,
+                correlation = corExp(form = ~ month | id, nugget = TRUE))
+m_prim <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+mods <- list("Independence" = m_ind, "Compound symmetry" = m_cs, "AR(1) by visit" = m_ar1,
+  "Exponential + nugget" = m_exp, "CS + heterogeneous variances" = m_cs_het,
+  "Unstructured" = m_un, "Random intercept" = m_ri, "Random intercept + slope" = m_rs,
+  "Random intercept + exponential" = m_ri_exp,
+  "Random int. + slope + exponential" = m_rs_exp)
+cmp <- data.frame(model = names(mods),
+  n_cov = sapply(mods, function(m) attr(logLik(m), "df")) - 18,
+  AIC = sapply(mods, AIC), BIC = sapply(mods, BIC), row.names = NULL) |>
+  mutate(dAIC = AIC - min(AIC), dBIC = BIC - min(BIC))
+d_ind <- dic(m_ind); d_cs <- dic(m_cs)
+```
+
+# Why the covariance matters
+
+## The estimand is a within-person change, so correlation changes the standard error
+
+```{r}
+#| echo: false
+rbind(Independence = as.data.frame(d_ind)[2, c("estimate", "SE")],
+      `Compound symmetry` = as.data.frame(d_cs)[2, c("estimate", "SE")]) |>
+  knitr::kable(digits = 2, caption = "EP minus UC, difference in mean change to month 12 (mmHg)")
+```
+
+- Same mean model, two assumptions about correlation.
+- Estimates almost equal; standard errors differ by a factor of `r round(d_ind$SE[2] / d_cs$SE[2], 1)`.
+
+::: {.notes}
+Open with this table before any theory. Both models have the same 18 fixed effects: a mean for each arm at each visit. The only difference is whether the six measurements on a person are treated as independent. Ask the room which standard error they believe. The independence model treats month 12 and baseline as coming from different people, so person-to-person variation in blood pressure does not cancel. Then mention the other reasons: under MAR the covariance model affects the means themselves; too-small SEs are worse than too-large ones; and the covariance sometimes is the question.
+:::
+
+## Four reasons to care about the covariance model
+
+1. Standard errors of within-person contrasts depend on it.
+2. Under MAR dropout, the estimated means depend on it.
+3. A covariance that is too simple can make SEs **too small**.
+4. Sometimes the covariance is the question (stability, measurement error).
+
+::: {.notes}
+Keep this brief; the point of the slide is to frame the module. For point 2, remind participants that Module 10 will show that a likelihood analysis is valid under MAR only when the model, including its covariance, is approximately right. Point 3 will reappear when we see that compound symmetry gives a smaller SE than models that fit better.
+:::
+
+## Look at the data first: residual correlations are high and fall slowly with lag
+
+```{r}
+#| echo: false
+#| fig-width: 5
+#| fig-height: 4.2
+#| out-width: "50%"
+plot_heat(mat_long(obs_cor, "Observed residual correlation"), ncol = 1)
+```
+
+::: {.notes}
+These are correlations of residuals after removing the arm-by-visit means, so differences between arms do not inflate them. Point out three features. All correlations are at least about 0.69: a stable person-level component. They fall with the gap between visits: serial correlation. They level off rather than dropping to zero. Ask: which model would produce this pattern? Answer we will reach: random intercept plus a serial component plus measurement error. Mention that pairwise-complete correlations are only a guide under MAR dropout.
+:::
+
+## Because the data are simulated, we know the recipe
+
+| Component | SD (true) | Correlation pattern |
+|---|---|---|
+| Random intercept | 11 mmHg | constant |
+| Random slope | 0.35 mmHg/month | grows with time |
+| Clinic | 3 mmHg | constant within clinic |
+| Serial process | 5 mmHg | $\exp(-\lvert\Delta t\rvert/3)$ |
+| Measurement error | 4 mmHg | none |
+
+::: {.notes}
+This is possible only because WALK is simulated. With real data you never see this table. The aim of the module is to recover something like it from the data and, more importantly, to decide how much of it the analysis needs.
+:::
+
+# Residual correlation structures
+
+## A covariance structure is a rule for filling in a participant's covariance matrix
+
+$$
+\mathbf{y}_i = X_i\boldsymbol\beta + \boldsymbol\varepsilon_i, \quad \boldsymbol\varepsilon_i \sim N(\mathbf{0}, R_i), \quad R_i = \sigma^2 C_i
+$$
+
+| Structure | $[C_i]_{jk}$ | Parameters (6 visits) |
+|---|---|---|
+| Compound symmetry | $\rho$ | 1 |
+| AR(1) by visit | $\rho^{\lvert j-k\rvert}$ | 1 |
+| Exponential + nugget | $(1-c)\,e^{-\lvert t_{ij}-t_{ik}\rvert/\phi}$ | 2 |
+| Unstructured | free $\sigma_{jk}$ | 21 |
+
+::: {.notes}
+Walk through each row. CS: same correlation for every pair, the random-intercept pattern and the sphericity-type assumption of repeated-measures ANOVA. AR(1): correlation multiplies by rho for each step between visits. Exponential: uses actual time, with range phi in months and nugget c for measurement error. Unstructured: every variance and covariance free. Stress that the mean model is the same throughout.
+:::
+
+## Fitting the structures with `gls()`
+
+```{r}
+#| eval: false
+m_cs  <- gls(sbp ~ visit_f * arm, data = walk,
+             correlation = corCompSymm(form = ~ 1 | id))
+m_ar1 <- gls(sbp ~ visit_f * arm, data = walk,
+             correlation = corAR1(form = ~ visit | id))      # integer index
+m_exp <- gls(sbp ~ visit_f * arm, data = walk,
+             correlation = corExp(form = ~ month | id, nugget = TRUE))
+m_un  <- gls(sbp ~ visit_f * arm, data = walk,
+             correlation = corSymm(form = ~ visit | id),
+             weights = varIdent(form = ~ 1 | visit_f))
+```
+
+::: {.notes}
+Point to the formula inside each correlation constructor: time or order variable, then the grouping variable. AR(1) and corSymm need an integer index, so we use visit (1 to 6), which also handles missed visits correctly. corExp takes actual months. All are REML fits by default, which is right because the mean model is shared. Likely question: why not corAR1 on month? Because AR(1) is defined on integer positions; use corExp or corCAR1 for actual time.
+:::
+
+## The exponential range is long because there is no random intercept
+
+```{r}
+#| echo: false
+p <- coef(m_exp$modelStruct$corStruct, unconstrained = FALSE)
+data.frame(range = p[["range"]], nugget = p[["nugget"]],
+           cor_1_month = (1 - p[["nugget"]]) * exp(-1 / p[["range"]]),
+           cor_12_months = (1 - p[["nugget"]]) * exp(-12 / p[["range"]])) |>
+  knitr::kable(digits = 2)
+```
+
+- A single exponential must keep correlations near 0.7 over a year.
+- It does so with a range of about `r round(p[["range"]])` months, absorbing the stable person component.
+
+::: {.notes}
+Participants are often puzzled: the true serial range is 3 months. The answer is that without a random intercept the exponential structure has to explain both the stable and the decaying parts. Keep this in mind for the combined models later, where the range drops to a couple of months.
+:::
+
+## Compare implied and observed correlations
+
+```{r}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 3.6
+#| out-width: "100%"
+bind_rows(mat_long(obs_cor, "Observed"),
+          mat_long(cov2cor(implied_cov(m_cs)), "Compound symmetry"),
+          mat_long(cov2cor(implied_cov(m_ar1)), "AR(1) by visit"),
+          mat_long(cov2cor(implied_cov(m_exp)), "Exponential + nugget"),
+          mat_long(cov2cor(implied_cov(m_un)), "Unstructured")) |>
+  mutate(model = factor(model, levels = unique(model))) |> plot_heat(ncol = 5)
+```
+
+::: {.notes}
+Go panel by panel. CS: right level, no decline with lag. AR(1): decays far too fast; it predicts 0.39 between baseline and month 12 against an observed 0.69. Exponential with nugget: follows the decline. Unstructured: reproduces the observed matrix closely, as it must with a parameter per cell. Ask participants to find the cell where AR(1) is most wrong.
+:::
+
+## Implied correlations come from a formula you can compute
+
+```{r}
+#| eval: false
+# Residual part: R = sigma^2 * S C S   (S = SD ratios from varIdent)
+# Random-effects part (lme only): Z G Z'
+V <- implied_cov(m_un)          # helper defined in the notes
+round(cov2cor(V), 2)
+```
+
+```{r}
+#| echo: false
+round(cov2cor(implied_cov(m_un)), 2)
+```
+
+::: {.notes}
+The notes define a short function, implied_cov(), that builds V from the fitted parameters at the scheduled months. Encourage participants to read it: it is the formula V = ZGZ' + R written in R. Note the trap that nlme stores corAR1 objects with class corARMA.
+:::
+
+## Try it
+
+Workbook exercise 1: fit CS, AR(1) and exponential structures, and compare their implied correlations with the observed matrix.
+
+::: {.notes}
+Give participants time to fit the models themselves. The unstructured fit takes around 15 seconds; warn them so they do not interrupt it.
+:::
+
+# Heterogeneous variances
+
+## `varIdent()` lets the residual SD differ by visit
+
+$$
+R_i = \sigma^2 S_i C_i S_i, \qquad S_i = \operatorname{diag}(\delta_{v(ij)}), \quad \delta_0 = 1
+$$
+
+```{r}
+coef(m_cs_het$modelStruct$varStruct, unconstrained = FALSE, allCoef = TRUE)
+anova(m_cs, m_cs_het)
+```
+
+::: {.notes}
+The ratios are SDs relative to baseline. All are between about 1.00 and 1.04, and the LRT on REML fits (same mean, so legitimate) shows no improvement. AIC goes up. This matches the observed variances, which are roughly constant. Warn about the common mistake of writing weights = ~ visit_f, which means varFixed, not varIdent.
+:::
+
+# Random effects plus residual correlation
+
+## The marginal covariance combines both sources
+
+$$
+V_i = \operatorname{Var}(\mathbf{y}_i) = Z_i G Z_i^\top + R_i
+$$
+
+$$
+\operatorname{Cov}(y_{it}, y_{is}) = \tau_0^2 + \tau_{01}(t+s) + \tau_1^2 ts + [R_i]_{ts}
+$$
+
+- Random intercept only: constant covariance, i.e. compound symmetry.
+- Random slope: variance is quadratic in time.
+- Plus exponential residuals: correlation declines with lag, then levels off.
+
+::: {.notes}
+Derive this on the board: Var(Zb + e) = Z Var(b) Z' + Var(e) because b and e are independent. Then write the scalar element for times t and s. The three bullet points are the consequences. The last one is the pattern we saw in the observed matrix.
+:::
+
+## `lme()` fits random effects and a correlation structure together
+
+```{r}
+#| eval: false
+m_rs_exp <- lme(sbp ~ visit_f * arm, random = ~ 1 + month | id,
+                correlation = corExp(form = ~ month | id, nugget = TRUE),
+                data = walk)
+```
+
+```{r}
+#| echo: false
+G <- as.matrix(getVarCov(m_rs_exp)); p <- coef(m_rs_exp$modelStruct$corStruct, unconstrained = FALSE)
+data.frame(parameter = c("SD intercept", "SD slope", "Correlation", "Residual SD", "Range (months)", "Nugget"),
+           estimate = c(sqrt(G[1,1]), sqrt(G[2,2]), cov2cor(G)[1,2], m_rs_exp$sigma, p[["range"]], p[["nugget"]]),
+           truth = c("11 (+ clinic 3)", "0.35", "-0.25", "6.4", "3", "0.39")) |>
+  knitr::kable(digits = 2)
+```
+
+::: {.notes}
+lmer cannot do this: it has no correlation argument. The estimates are close to the truth, with wide intervals for range and nugget (show intervals() if asked). The truth column is available only because the data are simulated. The intercept SD includes the unmodelled clinic variation.
+:::
+
+## Without serial correlation, the random slope absorbs it
+
+```{r}
+#| echo: false
+data.frame(model = c("Random intercept + slope", "... + exponential"),
+           SD_slope = c(sqrt(getVarCov(m_rs)[2,2]), sqrt(getVarCov(m_rs_exp)[2,2]))) |>
+  knitr::kable(digits = 2)
+```
+
+- True slope SD 0.35 mmHg/month.
+- Components of a misspecified covariance model can absorb features they were not meant to describe.
+
+::: {.notes}
+This is a key teaching point. Without a serial component, the only way the model can make distant measurements less alike than close ones is through slope variation, so it inflates the slope SD. Implication: do not interpret variance components substantively unless the covariance model is credible.
+:::
+
+## The combined model reproduces the observed pattern
+
+```{r}
+#| echo: false
+#| fig-width: 10
+#| fig-height: 3.6
+#| out-width: "100%"
+bind_rows(mat_long(obs_cor, "Observed"),
+          mat_long(cov2cor(implied_cov(m_ri)), "Random intercept"),
+          mat_long(cov2cor(implied_cov(m_rs)), "Random intercept + slope"),
+          mat_long(cov2cor(implied_cov(m_rs_exp)), "Random int. + slope + exponential")) |>
+  mutate(model = factor(model, levels = unique(model))) |> plot_heat(ncol = 4)
+```
+
+::: {.notes}
+Random intercept equals compound symmetry. The random slope adds a gentle decline. Adding exponential residuals lifts the adjacent-visit correlations (0 to 1 and 9 to 12), matching the data. Point to those cells.
+:::
+
+## The semivariogram checks serial correlation with irregular times
+
+```{r}
+#| echo: false
+#| fig-width: 7
+#| fig-height: 3.4
+#| out-width: "60%"
+vg <- Variogram(m_rs, form = ~ month | id, resType = "normalized", maxDist = 12)
+ggplot(vg, aes(dist, variog)) + geom_hline(yintercept = 1, linetype = 2, colour = "#9A9A9A") +
+  geom_point() + geom_smooth(method = "loess", se = FALSE, formula = y ~ x, colour = "#0072B2") +
+  labs(x = "Distance between measurements (months)", y = "Semivariogram (normalized residuals)")
+```
+
+::: {.notes}
+For each pair of residuals from the same participant, half the squared difference against the time apart. If the model has captured all within-person correlation, the normalized residuals are independent and the semivariogram is flat at 1. Values below 1 at short distances: unexplained serial correlation. The dip at long distances comes from the inflated slope variance. Both disappear when the exponential is added.
+:::
+
+## Try it
+
+Workbook exercise 2: compute $V_i = Z_iGZ_i^\top + R_i$ by hand for the random intercept and slope model and check it against `implied_cov()`.
+
+::: {.notes}
+Encourage participants to write the matrix multiplication themselves before using the helper.
+:::
+
+# Comparing models
+
+## REML for covariance, ML for fixed effects
+
+- **REML** likelihoods depend on the fixed-effects design $X$.
+- Compare covariance models only when the **fixed effects are identical**.
+- Compare fixed effects with **ML**; refit the chosen model with REML.
+
+```{r}
+#| echo: false
+walk$week <- walk$month * 52 / 12
+m_lin_mo <- lmer(sbp ~ month * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+m_lin_wk <- lmer(sbp ~ week * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+data.frame(time_in = c("months", "weeks"),
+           REML_logLik = c(logLik(m_lin_mo), logLik(m_lin_wk)),
+           ML_logLik = c(logLik(refitML(m_lin_mo)), logLik(refitML(m_lin_wk)))) |>
+  knitr::kable(digits = 2)
+```
+
+::: {.notes}
+The table is the memorable demonstration. The same model with time in months or in weeks: identical fit, identical ML log-likelihood, but the REML log-likelihood moves by about four units. That is a pure artefact of the term minus a half log determinant of X' V^-1 X. A difference that size between two genuinely different mean models would look like evidence. nlme warns when you compare REML fits with different fixed effects; lme4's anova() refits with ML automatically.
+:::
+
+## AIC and BIC rank the candidate covariance models {.smaller}
+
+```{r}
+#| echo: false
+knitr::kable(cmp[, c("model", "n_cov", "AIC", "BIC", "dAIC", "dBIC")], digits = 1,
+             col.names = c("Model", "Cov. pars", "AIC", "BIC", "ΔAIC", "ΔBIC"))
+```
+
+::: {.notes}
+All REML fits with the same 18 fixed effects. Independence is hopeless. CS and random intercept are identical. AR(1) is worse than CS. Unstructured beats CS clearly but loses to the exponential on AIC and badly on BIC. Best: random intercept plus exponential. The model with a random slope too is close on AIC, further on BIC. Question to ask: the truth includes a random slope, so why is it not preferred? Because its contribution is small (about 18 mmHg squared at month 12 out of 180) and hard to separate from serial correlation. That is parsimony, not failure.
+:::
+
+## Likelihood-ratio tests need nesting
+
+```{r}
+anova(m_ri, m_ri_exp)
+anova(m_cs, m_un)
+```
+
+::: {.notes}
+Both comparisons are nested and share fixed effects, so REML LRTs are fine. AR(1) and exponential are not nested: compare them with AIC or BIC. The second test has 19 degrees of freedom. Remind participants that small AIC differences, one or two units, are not evidence.
+:::
+
+# Boundaries and singular fits
+
+## Testing a variance of zero: the null is on the boundary
+
+$$
+\text{LR} \ \dot\sim\ \tfrac12\chi^2_0 + \tfrac12\chi^2_1 \quad\Rightarrow\quad p = \tfrac12 P(\chi^2_1 > \text{LR})
+$$
+
+- Random slope added to random intercept: $\tfrac12\chi^2_1 + \tfrac12\chi^2_2$ [@stram1994].
+- Naive $\chi^2$ p-values are conservative [@self1987].
+
+```{r}
+m_clinic <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 | clinic),
+                 data = walk, control = lmer_ctrl)
+lt <- lr_test(m_prim, m_clinic)
+c(chisq = lt$chisq, naive_p = lt$p, mixture_p = p_boundary_mixture(lt$chisq))
+```
+
+::: {.notes}
+Explain why: under the null the estimate would be negative half the time, gets set to zero, and then the LR statistic is exactly zero. So the null distribution has a point mass at zero. The notes include a simulation showing about half the statistics equal zero and the naive test rejecting about 2 per cent of the time at a nominal 5. For the clinic variance the mixture p-value is exactly half the naive one.
+:::
+
+## A singular fit: random slopes for 8 clinics
+
+```{r}
+m_cs2 <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 + month | clinic),
+              data = walk, control = lmer_ctrl)
+VarCorr(m_cs2)
+isSingular(m_cs2)
+```
+
+::: {.notes}
+lme4 reports boundary (singular) fit. The clinic intercept-slope correlation is -1: the clinic covariance matrix has collapsed to one dimension. Not an error, but a signal that the structure is too rich for the data: eight clinics cannot tell us about slope variation between clinics. Mention that singular fits also occur in small samples when the true variance is positive; the notes show one with 30 participants.
+:::
+
+## Responding to singular fits and convergence warnings
+
+- Find the component on the boundary: `VarCorr()`, `rePCA()`.
+- Simplify: drop it, or remove the correlation.
+- Check whether the estimand changes.
+- Convergence warnings: rescale, simplify, compare optimisers (`allFit()`).
+
+```{r}
+#| echo: false
+bind_rows(lapply(list(`Primary` = m_prim, `+ clinic intercept` = m_clinic,
+                      `+ clinic slope (singular)` = m_cs2), function(m) {
+  s <- summary(contrast(emmeans(m, ~ visit_f * arm), L_dic)); data.frame(contrast = s$contrast, estimate = s$estimate, SE = s$SE)
+}), .id = "model") |> knitr::kable(digits = 2)
+```
+
+::: {.notes}
+The table answers the practical question: treatment estimates barely move across these specifications. So for the treatment effect, the singular component is irrelevant; simplify and move on, or keep the clinic intercept if the design (randomisation stratified by clinic) suggests it. Do not silence convergence warnings without checking estimates across optimisers.
+:::
+
+## Try it
+
+Workbook exercises 3 and 4: a boundary test for the clinic variance, and a singular fit in a small subset.
+
+::: {.notes}
+Exercise 4 uses a random subset of participants, so different seeds will give different results. That variability is part of the lesson.
+:::
+
+# Choosing a model
+
+## The treatment estimate barely depends on the covariance model
+
+```{r}
+#| echo: false
+#| fig-width: 10
+#| fig-height: 4.6
+eb <- bind_rows(lapply(names(mods), function(nm) {
+  s <- dic(mods[[nm]]); data.frame(model = nm, contrast = s$contrast, estimate = s$estimate,
+                                   lower = s$lower.CL, upper = s$upper.CL)}))
+eb |> mutate(model = factor(model, levels = rev(unique(model)))) |>
+  ggplot(aes(estimate, model)) + geom_vline(xintercept = 0, colour = "#9A9A9A") +
+  geom_pointrange(aes(xmin = lower, xmax = upper), size = 0.3) + facet_wrap(~ contrast) +
+  labs(x = "Difference in mean change to month 12 (mmHg)", y = NULL)
+```
+
+::: {.notes}
+Point estimates vary by a few tenths of a mmHg once correlation is modelled. Standard errors vary more: independence and AR(1) are too wide; CS and random intercept are probably too narrow because they treat baseline and month 12 as correlated as months 0 and 1. The models that capture the decline (primary, unstructured, best-fitting) agree closely. True values, known because the data are simulated: -4.6 and -8.1.
+:::
+
+## Maximal or parsimonious?
+
+- @barr2013: keep random-effects structures maximal for confirmatory tests, because omitting real slope variance can be anti-conservative.
+- @matuschek2017: maximal models lose power and often fail to converge; data-supported parsimony keeps type I error near nominal.
+- In a parallel-group trial: describe each participant's covariance adequately, simplify when singular, check that the estimand is insensitive.
+
+::: {.notes}
+Present the two papers as complementary. Barr et al. are mainly concerned with within-subject effects in crossed designs, where omitting a by-subject slope for the tested effect inflates type I error. Matuschek et al. show the cost of fitting structures the data cannot support. For WALK, treatment is between participants, so what matters is an adequate description of each participant's repeated measures. Invite discussion: what would they prespecify in an analysis plan?
+:::
+
+## Principles for choosing the covariance model
+
+1. Prespecify a structure that can describe a stable person component and decline with lag.
+2. Use AIC/BIC, heatmaps and semivariograms to check, not to search.
+3. Report sensitivity analyses with alternative structures.
+4. Keep the purpose in mind: treatment effect, individual prediction, or variance decomposition.
+
+::: {.notes}
+For WALK the course keeps the random intercept and slope as the primary model: prespecified, handles irregular times, estimates within 0.1 mmHg of the best models, SEs about 5 to 10 per cent larger, and it describes individual trajectories, which later modules need. The random intercept plus exponential is a natural sensitivity analysis.
+:::
+
+## Try it
+
+Workbook independent exercises: choose and defend a covariance model for the WALK participants in clinics 1 to 4.
+
+::: {.notes}
+Ask participants to write a short justification as they would in an analysis plan, citing both statistical and substantive reasons.
+:::
+
+## Summary
+
+- $V_i = Z_iGZ_i^\top + R_i$: random effects and residual correlation together.
+- CS, AR(1), exponential (+ nugget), unstructured: different rules for correlation versus lag.
+- REML for covariance comparisons with the same fixed effects; ML for fixed effects.
+- Boundary tests need mixture p-values; singular fits signal an over-rich structure.
+- The treatment estimate barely changes across sensible covariance models.
+
+::: {.notes}
+End by returning to the opening table: the covariance model mattered a great deal for the standard error under independence, and very little among sensible models. That is the practical lesson.
+:::

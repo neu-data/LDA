@@ -1,0 +1,66 @@
+---
+title: "Method-selection diagrams"
+subtitle: "Guides to reasoning, not automatic rules"
+format:
+  html:
+    toc: true
+    number-sections: false
+    css: [../assets/cheatsheet.css, ../assets/diagrams-print.css]
+execute:
+  echo: false
+mermaid:
+  theme: neutral
+---
+
+These six diagrams set out the questions an analyst asks when planning a longitudinal analysis. They do not choose a model for you. A diagram cannot know your research question, your design, the reason data are missing or the conventions of your field. Use them to structure your reasoning and to check that you have considered each decision, then justify the final choice in words.
+
+Each diagram is stored as an editable Mermaid text file in `diagrams/` (for example `D1_outcome_and_structure.mmd`). Edit the text in any editor, preview it at mermaid.live or in RStudio, and re-render this page with Quarto.
+
+## D1. Outcome type and data structure
+
+The first question is what kind of outcome you have and how the observations are grouped. Remember that the outcome type narrows the choice of model family. It does not settle the choice.
+
+```{mermaid}
+%%| file: D1_outcome_and_structure.mmd
+%%| fig-width: 9
+```
+
+## D2. Paired tests, repeated-measures ANOVA, LMM, GEE and GLMM
+
+Traditional methods suit only narrow situations. They need complete data, fixed occasions and continuous outcomes. As soon as visits are missed or irregular, or covariates change over time, model-based approaches are needed.
+
+```{mermaid}
+%%| file: D2_choosing_a_method.mmd
+```
+
+## D3. Population-average or subject-specific?
+
+This question decides between GEE and GLMM for non-continuous outcomes. Answer it from the research question before fitting anything.
+
+```{mermaid}
+%%| file: D3_population_vs_subject.mmd
+```
+
+## D4. Time, random effects and residual correlation
+
+These three choices interact. Together they determine the implied marginal covariance $V_i = Z_i G Z_i^\top + R_i$ (Module 5).
+
+```{mermaid}
+%%| file: D4_time_random_effects_correlation.mmd
+```
+
+## D5. Missing data
+
+No analysis can confirm that data are missing at random. Background knowledge about why data are missing matters as much as any statistic.
+
+```{mermaid}
+%%| file: D5_missing_data.mmd
+```
+
+## D6. Diagnostics and interpretation
+
+Diagnostics exist to find problems that affect the estimand. Use them to understand your model, never to search for a model that gives the result you hoped for.
+
+```{mermaid}
+%%| file: D6_diagnostics_interpretation.mmd
+```

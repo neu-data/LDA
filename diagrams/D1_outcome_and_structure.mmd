@@ -1,0 +1,25 @@
+%% D1. What kind of outcome and data structure do you have?
+%% Editable Mermaid source. Render with Quarto, mermaid.live or any Mermaid viewer.
+%% A guide to reasoning, not an automatic rule for choosing a model.
+flowchart TD
+  A["Repeated measurements on the same units?"] -->|"No: one measurement per unit"| X["Cross-sectional regression (Module 0)"]
+  A -->|Yes| B["What type of outcome?"]
+  B --> C["Continuous"]
+  B --> D["Binary"]
+  B --> E["Count, possibly with varying exposure"]
+  B --> F["Ordinal or nominal categories"]
+  B --> G["Repeated marker plus time to an event"]
+  C --> C1["LMM or GLS (Modules 4-6); GEE with identity link (Module 7)"]
+  D --> D1["Logistic GLMM (Module 8) or GEE with logit link (Module 7)"]
+  E --> E1["Poisson or negative binomial GLMM, or GEE with log link; offset for exposure (Modules 7-8)"]
+  F --> F1["Cumulative-logit mixed model; multinomial models (Module 13, advanced)"]
+  G --> G1["Joint longitudinal and survival model (Module 13, advanced)"]
+  C1 --> H["Then: how many levels of clustering? Visits in participants, participants in clinics (Module 13)"]
+  D1 --> H
+  E1 --> H
+  classDef q fill:#ffffff,stroke:#555555,color:#222222;
+  classDef m fill:#eef4f8,stroke:#0b5d8f,color:#222222;
+  classDef adv fill:#f8ece4,stroke:#8a3b0a,color:#222222;
+  class A,B,C,D,E,F,G,H q;
+  class C1,D1,E1,X m;
+  class F1,G1 adv;

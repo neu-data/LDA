@@ -1,0 +1,5 @@
+grp,var1,var2,type,value
+id,(Intercept),NA,SD,12.372920575566575
+id,month,NA,SD,0.54205727382527
+id,(Intercept),month,correlation,-0.2346871916948761
+Residual,NA,NA,SD,5.619593720021688

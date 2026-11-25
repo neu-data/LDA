@@ -1,0 +1,50 @@
+/* Course stylesheet for HTML notes, workbook, answer key and assessments.
+   Light background, restrained colours, readable on screen and in print. */
+:root {
+  --ink: #222222;
+  --muted: #5f5f5f;
+  --rule: #dddddd;
+  --accent: #0b5d8f;
+  --paper: #ffffff;
+  --code-bg: #f6f6f4;
+}
+body {
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+h1, h2, h3, h4, .title { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--ink); font-weight: 650; line-height: 1.25; }
+h1.title { font-size: 2rem; }
+h2 { border-bottom: 1px solid var(--rule); padding-bottom: 0.25rem; margin-top: 2.2rem; }
+h3 { margin-top: 1.6rem; }
+a { color: var(--accent); }
+p, li { max-width: 46rem; }
+pre, code { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+div.sourceCode, pre.sourceCode { background: var(--code-bg); border: 1px solid #ececec; border-radius: 4px; }
+pre:not(.sourceCode) { background: #fbfbfa; border-left: 3px solid #cfcfcf; padding: 0.6rem 0.8rem; font-size: 0.86rem; }
+table { font-size: 0.92rem; border-collapse: collapse; }
+thead th { border-bottom: 2px solid #999; }
+td, th { padding: 0.3rem 0.6rem; }
+figure img, .figure img, p > img { max-width: 100%; height: auto; }
+figcaption, .figure-caption { color: var(--muted); font-size: 0.9rem; }
+math[display="block"] { margin: 0.9rem 0; font-size: 1.08em; }
+.callout { font-size: 0.97rem; }
+/* Labels for core and advanced material */
+.core-tag, .advanced-tag {
+  display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
+  padding: 0.05rem 0.45rem; border-radius: 3px; vertical-align: middle; margin-left: 0.4rem;
+}
+.core-tag { background: #e7f0f6; color: #0b5d8f; border: 1px solid #b9d3e4; }
+.advanced-tag { background: #f8ece4; color: #8a3b0a; border: 1px solid #e5c2ab; }
+.annotated-output { border-left: 3px solid var(--accent); padding-left: 0.8rem; }
+
+@media print {
+  body { font-size: 10.5pt; }
+  nav, #quarto-sidebar, #TOC, .quarto-title-banner, #quarto-margin-sidebar { display: none !important; }
+  main.content { max-width: 100% !important; }
+  h2, h3 { page-break-after: avoid; }
+  figure, table, pre, .callout { page-break-inside: avoid; }
+  a { color: var(--ink); text-decoration: none; }
+}

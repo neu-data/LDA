@@ -1,0 +1,252 @@
+---
+title: "Module 4. Linear mixed-effects models"
+subtitle: "Workbook"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+## Introduction {.unnumbered}
+
+These exercises take you through the linear mixed-effects models of Module 4 using the WALK trial. You will fit random-intercept and random-slope models, interpret variance components and the intraclass correlation, see how the coding of time changes the meaning of coefficients, obtain the primary estimand with `emmeans` in both `lme4` and `nlme`, compare ML and REML, and examine predicted random effects. Replace each `___` with code. Questions marked **Q** ask for an answer in words; write two or three sentences, using numbers from your output.
+
+Use `control = lmer_ctrl` in every `lmer()` call. The answer key is `answer-key/ak04-linear-mixed-models.qmd`.
+
+# Guided exercises
+
+## Exercise 1. A random-intercept model and the ICC
+
+*Learning outcomes: LO 4.1, LO 4.2.*
+
+a. Fit a random-intercept model with fixed effects for actual time, arm and their interaction.
+
+```{r}
+#| eval: false
+m_ri <- lmer(sbp ~ month * arm + (___ | id), data = walk, control = lmer_ctrl)
+summary(m_ri)
+```
+
+b. Extract the variance components and compute the ICC by hand and with `icc_lmer()`.
+
+```{r}
+#| eval: false
+vc <- as.data.frame(VarCorr(m_ri))
+vc
+tau0_sq  <- vc$vcov[___]
+sigma_sq <- vc$vcov[___]
+tau0_sq / (___ + ___)
+icc_lmer(m_ri)
+```
+
+c. Compare the ICC with the observed correlations between scheduled visits.
+
+```{r}
+#| eval: false
+round(visit_correlation(walk, id, ___, sbp), 2)
+```
+
+**Q1.1** Write the equation of the model you fitted, with the distributions of the random effect and the residual. Which coefficient answers the question "does SBP fall faster in EP than in UC"?
+
+**Q1.2** Interpret $\hat\tau_0$, $\hat\sigma$ and the ICC in words, in mmHg where possible.
+
+**Q1.3** What correlation does this model imply between months 0 and 12? How does it compare with the observed correlation?
+
+## Exercise 2. The random-slope (linear-time reference) model
+
+*Learning outcomes: LO 4.1, LO 4.2.*
+
+a. Add a random slope on `month`.
+
+```{r}
+#| eval: false
+m_lin <- lmer(sbp ~ month * arm + (1 + ___ | id), data = walk, control = lmer_ctrl)
+summary(m_lin)
+VarCorr(m_lin)
+```
+
+b. Compare the standard errors of the slope differences in the two models.
+
+```{r}
+#| eval: false
+fixef_table(m_ri)[5:6, c("term", "estimate", "se")]
+fixef_table(___)[5:6, c("term", "estimate", "se")]
+```
+
+**Q2.1** Write down $G$ with the estimated values filled in. What does the sign of the intercept-slope correlation mean for WALK participants?
+
+**Q2.2** Over 12 months, how much do participants' changes typically vary around their arm's mean change? (Hint: multiply $\hat\tau_1$ by 12.)
+
+**Q2.3** Why are the standard errors of the slope differences larger in the random-slope model, and which model's standard errors should you trust?
+
+## Exercise 3. Implied covariance and testing the random slope
+
+*Learning outcomes: LO 4.2.*
+
+a. Compute the implied covariance and correlation matrices at the scheduled times.
+
+```{r}
+#| eval: false
+V <- implied_cov_lmer(m_lin, c(0, 1, 3, 6, 9, 12))
+round(V, 1)
+cov_to_cor(___)
+```
+
+b. Find the time at which the implied variance is smallest, $t = -\hat\tau_{01}/\hat\tau_1^2$.
+
+```{r}
+#| eval: false
+G <- as.matrix(VarCorr(m_lin)$id)
+-G[___, ___] / G[___, ___]
+```
+
+c. Compare the two models with a likelihood-ratio test on the REML fits, and compute the boundary-corrected p-value.
+
+```{r}
+#| eval: false
+anova(m_ri, m_lin, refit = ___)
+lrt <- lr_test(m_ri, m_lin)
+p_boundary_mixture(lrt$chisq, df_mix = c(___, ___))
+```
+
+**Q3.1** Describe how the implied variance and the implied correlations change over time. Why is there no single ICC in this model?
+
+**Q3.2** Why is `refit = FALSE` acceptable here, and why is the ordinary $\chi^2_2$ p-value conservative?
+
+## Exercise 4. Centring time
+
+*Learning outcomes: LO 4.3.*
+
+a. Create `month12 = month - 12` and refit the random-slope model with it.
+
+```{r}
+#| eval: false
+walk <- walk |> mutate(month12 = ___)
+m_c12 <- lmer(sbp ~ month12 * arm + (1 + month12 | id), data = walk, control = lmer_ctrl)
+round(cbind(month0 = fixef(m_lin), month12 = fixef(m_c12)), 3)
+c(logLik(m_lin), logLik(m_c12))
+```
+
+b. Check that `armEP` in the centred model equals $\hat\beta_3 + 12\hat\beta_5$ from the uncentred model.
+
+```{r}
+#| eval: false
+b <- fixef(m_lin)
+b["armEP"] + 12 * b[___]
+```
+
+**Q4.1** What do `armSP` and `armEP` mean in each model? Has centring changed the fit?
+
+**Q4.2** Which random-effects parameters changed, and why?
+
+## Exercise 5. The primary model and the estimand, in `lme4` and `nlme`
+
+*Learning outcomes: LO 4.3, LO 4.4.*
+
+a. Fit the primary model with categorical time for the mean and a random slope on actual time.
+
+```{r}
+#| eval: false
+m_cat <- lmer(sbp ~ ___ * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+```
+
+b. Obtain the estimated marginal means, the change from baseline to month 12 in each arm and the difference in mean change compared with UC, without multiplicity adjustment.
+
+```{r}
+#| eval: false
+emm   <- emmeans(m_cat, ~ visit_f | arm)
+chg12 <- contrast(emm, list(chg12 = c(___)))
+dmc12 <- contrast(chg12, "___", by = NULL, adjust = "___")
+summary(chg12, infer = TRUE)
+summary(dmc12, infer = TRUE)
+```
+
+c. Fit the same model with `nlme::lme()` and repeat step b.
+
+```{r}
+#| eval: false
+m_cat_lme <- lme(sbp ~ visit_f * arm, random = ~ ___ | id, data = walk, method = "REML")
+max(abs(fixef(m_cat) - nlme::fixef(m_cat_lme)))
+```
+
+d. Compare the estimates with the true values (only possible because the data are simulated).
+
+```{r}
+#| eval: false
+truth <- readRDS(here("data", "walk_truth.rds"))
+truth$true_change |> filter(month == ___)
+```
+
+**Q5.1** Report the difference in mean change at month 12 for SP and EP versus UC with 95% confidence intervals, in one or two sentences suitable for a paper.
+
+**Q5.2** Which coefficient of `m_cat` equals the EP estimate, and why?
+
+**Q5.3** In what way do the `lmer` and `lme` results differ, and does it matter here?
+
+**Q5.4** Do the 95% confidence intervals contain the true values? Why can one simulated trial not tell you whether the method is biased?
+
+## Exercise 6. BLUPs and shrinkage
+
+*Learning outcomes: LO 4.6.*
+
+a. Compute each participant's separate least-squares slope and the model's predicted slope from `m_lin`.
+
+```{r}
+#| eval: false
+ols <- coef(lme4::lmList(sbp ~ month | id, data = walk)) |>
+  tibble::rownames_to_column("id") |> select(id, ols_slope = month)
+blup <- coef(___)$id |> tibble::rownames_to_column("id")
+shrink <- count(walk, id, arm, name = "n_obs") |>
+  left_join(ols, by = "id") |> left_join(blup, by = "id") |>
+  mutate(blup_slope = month + (arm == "SP") * `month:armSP` + (arm == "EP") * ___)
+```
+
+b. Summarise the spread of each kind of slope by number of observations and plot one against the other.
+
+```{r}
+#| eval: false
+shrink |> group_by(n_obs) |>
+  summarise(n = n(), sd_ols = sd(ols_slope, na.rm = TRUE), sd_blup = sd(___))
+ggplot(filter(shrink, !is.na(ols_slope)), aes(ols_slope, blup_slope, colour = factor(n_obs))) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey60") +
+  geom_point() + coord_cartesian(xlim = c(-6, 6)) +
+  labs(x = "OLS slope (mmHg/month)", y = "BLUP slope (mmHg/month)", colour = "Visits")
+```
+
+**Q6.1** Explain in your own words why the BLUP slopes of participants with two visits are close to their arm's mean slope.
+
+**Q6.2** Why are the BLUP slopes less spread out than $\hat\tau_1$ suggests, and why does this matter if you want to use predicted slopes in another analysis?
+
+# Independent exercises
+
+## Exercise 7. The estimand at month 6
+
+*Learning outcomes: LO 4.3, LO 4.4.*
+
+Using the primary model, estimate the difference in mean change from baseline to **month 6** between each programme and UC, with 95% confidence intervals. Then fit the linear-time model with time centred at month 6 and explain what its `armSP` and `armEP` coefficients estimate. Compare the two sets of month-6 estimates and say which you would report, and why.
+
+## Exercise 8. ML, REML and the shape of the mean
+
+*Learning outcomes: LO 4.3, LO 4.5.*
+
+Compare three mean models for SBP, all with a random intercept and a random slope on `month`: linear time by arm, quadratic time by arm, and categorical time by arm. Use the correct estimation method for the comparison, report the likelihood-ratio tests and AIC values, and state which estimation method you would use to report the chosen model. Explain why comparing these models with `anova(..., refit = FALSE)` would be wrong.
+
+## Exercise 9. A small trial: REML, ML and shrinkage with fewer participants
+
+*Learning outcomes: LO 4.5, LO 4.6.*
+
+Restrict WALK to participants from clinics 1 and 2. Fit the primary model to this subset by REML and by ML. Compare the variance components with each other and with those from the full data. Then compute OLS and BLUP slopes from the linear-time model fitted to the subset and compare the amount of shrinkage with the full-data analysis. Explain what you find.
+
+## Exercise 10. Writing up the covariate-adjusted model
+
+*Learning outcomes: LO 4.1, LO 4.2, LO 4.4.*
+
+Fit the covariate-adjusted primary model (add `age10 = (age - 60)/10`, `sex` and `bmi_c = bmi - 29`). Write its equation in the course notation, explaining every term. Report the difference in mean change at month 12 and the variance components, and write a methods-and-results paragraph of no more than 150 words. Explain why the random-intercept SD falls but the standard errors of the treatment contrasts hardly change.

@@ -1,0 +1,160 @@
+---
+title: "Module 9. Time-varying predictors and nonlinear change"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+walk <- walk |>
+  group_by(id) |> mutate(steps_pm = mean(steps)) |> ungroup() |>
+  mutate(steps_wc = steps - steps_pm,
+         steps_gm = steps_pm - mean(steps_pm[!duplicated(id)]),
+         age10 = (age - 60) / 10, bmi_c = bmi - 29,
+         month_p3 = pmax(month - 3, 0))
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This knowledge check has 12 questions. Each is mapped to a Module 9 learning outcome. Answer all questions before looking at the final section, which is for instructors.
+
+# Questions
+
+## Question 1 (LO 9.1)
+
+Which of the following WALK variables are time-varying? Select all that apply.
+
+a. `arm`
+b. `steps`
+c. `bmi`
+d. `month`
+e. `sex`
+
+## Question 2 (LO 9.1)
+
+True or false, with a one-sentence justification: "Because steps is measured at every visit, adding it to the WALK primary model can only make the estimated treatment effect more precise without changing what it means."
+
+## Question 3 (LO 9.2)
+
+The following output comes from a model with person-mean centred steps (thousands/day), adjusted for age, sex and BMI.
+
+```{r}
+#| label: q3
+m_wb <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + age10 + sex + bmi_c +
+               (1 + month | id), data = walk, control = lmer_ctrl)
+round(coef(summary(m_wb))[c("steps_wc", "steps_gm"), ], 3)
+```
+
+Write one sentence interpreting each coefficient.
+
+## Question 4 (LO 9.2)
+
+Using the output in Question 3, what is the contextual effect? What question does it answer?
+
+## Question 5 (LO 9.2)
+
+A colleague fits `lmer(sbp ~ steps + visit_f * arm + (1 + month | id))` and reports the `steps` coefficient as "the within-person effect of walking". What is wrong with this?
+
+a. Nothing; with a random intercept the coefficient is purely within-person.
+b. The coefficient is a blend of within-person and between-person associations.
+c. The coefficient is purely between-person because steps varies mostly between people.
+d. The model should use `steps` centred at the grand mean to make the coefficient within-person.
+
+## Question 6 (LO 9.2)
+
+When age, sex and BMI were added to the person-mean centred model, the between-person coefficient changed from −1.91 to −1.69 while the within-person coefficient stayed at −0.62. Explain why the two coefficients respond so differently to adjustment.
+
+## Question 7 (LO 9.3)
+
+WALK visits are scheduled at months 0, 1, 3, 6, 9 and 12. Why is `visit` (1 to 6) a poor choice of time variable in a linear-time model?
+
+## Question 8 (LO 9.3)
+
+True or false, with justification: "Mixed models need every participant to be measured at the same times, so the irregular KIDNEY visits must first be grouped into yearly windows."
+
+## Question 9 (LO 9.4)
+
+The output below is from a piecewise linear model with a knot at month 3 (`month_p3` $= \max(\text{month} - 3, 0)$).
+
+```{r}
+#| label: q9
+m_pw <- lmer(sbp ~ (month + month_p3) * arm + (1 + month | id), data = walk,
+             control = lmer_ctrl, REML = FALSE)
+round(fixef(m_pw), 3)
+```
+
+Calculate the slope of SBP (mmHg per month) in the enhanced programme after month 3.
+
+## Question 10 (LO 9.4)
+
+Two models for the WALK trajectory are compared:
+
+```{r}
+#| label: q10
+m_quad <- lmer(sbp ~ (month + I(month^2)) * arm + (1 + month | id), data = walk,
+               control = lmer_ctrl, REML = FALSE)
+m_ns <- lmer(sbp ~ splines::ns(month, df = 3) * arm + (1 + month | id), data = walk,
+             control = lmer_ctrl, REML = FALSE)
+AIC(m_quad, m_pw, m_ns)
+```
+
+Which model does AIC prefer? Why were the models fitted with `REML = FALSE`? Name one shape artefact of the quadratic model.
+
+## Question 11 (LO 9.5)
+
+```{r}
+#| label: q11
+g <- gamm(sbp ~ arm + s(month, by = arm, k = 5),
+          random = list(id = ~ 1 + month), data = walk, method = "REML")
+summary(g$gam)$p.table
+summary(g$gam)$s.table
+```
+
+(a) What does an edf of about 3.5 for `s(month):armEP` mean?
+(b) A student says "the `armEP` coefficient shows that EP participants had lower SBP at baseline". Is this correct? Explain.
+
+## Question 12 (LO 9.6)
+
+In a cohort study, the within-person association between daily steps and SBP is estimated as −0.6 mmHg per 1,000 steps/day. Give two reasons why this need not equal the causal effect of walking 1,000 more steps a day, with a concrete example of each.
+
+# Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+cw <- fixef(m_wb)
+b <- fixef(m_pw)
+ep_after <- b["month"] + b["month_p3"] + b["month:armEP"] + b["month_p3:armEP"]
+aic <- AIC(m_quad, m_pw, m_ns)
+st <- summary(g$gam)$s.table
+```
+
+**Q1.** b and d. Steps and time change from visit to visit; arm, BMI (measured at baseline) and sex do not.
+
+**Q2.** False. Steps is increased by the programmes, so it is partly a mediator. Adjusting for it removes the part of the effect acting through walking and changes the estimand from a total to a direct effect, which randomisation no longer protects.
+
+**Q3.** `steps_wc` (`r f2(cw["steps_wc"])`): at visits when a participant walks 1,000 steps a day more than their own average, their SBP is on average `r f2(abs(cw["steps_wc"]))` mmHg lower. `steps_gm` (`r f2(cw["steps_gm"])`): participants whose average step count is 1,000 a day higher have on average `r f2(abs(cw["steps_gm"]))` mmHg lower SBP, adjusting for age, sex and BMI. Answers must not use causal language.
+
+**Q4.** Contextual effect = between − within = `r f2(cw["steps_gm"])` − (`r f2(cw["steps_wc"])`) = `r f2(cw["steps_gm"] - cw["steps_wc"])` mmHg. It compares two participants with the same current step count whose usual step counts differ by 1,000 a day, and tests whether the between and within associations differ.
+
+**Q5.** b. A single coefficient uses both within- and between-person variation; it is a weighted blend. Option d is a common misconception: grand-mean centring only shifts the intercept.
+
+**Q6.** The within-person comparison contrasts occasions of the same participant, so characteristics that are constant within the participant (such as baseline BMI) cannot confound it. The between-person comparison contrasts different people, and BMI is related both to habitual walking and to SBP, so adjustment for it changes the estimate.
+
+**Q7.** Visit number treats the one-month gap between visits 1 and 2 as equal to the three-month gaps later, so a straight line in visit number is a curve in real time and the "per visit" slope has no stable unit. Use actual months.
+
+**Q8.** False. A mixed model with time as a continuous covariate uses each participant's measurements at their own times; no common schedule or binning is needed. Binning throws away timing information. (Irregular timing that depends on the outcome raises other issues: Module 10.)
+
+**Q9.** Slope after month 3 in EP = `month` + `month_p3` + `month:armEP` + `month_p3:armEP` = `r f2(ep_after)` mmHg per month.
+
+**Q10.** AIC prefers the `r c("quadratic", "piecewise", "natural spline")[which.min(aic$AIC)]` model (AIC `r formatC(min(aic$AIC), format = "f", digits = 1)`). The models differ in their fixed effects, and REML likelihoods are not comparable across different fixed-effect structures, so ML is used. The quadratic is symmetric about its minimum and therefore turns back up towards the end of follow-up, although the true curve levels off; it should also not be extrapolated.
+
+**Q11.** (a) The EP trajectory is clearly curved: an edf of 1 would be a straight line, and the maximum here is 4 (`k` − 1); `r f2(st[3, "edf"])` indicates a substantial curve. (b) Incorrect. The smooths are centred to average zero over the data, so `armEP` is the average difference between EP and UC over follow-up, which includes the treatment effect. Baseline differences must be computed from predictions at month 0.
+
+**Q12.** Any two of: (1) time-varying confounding, for example an illness reduces walking and raises SBP; (2) reverse causation, for example a high SBP reading prompts a doctor to advise more walking, so SBP influences steps; (3) mediation or adjustment issues if other time-varying variables in the model lie on the pathway. Person-mean centring removes only confounding by stable characteristics.

@@ -1,0 +1,8 @@
+Type: project
+Title: Longitudinal Data Analysis: Concepts, Methods and Practical Applications Using R
+Description: Course materials. This file lists the R packages the course uses
+    so that renv can record their exact versions in renv.lock.
+Depends: R (>= 4.4.0)
+Imports: here, readr, dplyr, tidyr, ggplot2, patchwork, lme4, lmerTest,
+    nlme, glmmTMB, geepack, emmeans, mgcv, mice, DHARMa, MASS, rlang,
+    splines, ordinal, survival, JMbayes2, knitr, rmarkdown, pbkrtest

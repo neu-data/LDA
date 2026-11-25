@@ -1,0 +1,362 @@
+---
+title: "Module 12. Study planning, reporting and reproducibility"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+pars <- list(delta = -0.5, sd_int = 11, sd_slope = 0.4, cor_int_slope = -0.2,
+             sd_resid = 6, times = c(0, 3, 6, 9, 12))
+s_tt <- function(times) sum((times - mean(times))^2)
+var_slope_diff <- function(n, times, sd_slope = pars$sd_slope,
+                           sd_resid = pars$sd_resid)
+  2 * (sd_slope^2 + sd_resid^2 / s_tt(times)) / n
+n_formula <- function(power = 0.9, times = pars$times, delta = pars$delta,
+                      alpha = 0.05)
+  ceiling(2 * (qnorm(1 - alpha / 2) + qnorm(power))^2 *
+            (pars$sd_slope^2 + pars$sd_resid^2 / s_tt(times)) / delta^2)
+power_formula_dropout <- function(n, dropout, times = pars$times) {
+  J <- length(times)
+  pk <- if (dropout == 0) c(rep(0, J - 1), 1) else
+    c(dropout * (1 - dropout)^(0:(J - 2)), (1 - dropout)^(J - 1))
+  info <- vapply(seq_len(J), function(k) if (k < 2) 0 else
+    1 / (pars$sd_slope^2 + pars$sd_resid^2 / s_tt(times[1:k])), 0)
+  pnorm(abs(pars$delta) / sqrt(2 / (n * sum(pk * info))) - qnorm(0.975))
+}
+# cached results from scripts/12_planning.R (same seeds as the notes)
+power_grid <- readRDS(here("outputs", "models", "m12_power_grid.rds"))
+slope_sims <- readRDS(here("outputs", "models", "m12_slope_sims.rds"))
+pg <- function(n, d, what = "power")
+  power_grid[[what]][power_grid$n_per_arm == n & power_grid$dropout == d]
+```
+
+# Design starts from the estimand
+
+## Different questions need different schedules {.smaller}
+
+| Question | Schedule implication |
+|---|---|
+| Difference in mean change at month 12 | Precise baseline and final visits; intermediate visits help under dropout |
+| Difference in linear rates of change | Spread visits widely; the ends are most informative |
+| When does the effect appear? | Front-load visits where change is expected |
+| How much do individuals differ in change? | Several visits per person over a long period |
+| Is the effect sustained? | Long follow-up beyond the plateau |
+
+::: {.notes}
+Ask participants to state the WALK primary estimand before showing the table (difference in mean change from baseline to month 12, programme minus usual care). Then ask what schedule each question would need. Mention the ICH E9(R1) estimand attributes: treatment, population, variable, intercurrent events, summary. A treatment-policy strategy means outcomes must still be collected after people stop the programme.
+:::
+
+## WALK front-loads its visits because change is early
+
+```{r}
+#| echo: false
+#| fig-height: 4
+truth <- readRDS(here("data", "walk_truth.rds"))
+curve <- expand.grid(month = round(seq(0, 12, by = 0.1), 1), arm = c("UC", "SP", "EP")) |>
+  mutate(change = -truth$A[as.character(arm)] * (1 - exp(-month / truth$tau)),
+         arm = factor(arm, levels = c("UC", "SP", "EP")))
+schedules <- list("WALK: 0, 1, 3, 6, 9, 12" = c(0, 1, 3, 6, 9, 12),
+                  "Equally spaced: 0, 3, 6, 9, 12" = c(0, 3, 6, 9, 12),
+                  "Sparse: 0, 6, 12" = c(0, 6, 12))
+pts <- bind_rows(lapply(names(schedules), function(s)
+  data.frame(schedule = s, month = schedules[[s]]))) |>
+  mutate(schedule = factor(schedule, levels = names(schedules))) |>
+  inner_join(curve, by = "month", relationship = "many-to-many")
+ggplot(curve, aes(month, change, colour = arm)) +
+  geom_line(linewidth = 0.8) + geom_point(data = pts, size = 2) +
+  geom_line(data = pts, linetype = 2, linewidth = 0.4) + facet_wrap(~schedule) +
+  scale_colour_arm(name = NULL, labels = walk_arm_labels) +
+  labs(x = "Months", y = "True mean change (mmHg)")
+```
+
+`r round(100 * (1 - exp(-1/2)))`% of the change by month 1, `r round(100 * (1 - exp(-3/2)))`% by month 3 (simulated truth).
+
+::: {.notes}
+All three schedules estimate the month-12 change. Only the front-loaded one shows how quickly the programmes act. Practical points to raise: visit burden increases dropout, visit windows must be achievable, and averaging two readings at baseline and the final visit reduces measurement error where it matters most.
+:::
+
+# How design choices affect precision
+
+## The variance of a slope difference has two parts
+
+$$
+\text{Var}(\hat\beta_3) = \frac{2}{n}\left(\tau_1^2 + \frac{\sigma^2}{S_{tt}}\right),\qquad S_{tt} = \sum_j (t_j - \bar t)^2
+$$
+
+- $\tau_1^2$: true differences in slopes between people; only more participants reduce it
+- $\sigma^2/S_{tt}$: noise in each person's fitted slope; spreading visits reduces it
+- $\tau_0^2$ does not appear: each participant is their own control
+
+::: {.notes}
+Derive it informally: fit a line to each participant; each fitted slope varies around the arm mean with variance tau1^2 + sigma^2/Stt; average n of them. The result holds exactly for balanced, complete data with independent residuals. Ask: why does the random-intercept variance not matter? Because a person's level cancels out of their own slope.
+:::
+
+## More visits help with diminishing returns; placement matters too {.smaller}
+
+```{r}
+#| echo: false
+dts <- list("0, 12" = c(0, 12), "0, 6, 12" = c(0, 6, 12),
+            "0, 3, 6, 9, 12" = c(0, 3, 6, 9, 12),
+            "0, 1, 3, 6, 9, 12 (WALK)" = c(0, 1, 3, 6, 9, 12),
+            "0, 0.5, ..., 12 (25 visits)" = seq(0, 12, 0.5),
+            "0, 1, 2, 10, 11, 12" = c(0, 1, 2, 10, 11, 12))
+knitr::kable(data.frame(Schedule = names(dts),
+                        S_tt = vapply(dts, s_tt, 0),
+                        `SE, 50 per arm` = sqrt(vapply(dts, function(t) var_slope_diff(50, t), 0)),
+                        `n per arm, 90% power` = vapply(dts, function(t) n_formula(0.9, t), 0),
+                        check.names = FALSE, row.names = NULL), digits = 3)
+```
+
+$\tau_1 = 0.4$ mmHg/month, $\sigma = 6$ mmHg, $\Delta = -0.5$ mmHg/month.
+
+::: {.notes}
+Three lessons: a midpoint adds nothing to a linear slope (0, 12 and 0, 6, 12 have the same S_tt); going from 5 to 25 visits roughly halves n but each extra visit buys less; six visits at the ends beat WALK's front-loaded six for a linear slope. Front-loading is worth it in WALK because change is not linear.
+:::
+
+## The formula agrees with 500 simulated trials {.smaller}
+
+```{r}
+#| echo: false
+se_f <- sqrt(var_slope_diff(50, pars$times))
+emp <- sd(slope_sims$est); mcse <- emp / sqrt(2 * (nrow(slope_sims) - 1))
+knitr::kable(data.frame(
+  Quantity = c("Formula SE", "Mean model-based SE", "Empirical SD of estimates",
+               "Monte Carlo SE of the empirical SD", "Mean estimate (truth -0.5)"),
+  Value = c(se_f, mean(slope_sims$se), emp, mcse, mean(slope_sims$est))), digits = 4)
+```
+
+::: {.notes}
+50 per arm, five visits, no dropout, the planned lmer analysis. The model-based SE matches the formula; the empirical SD is about two Monte Carlo SEs above it, which can happen by chance in 500 trials. Use this to show that formula and simulation check each other.
+:::
+
+## Correlation helps within-person comparisons
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+data.frame(rho = seq(0, 0.95, by = 0.01)) |>
+  mutate(`Follow-up only` = 1, `Change score` = 2 * (1 - rho), ANCOVA = 1 - rho^2) |>
+  pivot_longer(-rho, names_to = "analysis", values_to = "v") |>
+  ggplot(aes(rho, v, colour = analysis)) + geom_line(linewidth = 0.8) +
+  scale_colour_manual(values = c("Follow-up only" = "#6B6B6B", "Change score" = "#0072B2",
+                                 ANCOVA = "#D55E00"), name = NULL) +
+  labs(x = "Correlation baseline to follow-up", y = "Relative variance")
+```
+
+WALK: correlation `r round(with(load_walk("wide"), cor(sbp_m0, sbp_m12, use = "complete.obs")), 2)`, so ANCOVA needs about `r round(100 * (1 - with(load_walk("wide"), cor(sbp_m0, sbp_m12, use = "complete.obs"))^2))`% of the sample size of a follow-up-only analysis.
+
+::: {.notes}
+Change scores beat follow-up only when rho exceeds 0.5; ANCOVA is always at least as good [@vickers2001; @senn2006]. Connect to Module 1: positive correlation shrinks SEs for within-subject comparisons and inflates them for between-subject averages.
+:::
+
+## Dropout removes information, but not all of it
+
+Participant seen at the first $k$ visits contributes $w_k = 1/(\tau_1^2 + \sigma^2/S_{tt,k})$:
+
+$$
+\text{Var}(\hat\beta_3) \approx \frac{2}{n\sum_k \pi_k w_k}
+$$
+
+With 50 per arm, approximate power `r round(power_formula_dropout(50, 0), 2)` (no dropout), `r round(power_formula_dropout(50, 0.1), 2)` (dropout 0.1 per visit) and `r round(power_formula_dropout(50, 0.2), 2)` (0.2 per visit).
+
+::: {.notes}
+pi_k is the probability of being seen at exactly the first k visits. The approximation assumes MCAR dropout and ignores information flowing through the intercept-slope correlation. Inflating n by 1/(1 - proportion lost) treats dropouts as worthless, which is conservative for a mixed model.
+:::
+
+## Try it
+
+Workbook 12, **Exercises G1 and G2**: schedules, $S_{tt}$ and the sample-size formula.
+
+::: {.notes}
+Participants compare schedules for a stated question and compute n for a range of planning values. Encourage them to show how n changes as tau1 and sigma vary.
+:::
+
+# Simulation-based power
+
+## Power by simulation: simulate, analyse, count rejections
+
+$$
+\widehat{\text{power}} = \frac{1}{n_{\text{sim}}}\sum_s \mathbb{1}(p_s < \alpha),
+\qquad \text{MCSE} = \sqrt{\widehat{\text{power}}(1-\widehat{\text{power}})/n_{\text{sim}}}
+$$
+
+```{r}
+#| eval: false
+power_two_arm(n_sims = 200, seed = 1, n_per_arm = 50, dropout = 0.1)
+#> power, mcse, n_sims
+```
+
+MCSE ≤ 0.01 at power 0.8 needs $0.8 \times 0.2 / 0.01^2 = 1600$ simulated trials.
+
+::: {.notes}
+power_two_arm() in R/sim_helpers.R calls sim_two_arm() and fits the planned lmer model each time. Simulation handles dropout, irregular times and the actual planned analysis [@arnold2011]. Plan the simulation study through aims, data-generating mechanisms, estimands, methods and performance measures [@morris2019].
+:::
+
+## Power rises with n and falls with dropout
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+fl <- expand.grid(n_per_arm = 15:85, dropout = c(0, 0.1, 0.2)) |>
+  mutate(formula = mapply(power_formula_dropout, n_per_arm, dropout))
+power_grid |> mutate(lower = pmax(0, power - 1.96 * mcse), upper = pmin(1, power + 1.96 * mcse)) |>
+  ggplot(aes(n_per_arm, power, colour = factor(dropout))) +
+  geom_hline(yintercept = c(0.8, 0.9), colour = "grey75") +
+  geom_line(data = fl, aes(y = formula), linetype = 2, linewidth = 0.5) +
+  geom_pointrange(aes(ymin = lower, ymax = upper), position = position_dodge(width = 2.5), size = 0.3) +
+  scale_colour_manual(values = c("0" = "#222222", "0.1" = "#0072B2", "0.2" = "#D55E00"),
+                      name = "Dropout per visit") +
+  labs(x = "Participants per arm", y = "Power")
+```
+
+::: {.notes}
+Points: 200 simulated trials each, with 95% Monte Carlo intervals; dashed lines: the dropout formula. At 50 per arm: `r formatC(pg(50, 0), format = "f", digits = 2)`, `r formatC(pg(50, 0.1), format = "f", digits = 2)` and `r formatC(pg(50, 0.2), format = "f", digits = 2)`. The grid took about ten minutes and is cached. Ask: which design point would you now confirm with a bigger simulation?
+:::
+
+## A power estimate without its Monte Carlo SE cannot be judged
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+mc <- slope_sims |> mutate(n_sims = seq_along(p), power = cumsum(p < 0.05) / n_sims,
+                           mcse = sqrt(power * (1 - power) / n_sims))
+ggplot(mc, aes(n_sims, power)) +
+  geom_ribbon(aes(ymin = pmax(0, power - 1.96 * mcse), ymax = pmin(1, power + 1.96 * mcse)),
+              fill = "grey85") +
+  geom_line() + coord_cartesian(ylim = c(0.6, 1)) +
+  labs(x = "Number of simulated trials", y = "Running power estimate")
+```
+
+After 500 trials: `r round(tail(mc$power, 1), 3)` (MCSE `r round(tail(mc$mcse, 1), 3)`).
+
+::: {.notes}
+After 50 trials the interval is very wide. Also check type I error by simulating with delta = 0, check the fitted model recovers the planning values, and count failed or singular fits. Set and record the seed.
+:::
+
+## Try it
+
+Workbook 12, **Exercises G3 and G4**: power and type I error by simulation.
+
+::: {.notes}
+Participants run power_two_arm() with 100 simulations (about 20 seconds each) and report the MCSE; then repeat with delta = 0.
+:::
+
+# Writing the analysis plan
+
+## A SAP fixes the analysis before the data can influence it
+
+- Structure from @gamble2017; estimands from ICH E9(R1) [@ich2019]
+- Longitudinal additions: schedule and visit windows; time scale; full model; responses to diagnostic and fitting problems; missing-data assumption and sensitivity analyses
+- Template: `final-project/sap_template.md`
+- Filled example: `admin/templates/walk_sap_example.md`
+
+::: {.notes}
+Open the template and walk through the section headings. Emphasise version history with a column saying whether each change was made before unblinded data were seen. The fitting-problem rules connect directly to Module 11.
+:::
+
+## The WALK primary estimand, written out {.smaller}
+
+| Attribute | WALK |
+|---|---|
+| Treatment | Assignment to EP (or SP) vs UC |
+| Population | Adults with raised SBP meeting eligibility criteria |
+| Variable | Change in SBP, baseline to month 12 |
+| Intercurrent events | Stopping the programme: treatment policy. New antihypertensive: treatment policy (hypothetical as supplementary) |
+| Summary | Difference in mean change, mmHg |
+
+::: {.notes}
+Distinguish intercurrent events from missing data: stopping the programme is an intercurrent event; a missed visit is missing data. For binary outcomes the summary must say conditional or marginal.
+:::
+
+## Try it
+
+Workbook 12, **Exercise G5**: an estimand table for CLEAR.
+
+::: {.notes}
+Participants fill in the five attributes for the CLEAR binary outcome, including whether the odds ratio is conditional or marginal.
+:::
+
+# Reporting
+
+## Report enough to reconstruct the model and judge it {.smaller}
+
+```{r}
+#| echo: false
+m_pri <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk, control = lmer_ctrl)
+chg <- contrast(emmeans(m_pri, ~ visit_f | arm), list(change12 = c(-1, 0, 0, 0, 0, 1)))
+d <- summary(contrast(chg, method = "trt.vs.ctrl", by = NULL, adjust = "none"), infer = TRUE)
+```
+
+- Design and data: schedule, numbers of participants **and** observations, missingness by arm and visit
+- Model: mean model, time, random effects/covariance, estimation, df method, software versions
+- Estimand and how it is computed; MAR assumption and sensitivity analyses
+- Results: EP − UC at month 12 `r fmt_ci(d$estimate[2], d$lower.CL[2], d$upper.CL[2])` mmHg; SP − UC `r fmt_ci(d$estimate[1], d$lower.CL[1], d$upper.CL[1])` mmHg
+
+::: {.notes}
+The full reporting checklist is Appendix A of the SAP template. Common omissions: the covariance structure, the number of observations, and the missing-data assumption. Keep main text, supplement and archived code apart. The notes give a full methods and results paragraph.
+:::
+
+## Try it
+
+Workbook 12, **Independent exercise I3**: write methods and results for the DIARY model.
+
+::: {.notes}
+Participants write a paragraph for the negative binomial GLMM from Module 11, with inline R numbers.
+:::
+
+# Reproducibility
+
+## A project that anyone can run from top to bottom
+
+```
+LDA_course/
+├── LDA_course.Rproj   opens with the project root as working directory
+├── R/                 shared functions (setup.R)
+├── data-raw/ data/    data are created by code, never edited by hand
+├── scripts/           numbered: 00_make_data.R ... 12_planning.R
+└── outputs/           figures/, tables/, models/ (written by scripts)
+```
+
+- `here::here("data", "walk_long.csv")`: paths from the project root; never `setwd()`
+- Numbered scripts, one-way data flow, outputs saved by code
+
+::: {.notes}
+Ask: what would happen if a collaborator ran your script on their computer today? Absolute paths, hand-edited data and objects left in the workspace are the usual failures. Restart R and run from the top before sign-off.
+:::
+
+## Record and restore the package versions {.smaller}
+
+- `sessionInfo()` records what was used (saved in `outputs/m12_session_info.txt`)
+- **renv** [@ushey2026] restores it:
+  - `renv::init()`: project library and `renv.lock` (once)
+  - `renv::snapshot()`: update the lockfile after package changes
+  - `renv::restore()`: install the recorded versions elsewhere
+- Git: commit small changes with messages, `.gitignore` personal data, tag the reported version
+
+::: {.notes}
+Example of why versions matter: DHARMa 0.5.0 changed its default simulation to conditional, which changes participant-level tests (Module 11). The course itself does not use renv, because participants install packages differently; recommend it for real studies. Commit renv.lock, not the library.
+:::
+
+## Try it
+
+Workbook 12, **Exercise G6** and the independent exercises.
+
+::: {.notes}
+G6 is a short reproducibility audit. Then I1 (a power simulation for a WALK-like design), I2 (SAP sections for CLEAR), I3 (reporting) and I4 (critique).
+:::
+
+## Summary
+
+- Choose the schedule from the estimand; front-load when change is early
+- $\text{Var}(\hat\beta_3) = 2(\tau_1^2 + \sigma^2/S_{tt})/n$: participants beat visits once $\tau_1^2$ dominates
+- Simulate realistic designs, and report Monte Carlo SEs
+- Write the SAP first: estimand, model, responses to problems, missing data
+- Report against a checklist; make the project reproducible with `here`, numbered scripts, `sessionInfo()`, renv and Git
+
+::: {.notes}
+Close by pointing to the final project, which asks for a SAP based on the template and a reproducible analysis.
+:::

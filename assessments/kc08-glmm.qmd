@@ -1,0 +1,117 @@
+---
+title: "Module 8. Generalized linear mixed models"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: false
+source(here::here("R", "setup.R"))
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary() |> arrange(id, period)
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+Thirteen questions on Module 8, each mapped to a learning outcome. Answers and explanations are at the end.
+
+## Questions
+
+**Q1 (LO 8.1, 8.3).** The output below is from a logistic mixed model for CLEAR.
+
+```{r}
+#| label: q1-output
+#| echo: true
+m_q1 <- glmer(itch ~ week * arm + (1 | id), data = clear, family = binomial, nAGQ = 25)
+round(cbind(estimate = fixef(m_q1), se = sqrt(diag(as.matrix(vcov(m_q1))))), 4)
+VarCorr(m_q1)
+```
+
+(a) Interpret `exp(week:armActive)` in one sentence. (b) What does the intercept represent? (c) Interpret the random-intercept SD.
+
+**Q2 (LO 8.1).** Why can the Laplace approximation be inaccurate for CLEAR, and how would you check whether it matters?
+
+**Q3 (LO 8.1).** True or false, with justification: "With `nAGQ = 25`, `glmer` can fit a random intercept and a random slope for week."
+
+**Q4 (LO 8.3).** A colleague says: "The GLMM odds ratio for treatment is 0.5, so the proportion of treated patients with the event is half that of untreated patients." Give two reasons why this is wrong.
+
+**Q5 (LO 8.4).** A logistic GLMM gives a conditional log-odds ratio of −1.2 with a random-intercept SD of 2.5. Approximately what population-average log-odds ratio would GEE estimate?
+
+a. −1.2  b. −0.68  c. −0.41  d. −2.3
+
+**Q6 (LO 8.4).** For which of these models are the conditional and marginal slope coefficients (approximately) equal? Select all that apply.
+
+a. Linear mixed model with random intercept and slope.
+b. Poisson GLMM with log link and random intercept.
+c. Logistic GLMM with random intercept.
+d. Negative binomial GLMM with log link and random intercept.
+
+**Q7 (LO 8.4).** A trial's primary endpoint is "the proportion of patients in remission at week 24". Is a GEE (or marginal) analysis or a subject-specific GLMM odds ratio the more natural primary estimand? Justify, and say how a GLMM could still be used.
+
+**Q8 (LO 8.5).** `emmeans(glmm, ~ arm | week, type = "response")` for a logistic GLMM returns 0.27 (placebo) and 0.06 (active) at week 12. The observed proportions among those seen at week 12 are 0.32 and 0.14. Explain the discrepancy.
+
+**Q9 (LO 8.5).** Describe how to obtain a population-averaged risk difference with a 95% interval from a logistic GLMM.
+
+**Q10 (LO 8.2).** The output below compares Poisson and negative binomial GLMMs for DIARY.
+
+```{r}
+#| label: q10-output
+#| echo: true
+m_p <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+               data = diary, family = poisson)
+m_nb <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+                data = diary, family = nbinom2)
+r_p <- simulateResiduals(m_p, n = 500, seed = 1)
+r_nb <- simulateResiduals(m_nb, n = 500, seed = 1)
+c(disp_poisson = unname(testDispersion(r_p, plot = FALSE)$statistic),
+  zeros_poisson = unname(testZeroInflation(r_p, plot = FALSE)$statistic),
+  disp_nb = unname(testDispersion(r_nb, plot = FALSE)$statistic),
+  zeros_nb = unname(testZeroInflation(r_nb, plot = FALSE)$statistic),
+  AIC_poisson = AIC(m_p), AIC_nb = AIC(m_nb))
+```
+
+(a) Is there overdispersion? (b) Should a zero-inflated model be fitted? Justify.
+
+**Q11 (LO 8.2).** Why is `log(days)` entered as an offset, and what would go wrong if it were omitted?
+
+**Q12 (LO 8.2, 8.5).** For the NB GLMM with random-intercept SD 0.52, the expected count per 28 days for a participant with $b_{0i} = 0$ is 4.2. What is the approximate population mean count?
+
+**Q13 (LO 8.1).** DHARMa 0.5.0 simulates conditionally on the fitted random effects by default. For which kind of check should you switch to `simulateREs = "unconditional"`, and why?
+
+## Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+fq <- fixef(m_q1); sq <- attr(VarCorr(m_q1)$id, "stddev")
+```
+
+**Q1.** (a) For a given participant, the odds of itch are multiplied each week by a further `r f2(exp(fq[4]), 3)` on active treatment compared with placebo. (b) The log-odds of itch at week 0 on placebo for a participant with random intercept 0 (probability `r f2(plogis(fq[1]))`), not the population proportion. (c) $\hat\tau_0$ = `r f2(sq)` on the logit scale: participants one SD apart have odds of itch differing by a factor of about `r round(exp(sq), 1)` at every visit; latent ICC `r f2(sq^2 / (sq^2 + pi^2 / 3))`.
+
+**Q2.** Binary outcome, at most six observations per participant and a large random-intercept variance: the integrand is far from normal-shaped, and Laplace tends to underestimate the variance (here 1.67 versus 1.76). Check by refitting with adaptive quadrature (`nAGQ` = 10, 25) and comparing estimates.
+
+**Q3.** False. `glmer` allows `nAGQ > 1` only for models with a single scalar random effect; with a random slope, Laplace (`nAGQ = 1`) must be used.
+
+**Q4.** (1) An odds ratio is not a ratio of proportions (risk ratio). (2) The GLMM odds ratio is subject-specific; the population-average odds ratio is closer to 1. Proportions should be computed by integrating over the random effects.
+
+**Q5.** b. $-1.2/\sqrt{1 + 0.346 \times 6.25} = -1.2/1.77 \approx -0.68$. The exact integral differs slightly, because the approximation is less accurate for large SDs. Answer a ignores attenuation; d inflates instead of attenuating.
+
+**Q6.** a, b and d. Identity link: fixed effects are marginal effects. Log link with random intercept: slopes coincide, only the intercept shifts by $\tau_0^2/2$. Logit: attenuation.
+
+**Q7.** The endpoint is a population proportion, so a marginal (population-average) estimand such as a risk difference or marginal odds ratio is natural. A GLMM can still be used, being valid under MAR, by integrating over the random effects to obtain population-averaged proportions and their difference.
+
+**Q8.** The `emmeans` values are probabilities for a participant with $b_{0i} = 0$, which are further from 0.5 than population proportions; population-averaged probabilities from the GLMM are about 0.34 and 0.14. Observed proportions at week 12 are also affected by severity-dependent dropout.
+
+**Q9.** Compute, for each arm at week 12, the inverse logit averaged over the random-intercept distribution (numerical integration, for example Gauss–Hermite quadrature); take the difference. For uncertainty, draw $(\tau_0, \boldsymbol\beta)$ from their joint approximate sampling distribution (or use a parametric bootstrap with `bootMer`), recompute the difference for each draw and take the 2.5th and 97.5th percentiles.
+
+**Q10.** (a) Yes: the Poisson model's dispersion ratio is well above 1, and the NB model has a ratio near 1 and a much lower AIC. (b) No. The Poisson model's excess zeros are a symptom of overdispersion; the NB model predicts the zeros well (ratio near 1). Zero inflation should be tested against NB and only with a substantive reason; a ZINB fit in the notes did not improve the fit.
+
+**Q11.** The number of diary days varies; the offset (coefficient fixed at 1) makes the model about the rate per diary day. Without it, periods with incomplete diaries would appear to have fewer migraines and the treatment comparison could be distorted if completeness differed between arms or periods.
+
+**Q12.** $4.2 \times \exp(0.52^2/2) = 4.2 \times 1.14 \approx 4.8$.
+
+**Q13.** For checks aggregated by participant (residuals recalculated per group, then tested for dispersion or uniformity). Conditional simulation keeps each participant's fitted random effect fixed, so participant-level totals vary too little across simulations and a correct model is rejected far too often; unconditional simulation draws new random effects.

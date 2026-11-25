@@ -1,0 +1,43 @@
+---
+title: "Choosing a longitudinal method"
+subtitle: "A one-page comparison. Use with the decision diagrams in diagrams/decision-diagrams.html"
+---
+
+The table compares the methods taught in the course. It is a guide to reasoning, not a rule. Start from the research question and its estimand, then check that the method's data requirements and missing-data assumption fit your study. When two methods fit, prefer the one whose target matches the question and whose assumptions are most credible. Justify the final choice in words.
+
+## Methods at a glance
+
+| Method | Answers | Outcome | Data needed | Target | Valid if missing data are | Main R function | Module |
+|---|---|---|---|---|---|---|---|
+| Paired *t*-test | Mean change within one group | Continuous | Two occasions, complete pairs | Within-group mean change | MCAR (complete pairs) | `t.test(paired = TRUE)` | 3 |
+| ANCOVA at one follow-up | Group difference at one visit, baseline-adjusted | Continuous | Baseline and one follow-up | Population average | MCAR, or MAR given baseline and arm | `lm(y ~ arm + y0)` | 3 |
+| Repeated-measures ANOVA | Omnibus tests of time and group-by-time | Continuous | Fixed common occasions, complete data | Population average | MCAR (listwise deletion) | `aov(... + Error())`, `anova.mlm` | 3 |
+| Linear mixed model | Mean trajectories, differences in change, individual variation | Continuous | Any number of occasions, irregular times allowed | Population average = subject-specific (identity link) | MAR (likelihood) | `lmer()`, `lme()` | 4–6 |
+| GLS / MMRM | Mean trajectories with modelled residual covariance | Continuous | Common schedule for unstructured; any for exponential | Population average | MAR (likelihood) | `gls()` | 5 |
+| GEE | Population-average effects | Continuous, binary, count | Many independent clusters | Population average (marginal) | MCAR or covariate-dependent; IPW-GEE for MAR | `geeglm()` | 7 |
+| Logistic GLMM | Conditional effects on odds; individual variation | Binary | Repeated binary outcomes | Subject-specific (conditional) | MAR (likelihood) | `glmer(family = binomial)` | 8 |
+| Poisson / NB GLMM | Conditional rate ratios; individual variation | Count (with exposure) | Repeated counts; offset for exposure | Subject-specific; marginal rate ratio equal for random intercept | MAR (likelihood) | `glmmTMB(family = nbinom2)` | 8 |
+| Within/between LMM | Within-person vs between-person associations | Continuous (or GLMM) | Time-varying covariate | Association, not causal by default | MAR | `lmer()` with person-mean centring | 9 |
+| Splines / GAMM | Smooth nonlinear change | Continuous (or GLMM) | Enough occasions to estimate curvature | As for the parent model | MAR | `ns()`, `gamm()` | 9 |
+| Multiple imputation | Analysis under MAR with auxiliary variables | Any | An imputation model respecting the structure | As for the analysis model | MAR given the imputation model | `mice()` | 10 |
+| Delta adjustment | Sensitivity to MNAR | Any | MI or pattern-mixture framework | As for the primary estimand | Departures from MAR of size δ | `mice()` + post-processing | 10 |
+| Ordinal mixed model | Conditional effects on cumulative odds | Ordinal | Repeated ordered categories | Subject-specific | MAR | `ordinal::clmm()` | 13 <span class="advanced-tag">ADV</span> |
+| Joint model | Marker trajectory and its link to an event | Continuous + time to event | Marker measured until the event | Subject-specific | Dropout driven by the event | `JMbayes2::jm()` | 13 <span class="advanced-tag">ADV</span> |
+| Marginal structural model | Causal effect of time-varying treatment | Any | Time-varying treatment and confounders | Population average (causal) | Correct treatment and censoring models | `glm()` weights + `geeglm()` | 13 <span class="advanced-tag">ADV</span> |
+
+## Five questions to ask before choosing
+
+1. **What is the estimand?** Write it down: the population, the outcome variable, the time point or summary of change, how intercurrent events such as dropout or treatment change are handled, and the summary measure (difference in means, odds ratio, rate ratio).
+2. **Population average or subject specific?** For continuous outcomes with an identity link the two coincide. For binary and count outcomes they do not, so choose deliberately (diagram D3).
+3. **How are the data structured?** Fixed or irregular occasions; number of participants (clusters); further levels such as clinics; time-varying covariates.
+4. **Why are data missing?** If dropout may depend on earlier outcomes, use a likelihood-based model or multiple imputation (MAR) and plan a sensitivity analysis. Standard GEE and complete-case methods need stronger assumptions (diagram D5).
+5. **What will you report?** Choose a method that produces the estimand directly with a confidence interval, on a scale your readers understand.
+
+## Sample size cues
+
+| Situation | Caution |
+|---|---|
+| Fewer than about 40 clusters | Sandwich SEs are too small: use a bias-corrected estimator (Mancl–DeRouen) and *t* reference, or a mixed model |
+| Fewer than about 10 higher-level units (clinics) | Variance of a random effect is poorly estimated: consider fixed effects for the units |
+| Few events per participant (binary) | Use adaptive quadrature; watch for separation and boundary estimates |
+| Few occasions per participant | Random slopes and serial correlation may not be separately identifiable |

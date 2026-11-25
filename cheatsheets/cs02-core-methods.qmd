@@ -1,0 +1,404 @@
+---
+title: "Core methods reference"
+subtitle: "Purpose, assumptions, R example, what to report and a common error for each core method"
+---
+
+```{r}
+#| label: setup
+#| include: false
+source(here::here("R", "setup.R"))
+walk  <- load_walk() |> mutate(age10 = (age - 60) / 10, bmi_c = bmi - 29)
+wide  <- load_walk("wide")
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary()
+```
+
+Every R example on this sheet was run when the sheet was built, using the course datasets (`walk`, `wide`, `clear`, `diary`, loaded with `load_walk()`, `load_walk("wide")`, `load_clear()` and `load_diary()` after `source(here::here("R", "setup.R"))`). Numbers quoted are from the simulated WALK, CLEAR and DIARY studies and illustrate the methods only. Module numbers point to the full explanation.
+
+## Traditional approaches (Module 3)
+
+::: {.cards}
+
+::: {.card}
+### Baseline-adjusted ANCOVA at one follow-up <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Compare groups at a single prespecified follow-up in a randomised trial, adjusting for the baseline value of the outcome.
+
+[Assumptions.]{.lab} Independent participants; linear baseline relationship with a common slope; complete data at that follow-up (or MAR handled separately).
+
+```{r}
+d12 <- filter(wide, !is.na(sbp_m12))
+summary(lm(sbp_m12 ~ arm + sbp_m0, data = d12))
+t.test(d12$sbp_m12, d12$sbp_m0, paired = TRUE)  # within-group change only
+```
+
+[Report.]{.lab} Adjusted difference in means with 95% CI; number analysed per arm; that baseline adjustment was prespecified.
+
+::: {.err}
+[Common error.]{.lab} Comparing within-arm paired tests ("significant in EP, not in UC") instead of comparing arms directly.
+:::
+:::
+
+::: {.card}
+### Repeated-measures ANOVA <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Omnibus tests of group, occasion and group-by-occasion with fixed, common occasions.
+
+[Assumptions.]{.lab} Complete, balanced data; normal errors; sphericity, otherwise apply the Greenhouse–Geisser or Huynh–Feldt correction.
+
+```{r}
+cc  <- na.omit(wide)                 # completers only
+yv  <- c("sbp_m0","sbp_m1","sbp_m3","sbp_m6","sbp_m9","sbp_m12")
+mlm <- lm(as.matrix(cc[, yv]) ~ arm, data = cc)
+idata <- data.frame(visit = factor(yv, levels = yv))
+anova(mlm, X = ~1, idata = idata, test = "Spherical")
+```
+
+[Report.]{.lab} Number analysed vs randomised; F, ε and corrected p-value.
+
+::: {.err}
+[Common error.]{.lab} Ignoring the participants removed by listwise deletion (122 of 360 in WALK).
+:::
+:::
+
+:::
+
+## Linear mixed models and covariance (Modules 4–6)
+
+::: {.cards}
+
+::: {.card}
+### Random-intercept and random-slope LMM <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Model repeated continuous outcomes with a mean trajectory (fixed effects) and participant-specific levels and rates of change (random effects).
+
+[Assumptions.]{.lab} Correct mean model; $\mathbf b_i \sim N(\mathbf 0, G)$; residuals independent of random effects; MAR for missing outcomes.
+
+```{r}
+m_ri  <- lmer(sbp ~ month * arm + (1 | id), data = walk, control = lmer_ctrl)
+m_lin <- lmer(sbp ~ month * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+icc_lmer(m_ri); VarCorr(m_lin)
+```
+
+[Report.]{.lab} Fixed effects with 95% CIs; random-effect SDs and correlation; residual SD; ICC for a random-intercept model.
+
+::: {.err}
+[Common error.]{.lab} Reading `armEP` in an interaction model as "the treatment effect". It is the difference at time 0.
+:::
+:::
+
+::: {.card}
+### Primary model: difference in mean change <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Estimate the difference in mean change from baseline to a visit without assuming a shape for the mean trajectory.
+
+[Assumptions.]{.lab} Adequate covariance (random intercept and slope on actual time); MAR.
+
+```{r}
+m_cat <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+              control = lmer_ctrl)
+emm   <- emmeans(m_cat, ~ visit_f | arm)
+chg12 <- contrast(emm, list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+summary(contrast(chg12, "trt.vs.ctrl", by = NULL, adjust = "none"),
+        infer = TRUE)
+```
+
+[Report.]{.lab} Within-arm changes and differences in mean change with 95% CIs, the df method and any multiplicity adjustment (WALK: EP − UC −9.0, 95% CI −11.8 to −6.1 mmHg).
+
+::: {.err}
+[Common error.]{.lab} Leaving the Dunnett adjustment that `trt.vs.ctrl` applies by default without saying so.
+:::
+:::
+
+::: {.card}
+### Residual correlation structures <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Model within-participant correlation directly (compound symmetry, AR(1), exponential in actual time, unstructured), with or without random effects.
+
+[Assumptions.]{.lab} Correct mean model; same correlation pattern for all participants; AR(1) needs an integer occasion index.
+
+```{r}
+g_exp <- gls(sbp ~ visit_f * arm, data = walk, method = "REML",
+             correlation = corExp(form = ~ month | id, nugget = TRUE))
+g_un  <- gls(sbp ~ visit_f * arm, data = walk, method = "REML",
+             correlation = corSymm(form = ~ visit | id),
+             weights = varIdent(form = ~ 1 | visit_f))
+AIC(g_exp, g_un)
+```
+
+[Report.]{.lab} The chosen structure, why, its parameters, and that treatment estimates were stable across reasonable alternatives.
+
+::: {.err}
+[Common error.]{.lab} `corAR1(form = ~ month | id)` with non-integer times; `corSymm` without a visit index when visits are missed.
+:::
+:::
+
+::: {.card}
+### Comparing models: ML, REML, LRT, AIC <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Choose an adequate model and test terms correctly.
+
+[Assumptions.]{.lab} Same observations in all models; REML comparisons only between models with identical fixed effects; variance tests lie on the boundary.
+
+```{r}
+anova(m_ri, m_lin, refit = FALSE)            # same fixed effects: REML
+lt <- lr_test(m_ri, m_lin)
+p_boundary_mixture(lt$chisq, df_mix = c(1, 2))   # slope variance = 0?
+anova(m_lin, m_cat)                          # different fixed effects: refits by ML
+```
+
+[Report.]{.lab} Candidate models, criterion used, chosen model and reason; mixture p-values for variance components.
+
+::: {.err}
+[Common error.]{.lab} Comparing REML log-likelihoods or AICs across models with different fixed effects.
+:::
+:::
+
+::: {.card}
+### Predictions: confidence vs prediction intervals <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Show the uncertainty about a mean trajectory (CI) separately from the spread of individual values (PI).
+
+[Assumptions.]{.lab} Normal random effects and residuals; variance components treated as known.
+
+```{r}
+emm_tab <- as.data.frame(summary(emmeans(m_cat, ~ visit_f * arm)))
+pop  <- predict(m_cat, re.form = NA)    # population average
+subj <- predict(m_cat)                  # subject specific (with BLUPs)
+```
+
+[Report.]{.lab} Which interval is shown and what it describes. In WALK the 95% CI for the EP mean at month 12 is about 5 mmHg wide, the PI for a new participant about 54 mmHg.
+
+::: {.err}
+[Common error.]{.lab} Presenting a confidence band as the range of individual participants' values.
+:::
+:::
+
+:::
+
+## Non-normal outcomes (Modules 7–8)
+
+::: {.cards}
+
+::: {.card}
+### Generalized estimating equations <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Population-average (marginal) effects for continuous, binary or count outcomes; within-cluster correlation is a nuisance.
+
+[Assumptions.]{.lab} Correct mean model; many independent clusters (roughly 40 or more); missingness MCAR or dependent only on covariates in the model.
+
+```{r}
+g <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+            data = clear, family = binomial, corstr = "exchangeable")
+summary(g)                                    # robust (sandwich) SEs
+emmeans(g, ~ arm, at = list(week = 12), type = "response")
+```
+
+[Report.]{.lab} Link, mean model, working correlation, number of clusters, robust SEs; odds or rate ratios and predicted proportions or rates.
+
+::: {.err}
+[Common error.]{.lab} A character `id`: it is coerced to `NA` and all rows become one cluster. Use `factor(id)` and sort by id and time.
+:::
+:::
+
+::: {.card}
+### Logistic mixed model <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Subject-specific (conditional) effects on the odds of a binary outcome.
+
+[Assumptions.]{.lab} Logit linear in covariates given the random effects; normal random intercept; MAR dropout.
+
+```{r}
+m_b <- glmer(itch ~ week * arm + (1 | id), data = clear,
+             family = binomial, nAGQ = 25)
+fixef_table(m_b, exponentiate = TRUE)
+tau <- attr(VarCorr(m_b)$id, "stddev")
+fixef(m_b) / sqrt(1 + 0.346 * tau^2)          # approximate marginal effects
+```
+
+[Report.]{.lab} Estimation method (AGQ points or Laplace); conditional odds ratios; random-intercept SD; marginal probabilities and risk differences if a population question is asked.
+
+::: {.err}
+[Common error.]{.lab} Reading GLMM odds ratios as population-average effects. They are further from 1 than GEE odds ratios, and that is not bias.
+:::
+:::
+
+::: {.card}
+### Count mixed model with exposure <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Rate ratios and expected counts for repeated counts with varying observation time.
+
+[Assumptions.]{.lab} Log-linear rate given random effects; log exposure as an offset; NB variance $\mu + \mu^2/\theta$.
+
+```{r}
+nb <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+              data = diary, family = nbinom2)
+r <- simulateResiduals(nb, n = 500, seed = 1)
+testDispersion(r); testZeroInflation(r)
+emmeans(nb, ~ arm | post, offset = log(28), type = "response")
+```
+
+[Report.]{.lab} Rate ratio for `post:arm` with CI; expected counts per 28 days (state that `emmeans` gives them at $b_i = 0$); dispersion checks.
+
+::: {.err}
+[Common error.]{.lab} Adding zero inflation because a Poisson model under-predicts zeros. Compare with NB first, and only with a substantive reason.
+:::
+:::
+
+:::
+
+## Time-varying predictors, nonlinear change and missing data (Modules 9–10)
+
+::: {.cards}
+
+::: {.card}
+### Within- and between-person effects <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Separate a time-varying covariate's association into within-person and between-person parts.
+
+[Assumptions.]{.lab} Linear associations at each level; between-person part needs between-person confounders; neither part is causal by default.
+
+```{r}
+walk_c <- walk |> group_by(id) |> mutate(steps_pm = mean(steps)) |>
+  ungroup() |> mutate(steps_wc = steps - steps_pm,
+                      steps_gm = steps_pm - mean(steps_pm))
+m_wb <- lmer(sbp ~ steps_wc + steps_gm + visit_f * arm + age10 + sex +
+               bmi_c + (1 + month | id), data = walk_c, control = lmer_ctrl)
+```
+
+[Report.]{.lab} Within- and between-person coefficients with CIs; whether the covariate is affected by treatment.
+
+::: {.err}
+[Common error.]{.lab} One blended coefficient for a time-varying covariate, or adjusting the primary treatment effect for a mediator such as steps.
+:::
+:::
+
+::: {.card}
+### Nonlinear trajectories <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Describe curved mean change: piecewise linear, natural splines or a generalized additive mixed model.
+
+[Assumptions.]{.lab} Knots or basis chosen in advance; compare fixed-effect structures by ML.
+
+```{r}
+walk$month_p3 <- pmax(walk$month - 3, 0)
+m_pw <- lmer(sbp ~ (month + month_p3) * arm + (1 + month | id),
+             data = walk, REML = FALSE, control = lmer_ctrl)
+m_ns <- lmer(sbp ~ splines::ns(month, df = 3) * arm + (1 + month | id),
+             data = walk, REML = FALSE, control = lmer_ctrl)
+AIC(m_pw, m_ns)
+```
+
+[Report.]{.lab} Phase-specific slopes (piecewise) or fitted curves with intervals (splines, GAMMs); contrasts at stated times from predictions.
+
+::: {.err}
+[Common error.]{.lab} Interpreting individual spline coefficients, or extrapolating a polynomial beyond the data.
+:::
+:::
+
+::: {.card}
+### Multiple imputation for longitudinal data <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Handle missing outcomes or covariates under MAR, including auxiliary variables not in the analysis model.
+
+[Assumptions.]{.lab} MAR given the variables in the imputation model; imputation model at least as rich as the analysis model (arm, all visits).
+
+```{r}
+imp <- mice(select(wide, arm, age, sex, bmi, starts_with("sbp_m")),
+            m = 10, method = "norm", seed = 2026, printFlag = FALSE)
+fit <- with(imp, lm(sbp_m12 ~ arm + sbp_m0))
+summary(pool(fit), conf.int = TRUE)
+```
+
+[Report.]{.lab} Imputation method and variables, number of imputations (often 20 or more), pooling by Rubin's rules, the MAR assumption.
+
+::: {.err}
+[Common error.]{.lab} Imputing in long format as if visits were independent, or omitting arm from the imputation model.
+:::
+:::
+
+::: {.card}
+### Delta-adjustment sensitivity analysis <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Show how conclusions change if participants who dropped out had systematically worse outcomes than MAR predicts.
+
+[Assumptions.]{.lab} A plausible range for δ chosen with subject-matter input; δ applied after dropout.
+
+```{r}
+delta <- 4                        # mmHg worse after dropout, programme arms
+fits <- lapply(seq_len(imp$m), function(k) {
+  d <- mice::complete(imp, k); miss <- is.na(wide$sbp_m12)
+  shift <- miss & d$arm != "UC"
+  d$sbp_m12[shift] <- d$sbp_m12[shift] + delta
+  lm(sbp_m12 ~ arm + sbp_m0, data = d)
+})
+summary(pool(as.mira(fits)), conf.int = TRUE)
+```
+
+[Report.]{.lab} Estimates across a grid of δ and the tipping point at which the conclusion changes.
+
+::: {.err}
+[Common error.]{.lab} Treating MAR results as proof that dropout was ignorable. MAR cannot be tested from the observed data.
+:::
+:::
+
+:::
+
+## Diagnostics and planning (Modules 11–12)
+
+::: {.cards}
+
+::: {.card}
+### Diagnostics for mixed models <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Check residuals, random effects and influence; find problems that matter for the estimand.
+
+[Assumptions.]{.lab} Plots are guides, not tests; shrinkage distorts plots of predicted random effects.
+
+```{r}
+plot(fitted(m_cat), resid(m_cat))              # conditional residuals
+qqnorm(ranef(m_cat)$id[, 1])                   # random intercepts (shrunken)
+isSingular(m_cat)
+r_b <- simulateResiduals(m_b, n = 500, seed = 1)  # GLMM: DHARMa
+testDispersion(r_b)
+```
+
+[Report.]{.lab} What was checked, what was found, what changed and why; recorded in the analysis log.
+
+::: {.err}
+[Common error.]{.lab} Changing the model until a result becomes significant. Revise only for substantive reasons and say so.
+:::
+:::
+
+::: {.card}
+### Power by simulation <span class="core-tag">CORE</span>
+[Purpose.]{.lab} Estimate power or sample size for the planned analysis under realistic correlation and dropout.
+
+[Assumptions.]{.lab} The simulation model reflects the expected data; enough simulations for a small Monte Carlo error.
+
+```{r}
+power_two_arm(n_sims = 50, n_per_arm = 50, delta = -0.5, dropout = 0.1)
+```
+
+[Report.]{.lab} The data-generating assumptions, number of simulations, estimated power with its Monte Carlo SE (use 1,000 or more simulations for a final design).
+
+::: {.err}
+[Common error.]{.lab} Reporting a power estimate without its Monte Carlo SE, or ignoring dropout.
+:::
+:::
+
+:::
+
+## Advanced extensions (Module 13) <span class="advanced-tag">ADVANCED</span>
+
+::: {.cards}
+
+::: {.card .adv}
+### Specialist models: when to use them
+[Ordinal outcome]{.lab}: cumulative-logit mixed model, `ordinal::clmm(severity_f ~ week * arm + (1 | id))`; check proportional odds.
+
+[Three levels]{.lab}: `lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 | clinic))`; with few clinics, consider clinic as fixed.
+
+[Nonlinear mixed model]{.lab}: `nlme::nlme()` when parameters such as an asymptote or rate have meaning; needs starting values.
+
+[Joint model]{.lab}: `JMbayes2::jm()` when a marker is measured until an event and the event depends on the marker's current value.
+
+[Time-varying confounding]{.lab}: marginal structural models with stabilised inverse probability weights, when a time-varying confounder is affected by earlier treatment.
+:::
+
+::: {.card .adv}
+### Signs that you need a specialist
+* The causal question involves treatment that changes over time in response to the outcome.
+* Visits or dropout are driven by the outcome in ways MAR cannot represent.
+* The outcome is a time to event linked to a longitudinal marker.
+* Fewer than about 10 clusters at a higher level, or very sparse binary outcomes.
+* Models fail to converge for reasons that simplification does not resolve.
+:::
+
+:::

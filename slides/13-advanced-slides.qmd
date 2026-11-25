@@ -1,0 +1,495 @@
+---
+title: "Module 13. Advanced extensions"
+subtitle: "Slides"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| echo: false
+source(here::here("R", "setup.R"))
+suppressPackageStartupMessages({
+  library(ordinal); library(survival); library(JMbayes2)
+})
+slice <- dplyr::slice; lme <- nlme::lme; coxph <- survival::coxph
+walk  <- load_walk()
+clear <- load_clear() |> mutate(id = factor(id), age10 = (age - 45) / 10)
+kid_long <- load_kidney("long") |> mutate(age10 = (age - 60) / 10) |> as.data.frame()
+kid_ev   <- load_kidney("events") |> mutate(age10 = (age - 60) / 10) |> as.data.frame()
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+f3 <- function(x) formatC(x, format = "f", digits = 3)
+pct <- function(x) paste0(formatC(100 * x, format = "f", digits = 0), "%")
+walk_truth   <- readRDS(here("data", "walk_truth.rds"))
+clear_truth  <- readRDS(here("data", "clear_truth.rds"))
+kidney_truth <- readRDS(here("data", "kidney_truth.rds"))
+```
+
+## Five situations beyond the core toolkit <span class="advanced-tag">ADVANCED</span>
+
+- Ordered categories: **cumulative-logit mixed model** (CLEAR)
+- Participants grouped in clinics: **three-level model** (WALK)
+- A curve with meaningful parameters: **nonlinear mixed model** (WALK)
+- A biomarker and an event: **joint model** (KIDNEY)
+- Treatment that responds to the patient: **marginal structural model** (simulation)
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+::: {.notes}
+Open by saying that every section of this module is advanced and optional, and the sections are independent. The goal is recognition plus a first competent analysis, and knowing when to call a specialist (LO 13.6). Because the data are simulated we can compare each estimate with the truth, and we will do so throughout; stress that this is possible only with simulated data. Ask the group which of the five situations they have met in their own work, and spend more time on those.
+:::
+
+# Ordinal repeated outcomes
+
+## Itch severity is ordered, so keep the order <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+#| fig-height: 4.2
+clear |>
+  count(arm, week, severity_f) |>
+  group_by(arm, week) |> mutate(prop = n / sum(n)) |>
+  ggplot(aes(factor(week), prop, fill = severity_f)) +
+  geom_col(width = 0.75) + facet_wrap(~ arm) +
+  scale_fill_manual(values = c("#F0F0F0", "#BDBDBD", "#6B6B6B", "#222222"),
+                    name = "Itch severity") +
+  labs(x = "Week", y = "Proportion")
+```
+
+::: {.notes}
+CLEAR: 200 participants, placebo versus active, severity none/mild/moderate/severe at weeks 0 to 12. Point at the shift towards lighter shading over time, larger in the active arm. Modules 7 and 8 used moderate-or-severe as a binary outcome. Ask: what information did the dichotomy throw away? (None versus mild; moderate versus severe.) When it is needed: an ordered outcome with more than two levels where a cut-off would be arbitrary.
+:::
+
+## One set of slopes moves every threshold <span class="advanced-tag">ADVANCED</span>
+
+$$
+\operatorname{logit} P(Y_{ij} \le k \mid b_{0i}) = \theta_k - (\beta_1 t_{ij} + \beta_2 \text{Active}_i + \beta_3 t_{ij}\text{Active}_i + b_{0i})
+$$
+
+- $\theta_0 < \theta_1 < \theta_2$: cut-points; no separate intercept
+- Positive $\beta$: higher (worse) categories more likely (`ordinal` sign convention)
+- $b_{0i} \sim N(0, \tau_0^2)$: participant's persistent level
+- **Proportional odds:** the same $\beta$ at every cut-point
+
+::: {.notes}
+Explain the latent-variable picture: each person has an unobserved itch intensity; categories are reported by where it falls relative to fixed thresholds. Treatment and time move the intensity; thresholds stay put. That is why one coefficient serves all three cut-offs. Warn about the sign: the minus sign means positive coefficients mean worse; other software can flip all signs. The coefficients are subject-specific (conditional), as in Module 8.
+:::
+
+## Fitting it with `clmm()` <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| label: clmm
+m_clmm <- clmm(severity_f ~ week * arm + (1 | id), data = clear, nAGQ = 7)
+round(coef(summary(m_clmm)), 3)
+sqrt(as.numeric(VarCorr(m_clmm)$id))     # random-intercept SD
+```
+
+```{r}
+#| echo: false
+cf <- coef(summary(m_clmm))
+b_wa <- cf["week:armActive", 1]; se_wa <- cf["week:armActive", 2]
+or12 <- exp(12 * b_wa)
+```
+
+::: {.notes}
+nAGQ = 7 uses adaptive quadrature, more accurate than Laplace when the random-intercept SD is about 2. Point at week (placebo slope), week:armActive (extra slope with active) and the three thresholds. The random-intercept SD is close to 2, so participants differ a lot. Ask participants to read the sign of week:armActive: negative, so severity falls faster with active.
+:::
+
+## Active treatment cuts the odds of worse itch by week 12 <span class="advanced-tag">ADVANCED</span>
+
+- Extra log-odds change per week, active vs placebo: **`r f3(b_wa)`** (SE `r f3(se_wa)`)
+- Over 12 weeks: cumulative odds ratio **`r f2(or12)`** (95% CI `r f2(exp(12 * (b_wa - 1.96 * se_wa)))` to `r f2(exp(12 * (b_wa + 1.96 * se_wa)))`)
+- Same odds ratio for "mild or worse", "moderate or worse", "severe"
+- Truth (simulated): extra slope `r clear_truth$beta_trtweek`, placebo slope `r clear_truth$beta_week`, SD `r clear_truth$sd_b`
+
+::: {.notes}
+Translate: for the same participant, the odds of being in a worse rather than a better category at week 12 are about `r pct(1 - or12)` lower on active than they would be on placebo. The truth comparison is possible only because the data are simulated; the notes show that after adjusting for age and sex all fixed-parameter intervals contain the generating values. Stress that this is a conditional effect.
+:::
+
+## Report probabilities, conditional and marginal <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+#| fig-height: 4.4
+pp <- read_csv(here("outputs", "tables", "m13_clmm_pred_probs.csv"),
+               show_col_types = FALSE) |>
+  mutate(severity = factor(severity, levels = levels(clear$severity_f)),
+         arm = factor(arm, levels = c("Placebo", "Active")))
+ggplot(pp, aes(week, prob, colour = arm)) +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.2) +
+  facet_grid(type ~ severity) + scale_colour_arm(name = NULL) +
+  scale_x_continuous(breaks = c(0, 4, 8, 12)) +
+  labs(x = "Week", y = "Predicted probability")
+```
+
+::: {.notes}
+These predictions come from the same model, computed in scripts/13a_ordinal.R. Top row: a participant with random intercept zero. Bottom row: averaged over the random-intercept distribution by Gauss-Hermite quadrature, which describes the trial population. The marginal curves are flatter, the same conditional versus marginal distinction as Module 8. Clinicians understand "proportion with moderate or severe itch at week 12" far better than a cumulative odds ratio.
+:::
+
+## Check proportional odds: let slopes vary by cut-point <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| label: po-test
+clear_df <- as.data.frame(clear) |> mutate(week_act = week * (arm == "Active"))
+m_po  <- clmm2(severity_f ~ week + arm + week_act, random = id,
+               data = clear_df, Hess = TRUE, nAGQ = 7)
+m_npo <- clmm2(severity_f ~ arm, nominal = ~ week + week_act, random = id,
+               data = clear_df, Hess = TRUE, nAGQ = 7)
+po_lrt <- anova(m_po, m_npo)
+```
+
+LR statistic `r f2(po_lrt[2, "LR stat."])` on `r po_lrt[2, 5]` df, `r fmt_p(po_lrt[2, "Pr(Chi)"])`: no evidence against proportional odds.
+
+::: {.notes}
+Nominal effects give each cut-point its own slope (a partial proportional odds model). week_act codes the extra active slope separately to avoid a redundant parameter. A second, informal check is to fit binary GLMMs to each cumulative split and compare slopes; the notes show that the severe split is imprecise. Remind them that non-rejection is not proof, and the 4-df test has limited power with 200 participants.
+:::
+
+## Nominal outcomes need a multinomial model <span class="advanced-tag">ADVANCED</span>
+
+$$
+\log \frac{P(Y_{ij} = k \mid \mathbf{b}_i)}{P(Y_{ij} = 0 \mid \mathbf{b}_i)} = \mathbf{x}_{ij}^\top \boldsymbol\beta_k + b_{ik}, \quad k = 1, \dots, K
+$$
+
+- Each category has its own coefficients and (correlated) random intercept
+- Options: full baseline-category logit GLMM (specialist software), separate binary GLMMs (approximate), multinomial GEE (marginal)
+- **Specialist:** nominal outcome, failed proportional odds for treatment, random slopes, primary endpoint
+
+::: {.notes}
+Examples of nominal outcomes: type of treatment used at each visit, reason for a missed dose. Ordering them would be meaningless. The multinomial model has K times as many coefficients as the ordinal model. None of the course packages fits the full model, so treat it as a specialist analysis. Separate binary GLMMs comparing each category with the reference are a reasonable first look, but they ignore the correlation of the random effects across categories.
+:::
+
+## Try it <span class="advanced-tag">ADVANCED</span>
+
+Workbook exercise 1: fit the adjusted cumulative-logit model, compare with the truth, and compute predicted probabilities at week 12.
+
+::: {.notes}
+Allow participants to work in pairs. Those who finish early can try the nominal-effects test in the independent exercises.
+:::
+
+# Three-level data
+
+## WALK participants are nested in 8 clinics <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+walk |> filter(visit == 1) |>
+  ggplot(aes(clinic, sbp)) +
+  geom_boxplot(outlier.size = 0.6, fill = "#F0F0F0") +
+  labs(x = "Clinic", y = "Baseline SBP (mmHg)")
+```
+
+Visits (level 1) within participants (level 2) within clinics (level 3). Every clinic has all three arms.
+
+::: {.notes}
+When it is needed: participants are grouped and the grouping could explain variation, especially if treatment is assigned by group. Point out the modest differences between clinic medians. Emphasise the design feature: randomisation was stratified by clinic, so treatment varies within clinics. Ask: what would change if whole clinics had been randomised?
+:::
+
+## A third random intercept adds a third variance component <span class="advanced-tag">ADVANCED</span>
+
+$$
+y_{ij} = \mathbf{x}_{ij}^\top \boldsymbol\beta + u_c + b_{0i} + b_{1i} t_{ij} + \varepsilon_{ij}, \quad u_c \sim N(0, \tau_c^2)
+$$
+
+```{r}
+#| label: three-ri
+m3_ri <- lmer(sbp ~ visit_f * arm + (1 | clinic) + (1 | id),
+              data = walk, control = lmer_ctrl)
+vc <- as.data.frame(VarCorr(m3_ri))
+v <- vc$vcov[match(c("clinic", "id", "Residual"), vc$grp)]
+round(rbind(variance = v, share = v / sum(v)), 3)
+```
+
+::: {.notes}
+IDs are unique across clinics, so (1 | id) is nested automatically; otherwise use (1 | clinic:id). Read the shares: clinic about `r pct(v[1] / sum(v))`, participant `r pct(v[2] / sum(v))`, visit `r pct(v[3] / sum(v))`. Two participants at the same clinic correlate `r f3(v[1] / sum(v))`; two visits of one participant `r f2(sum(v[1:2]) / sum(v))`. True clinic SD is 3 mmHg (simulated).
+:::
+
+## Eight clinics say little about clinic variation <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+ci <- read_csv(here("outputs", "tables", "m13_threelevel_profile_ci.csv"),
+               show_col_types = FALSE)
+m3_primary <- lmer(sbp ~ visit_f * arm + (1 + month | id) + (1 | clinic),
+                   data = walk, control = lmer_ctrl)
+sd_c <- as.data.frame(VarCorr(m3_primary)) |> filter(grp == "clinic") |> pull(sdcor)
+```
+
+- Clinic SD in the primary model: **`r f1(sd_c)` mmHg**
+- Profile 95% CI: **`r f1(ci[[2]][1])` to `r f1(ci[[3]][1])` mmHg** (upper limit more than 4 times the lower)
+- Truth (simulated): 3 mmHg; the 8 clinic effects actually drawn have SD `r f2(sd(walk_truth$clinic_eff))`
+
+::: {.notes}
+The profile interval is computed in scripts/13b_three_level.R (it takes about a minute). The point: a variance estimated from 8 clusters is very uncertain and could easily be estimated as zero in another sample. The boundary-corrected LRT is in the notes. Encourage reporting the interval rather than a p-value.
+:::
+
+## Fixed, random or ignored: the contrast hardly changes here <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+trt <- read_csv(here("outputs", "tables", "m13_threelevel_treatment_contrasts.csv"),
+                show_col_types = FALSE)
+knitr::kable(trt |> select(model, contrast, estimate, se, lower, upper),
+             digits = 2)
+```
+
+::: {.notes}
+Because every clinic has every arm, clinic effects cancel from the between-arm comparison. In a cluster-randomised trial the picture reverses: ignoring clinic gives SEs far too small, clinic as fixed makes the treatment effect inestimable, and clinic as random with 8 clusters needs small-sample df corrections. Fixed clinic effects suit stratified trials with few clinics. Involve a specialist for cluster-randomised and stepped-wedge designs.
+:::
+
+## Try it <span class="advanced-tag">ADVANCED</span>
+
+Workbook exercise 2: partition the variance, then compare clinic as fixed and as random for the month-12 contrast.
+
+::: {.notes}
+Prompt: before fitting, predict whether the treatment SE will change. Most will guess it gets bigger; the design explains why it does not.
+:::
+
+# Nonlinear mixed models
+
+## Blood pressure falls, then levels off <span class="advanced-tag">ADVANCED</span>
+
+$$
+y_{ij} = \phi_{0i} - \phi_{1i}\left(1 - e^{-t_{ij}/\kappa}\right) + \varepsilon_{ij}
+$$
+
+- $\phi_{0i} = \beta_0 + b_{0i}$: participant's baseline SBP
+- $\phi_{1i} = \beta_{\text{arm}} + b_{1i}$: participant's plateau fall
+- $\kappa$ (`tau` in code): months to reach 63% of the plateau
+- Truth (simulated): plateau 2, 6, 9 mmHg excluding the steps-mediated part; $\kappa = 2$ months
+
+::: {.notes}
+When it is needed: theory or strong evidence says the trajectory follows a particular curve, and its parameters are the scientific quantities. Splines (Module 9) fit the shape but their coefficients mean nothing on their own. Here every parameter has a meaning. Explain 63% at t = kappa and 95% at 3 kappa. The truth adds a steps-mediated part, so the total plateau is about 2.1, 6.7, 10.2.
+:::
+
+## `nlme()` needs a formula, a fixed list and starting values <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| label: nlme-start
+#| echo: false
+obs <- walk |> group_by(arm, month_sched) |> summarise(sbp = mean(sbp))
+start_A <- obs |> group_by(arm) |>
+  summarise(A = sbp[month_sched == 0] - sbp[month_sched == 12]) |> pull(A)
+start_vals <- c(base = mean(walk$sbp[walk$visit == 1]), A = round(start_A, 1),
+                tau = 2)
+```
+
+```{r}
+#| label: nlme
+start_vals   # mean baseline; observed fall to month 12 by arm; tau = 2
+m_nl2 <- nlme(sbp ~ base - A * (1 - exp(-month / tau)),
+              data   = as.data.frame(walk),
+              fixed  = list(base ~ 1, A ~ arm - 1, tau ~ 1),
+              random = list(id = pdDiag(base + A ~ 1)),
+              start  = start_vals)
+round(nlme::fixef(m_nl2), 2)
+```
+
+::: {.notes}
+Starting values come from the data: mean baseline SBP, the observed fall from month 0 to 12 in each arm, and tau of 2 because most of the fall is visible by month 3. The order of start must match the fixed list: base, three A values, tau. The same code as in the notes derives them. Random effects on base and A, diagonal covariance.
+:::
+
+## The parameters answer the question directly <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+fe <- nlme::fixef(m_nl2); ci <- intervals(m_nl2, which = "fixed")$fixed
+```
+
+| Parameter | Estimate (95% CI) | Simulated truth (total) |
+|---|---|---|
+| Plateau fall, UC | `r fmt_ci(fe[2], ci[2, 1], ci[2, 3])` | `r f1(2 + 0.6 * 0.2)` |
+| Plateau fall, SP | `r fmt_ci(fe[3], ci[3, 1], ci[3, 3])` | `r f1(6 + 0.6 * 1.2)` |
+| Plateau fall, EP | `r fmt_ci(fe[4], ci[4, 1], ci[4, 3])` | `r f1(9 + 0.6 * 2.0)` |
+| Time constant (months) | `r fmt_ci(fe[5], ci[5, 1], ci[5, 3], 2)` | 2 |
+
+::: {.notes}
+The model omits steps, so it estimates the total effect including the part acting through walking; compare with the total plateau column. tau is close to 2. Mention that adding the random plateau changed the fixed effects (tau moved from about 1.8 to about 2.1): in nonlinear models the random-effects structure affects the fixed estimates. Convergence checks: refit from different starting values (the notes do kappa = 1 and 4 and get identical estimates).
+:::
+
+## Try it <span class="advanced-tag">ADVANCED</span>
+
+Workbook exercise 3: fit the asymptotic model, refit from different starts, and compute the difference in plateau fall between EP and UC.
+
+::: {.notes}
+Common stumbling block: the length of start. If nlme fails, look at the order and number of start values first.
+:::
+
+# Joint models
+
+## Measurements stop when kidneys fail <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+#| fig-height: 3.8
+set.seed(13)
+show_ids <- c(sample(kid_ev$id[kid_ev$failure == 1], 6),
+              sample(kid_ev$id[kid_ev$failure == 0], 6))
+kid_long |> filter(id %in% show_ids) |>
+  left_join(kid_ev |> select(id, failure), by = "id") |>
+  mutate(status = ifelse(failure == 1, "Kidney failure", "No failure")) |>
+  ggplot(aes(years, egfr, group = id)) +
+  geom_line(colour = "#555555", alpha = 0.7) + geom_point(size = 0.9, colour = "#555555") +
+  facet_wrap(~ status) + labs(x = "Years since entry", y = "eGFR")
+```
+
+::: {.notes}
+KIDNEY: 300 adults, eGFR at irregular visits, `r sum(kid_ev$failure)` kidney failures. When it is needed: the question links a noisy, intermittently measured biomarker to an event, or the event cuts the measurements short. Point at the falling trajectories that end at failure. Ask: what would a Cox model with the last observed eGFR get wrong? (Measurement error; values go stale between visits.)
+:::
+
+## Two submodels share the random effects <span class="advanced-tag">ADVANCED</span>
+
+$$
+y_{ij} = m_i(t_{ij}) + \varepsilon_{ij}, \qquad m_i(t) = \mathbf{x}_i(t)^\top\boldsymbol\beta + \mathbf{z}_i(t)^\top\mathbf{b}_i
+$$
+$$
+h_i(t) = h_0(t)\exp\{\gamma\,\text{Diabetes}_i + \alpha\, m_i(t)\}
+$$
+
+- $m_i(t)$: true current eGFR, from the mixed model
+- $\alpha$: log HR per unit of **current true** eGFR (truth: `r kidney_truth$alpha`)
+
+::: {.notes}
+The longitudinal part estimates each person's true trajectory, separating it from measurement error and filling gaps between visits. The hazard depends on that true value at the same moment. Both parts are estimated together by MCMC in JMbayes2. Other functional forms: the current slope, or the area under the curve.
+:::
+
+## `jm()` combines an `lme` and a `coxph` fit <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| label: jm-code
+#| eval: false
+lme_egfr <- lme(egfr ~ ns(years, knots = 2.5, Boundary.knots = c(0, 5)) +
+                  diabetes + diabetes:years + age10,
+                random = ~ years | id, data = kid_long)
+cox_fail <- coxph(Surv(time, failure) ~ diabetes, data = kid_ev)
+jm_fit <- jm(cox_fail, lme_egfr, time_var = "years",
+             functional_forms = ~ value(egfr),
+             n_chains = 3L, n_iter = 25000L, n_burnin = 5000L, seed = 2026L)
+```
+
+::: {.notes}
+Fixed spline knots matter: the model evaluates the trajectory at new times and needs the same basis. A quadratic in time mixed poorly because its two time terms are highly correlated; the spline basis fixed that. The fit takes a couple of minutes, so the script saves it and the slides load it.
+:::
+
+## The joint model recovers the association; naive Cox attenuates it <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+jm_fit <- readRDS(here("outputs", "models", "m13_jm.rds"))
+sv <- summary(jm_fit)$Survival
+a <- sv["value(egfr)", ]
+td <- tmerge(kid_ev |> select(id, diabetes, time, failure),
+             kid_ev |> select(id, time, failure), id = id,
+             fail = event(time, failure))
+td <- tmerge(td, kid_long |> select(id, years, egfr), id = id,
+             egfr = tdc(years, egfr))
+nv <- summary(coxph(Surv(tstart, tstop, fail) ~ egfr + diabetes, data = td))$coefficients
+rh <- c(summary(jm_fit)$Survival$Rhat, summary(jm_fit)$Outcome1$Rhat)
+```
+
+| Model | $\hat\alpha$ (95% interval) | HR per 10 lower |
+|---|---|---|
+| Joint model | `r fmt_ci(a$Mean, a[["2.5%"]], a[["97.5%"]], 3)` | `r f1(exp(-10 * a$Mean))` |
+| Time-dependent Cox, last observed eGFR | `r fmt_ci(nv["egfr", 1], nv["egfr", 1] - 1.96 * nv["egfr", 3], nv["egfr", 1] + 1.96 * nv["egfr", 3], 3)` | `r f1(exp(-10 * nv["egfr", 1]))` |
+| Truth (simulated) | `r kidney_truth$alpha` | `r f1(exp(1.3))` |
+
+MCMC: 3 chains, 25,000 iterations, 5,000 burn-in; Rhat `r f2(min(rh))` to `r f2(max(rh))`.
+
+::: {.notes}
+The naive estimate is closer to zero: measurement error and stale values dilute the association. With 46 events the intervals overlap; the direction is systematic, the size in one dataset is not. Always report chains, iterations, burn-in and Rhat, and show trace plots (in the notes). Rhat above about 1.05 means run longer or reparameterise.
+:::
+
+## Try it <span class="advanced-tag">ADVANCED</span>
+
+Workbook exercise 4: fit the submodels, load the saved joint model, read the association and compare with the naive Cox model.
+
+::: {.notes}
+If time is short, participants can load the saved fit rather than run MCMC. Involve a specialist for competing risks, several biomarkers, or prediction tools meant for clinical use.
+:::
+
+# Time-varying confounding
+
+## A confounder that is also affected by earlier treatment <span class="advanced-tag">ADVANCED</span>
+
+```{mermaid}
+flowchart LR
+  L0["L0 baseline severity"] --> A0["A0 treatment, time 0"]
+  L0 --> L1["L1 severity, time 1"]
+  L0 --> Y["Y outcome"]
+  A0 --> L1
+  A0 --> A1["A1 treatment, time 1"]
+  A0 --> Y
+  L1 --> A1
+  L1 --> Y
+  A1 --> Y
+  U["U unmeasured"] --> L1
+  U --> Y
+```
+
+::: {.notes}
+When it is needed: in observational data, treatment decisions at each visit depend on measurements that earlier treatment affected. L1 confounds A1 (must adjust) but is a mediator of A0 and a collider on A0 to L1 to U to Y (must not adjust). No single regression gets both right. Ask the group to trace the paths from A0 to Y and say which one adjustment for L1 blocks and which one it opens.
+:::
+
+## Weighting replaces adjustment <span class="advanced-tag">ADVANCED</span>
+
+MSM: $E[Y^{a_0, a_1}] = \beta_0 + \beta_1 a_0 + \beta_2 a_1$ (truth: $\beta_1 = -3.2$, $\beta_2 = -2$)
+
+$$
+SW_i = \prod_{t=0}^{1} \frac{P(A_t = a_{it} \mid \bar a_{i,t-1})}{P(A_t = a_{it} \mid \bar a_{i,t-1}, \bar l_{it})}
+$$
+
+```{r}
+#| label: msm-code
+#| eval: false
+ps1_den <- glm(A1 ~ A0 + L0 + L1, family = binomial, data = dat)
+ps1_num <- glm(A1 ~ A0,           family = binomial, data = dat)
+# ... same for A0; sw = product of num/den probabilities of treatment received
+geeglm(Y ~ A0 + A1, data = dat, id = id, weights = sw, corstr = "independence")
+```
+
+::: {.notes}
+Weighting creates a pseudo-population in which treatment is unrelated to measured confounders, without conditioning on L1. Stabilised weights keep the weights near 1. Robust SEs are needed. Assumptions: no unmeasured confounding of treatment, positivity, consistency, correct treatment models.
+:::
+
+## Standard adjustment fails; the MSM recovers both effects <span class="advanced-tag">ADVANCED</span>
+
+```{r}
+#| echo: false
+#| fig-height: 3.4
+msm_tab <- read_csv(here("outputs", "tables", "m13_msm_estimates.csv"),
+                    show_col_types = FALSE)
+ggplot(msm_tab, aes(estimate, method)) +
+  geom_vline(aes(xintercept = truth), linetype = 2, colour = "#6B6B6B") +
+  geom_pointrange(aes(xmin = lower, xmax = upper)) +
+  facet_wrap(~ term) + labs(x = "Estimated effect on Y (dashed: truth)", y = NULL)
+```
+
+::: {.notes}
+Results from scripts/13e_msm.R (n = 5,000, seed 2026). Unadjusted: confounded. Adjusted for L0: right for A0, wrong for A1. Adjusted for L0 and L1: right for A1, A0 badly biased and of the wrong sign. MSM: both close to truth, with wider intervals. 200 repetitions in the notes confirm the bias is systematic. Always involve a causal-inference specialist before using these methods.
+:::
+
+## Try it <span class="advanced-tag">ADVANCED</span>
+
+Workbook exercise 5: compute stabilised weights by hand and fit the MSM; then change the data-generating mechanism.
+
+::: {.notes}
+A good extension: set the effect of A0 on L1 to zero. L1 is then neither a mediator of A0 nor a collider on a path from A0, so the regression adjusted for L0 and L1 estimates the effect of A0 (now -2) without bias. Time-varying confounding is a problem precisely because earlier treatment affects the later confounder.
+:::
+
+# When to call a specialist
+
+## Recognise the situation early, then bring in help <span class="advanced-tag">ADVANCED</span>
+
+| Situation | Do it yourself | Involve a specialist |
+|---|---|---|
+| Ordinal outcome | Random-intercept cumulative logit | Nominal outcome; PO fails for treatment |
+| Clinics | Treatment within clinic | Cluster-randomised; few clusters |
+| Curved trajectory | Simple curve, 1–2 random effects | PK/PD; fragile convergence |
+| Biomarker and event | One biomarker, current value | Competing risks; prediction tools |
+| Time-varying treatment | Draw the DAG | Always |
+
+::: {.notes}
+LO 13.6. The best time to involve a specialist is when writing the protocol and analysis plan (Module 12), not after data collection. Close by asking each participant to name one situation in their own work that this module applies to, and what they would do first.
+:::

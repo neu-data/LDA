@@ -1,0 +1,170 @@
+---
+title: "Module 3. Statistical foundations and traditional approaches"
+subtitle: "Knowledge check"
+bibliography: ../references/references.bib
+---
+
+```{r}
+#| label: setup
+#| include: true
+source(here::here("R", "setup.R"))
+walk <- load_walk()
+wide <- load_walk("wide")
+yv <- paste0("sbp_m", c(0, 1, 3, 6, 9, 12))
+f1 <- function(x) formatC(x, format = "f", digits = 1)
+f2 <- function(x) formatC(x, format = "f", digits = 2)
+```
+
+::: {.callout-warning title="Simulated data"}
+All examples use simulated data from fictional studies. Results illustrate methods; they are not empirical findings.
+:::
+
+This knowledge check has 13 questions. Each is mapped to a Module 3 learning outcome. Answer all questions before looking at the final section, which is for instructors.
+
+# Questions
+
+## Question 1 (LO 3.1)
+
+The following model was fitted to the WALK long data.
+
+```{r}
+#| label: q1
+m <- lm(sbp ~ month * arm, data = walk)
+round(coef(summary(m)), 3)
+```
+
+What does the coefficient of `armEP` represent?
+
+a. The effect of the enhanced programme on SBP at month 12.
+b. The difference in mean SBP between EP and UC at month 0.
+c. The average difference in SBP between EP and UC over the year.
+d. The difference in mean slope between EP and UC.
+
+## Question 2 (LO 3.1)
+
+Using the output in Question 1, what is the model's estimate of the difference in mean SBP between EP and UC at month 12? Show your calculation.
+
+## Question 3 (LO 3.1)
+
+True or false, with a one-sentence justification: "A residual-versus-fitted plot with no pattern shows that the independence assumption of the model in Question 1 is reasonable."
+
+## Question 4 (LO 3.2)
+
+A paired t-test in the EP arm gives the following output.
+
+```{r}
+#| label: q4
+ep <- wide |> filter(arm == "EP", !is.na(sbp_m0), !is.na(sbp_m12))
+t.test(ep$sbp_m12, ep$sbp_m0, paired = TRUE)
+```
+
+Which statement is correct?
+
+a. The enhanced programme reduces SBP by about 10 mmHg compared with usual care.
+b. Mean SBP among EP participants with both measurements fell by about 10 mmHg from baseline to month 12.
+c. The result shows that the change in EP is larger than the change in UC.
+d. The test uses all 120 participants randomised to EP.
+
+## Question 5 (LO 3.2)
+
+Name two assumptions of a paired t-test and one reason why WALK participants with both baseline and month-12 measurements may not represent all randomised participants.
+
+## Question 6 (LO 3.2, 3.3)
+
+The output below is from a repeated-measures ANOVA on completers.
+
+```{r}
+#| label: q6
+cc <- wide[complete.cases(wide[, yv]), ]
+Y <- as.matrix(cc[, yv])
+mlm <- lm(Y ~ arm, data = cc)
+idata <- data.frame(visit = factor(yv, levels = yv))
+q6 <- anova(mlm, X = ~1, idata = idata, test = "Spherical")
+q6
+```
+
+Which row tests whether the change in SBP over time differs between arms, and what is its Greenhouse–Geisser corrected p-value?
+
+## Question 7 (LO 3.3)
+
+Which statement best describes sphericity?
+
+a. All measurements have the same variance.
+b. The variance of the difference between any two occasions is the same for every pair of occasions.
+c. The residuals are normally distributed at every occasion.
+d. The correlation between occasions decreases with the time between them.
+
+## Question 8 (LO 3.3)
+
+The Greenhouse–Geisser epsilon in Question 6 is `r f2(as.numeric(sub(".*: *", "", grep("Greenhouse", attr(q6, "heading"), value = TRUE))))`. What would an epsilon of exactly 1 mean, and what does the correction do to the F-test?
+
+## Question 9 (LO 3.3)
+
+List three limitations of repeated-measures ANOVA for the WALK data that the Greenhouse–Geisser correction does **not** fix.
+
+## Question 10 (LO 3.4)
+
+Three analyses of month-12 SBP gave these results for EP versus UC.
+
+```{r}
+#| label: q10
+#| echo: false
+d12 <- wide |> filter(!is.na(sbp_m0), !is.na(sbp_m12)) |> mutate(chg = sbp_m12 - sbp_m0)
+q10 <- bind_rows(
+  fixef_table(lm(sbp_m12 ~ arm, data = d12)) |> mutate(analysis = "B"),
+  fixef_table(lm(chg ~ arm, data = d12)) |> mutate(analysis = "C"),
+  fixef_table(lm(sbp_m12 ~ arm + sbp_m0, data = d12)) |> mutate(analysis = "A")) |>
+  filter(term == "armEP") |> select(analysis, estimate, se) |> arrange(analysis)
+q10
+```
+
+Analyses A, B and C are follow-up only, change score and ANCOVA, in some order. The correlation between baseline and month-12 SBP is `r f2(cor(d12$sbp_m0, d12$sbp_m12))`. Which is which? Explain using the standard errors.
+
+## Question 11 (LO 3.4)
+
+True or false, with justification: "In a randomised trial, change-score analysis and ANCOVA estimate different treatment effects, so the choice between them depends on which effect you want."
+
+## Question 12 (LO 3.4)
+
+In an observational study, men and women are compared on blood pressure measured at two times. A change-score analysis shows no difference between sexes, while ANCOVA adjusting for the first measurement shows a clear difference. Name this phenomenon and explain briefly why it occurs.
+
+## Question 13 (LO 3.5)
+
+An analysis plan proposes comparing each of two programmes with usual care by t-test at each of six visits. Give three reasons why this is inadequate, and state the probability of at least one false-positive result if the 12 tests were independent and no effect existed.
+
+# Answers and explanations (for instructors)
+
+```{r}
+#| label: answers
+#| include: false
+b <- coef(m)
+tt <- t.test(ep$sbp_m12, ep$sbp_m0, paired = TRUE)
+eps <- as.numeric(sub(".*: *", "", grep("Greenhouse", attr(q6, "heading"), value = TRUE)))
+ord <- q10[order(q10$se), ]
+```
+
+**Question 1.** b. With the interaction in the model, `armEP` is the EP–UC difference where `month` = 0 (`r f2(b["armEP"])` mmHg). Option d describes `month:armEP`. (LO 3.1)
+
+**Question 2.** $\hat\beta_{\text{armEP}} + 12\,\hat\beta_{\text{month:armEP}}$ = `r f2(b["armEP"])` + 12 × (`r f2(b["month:armEP"])`) = `r f2(b["armEP"] + 12 * b["month:armEP"])` mmHg. Accept small rounding differences. (LO 3.1)
+
+**Question 3.** False. The residual-versus-fitted plot shows each residual on its own and cannot reveal correlation between residuals from the same participant; that needs, for example, the correlation of residuals across visits, which in WALK is high. (LO 3.1)
+
+**Question 4.** b. The paired test estimates within-arm change among the `r nrow(ep)` EP participants with both measurements (mean change `r f1(tt$estimate)` mmHg). It does not compare arms (a, c) and does not use all randomised participants (d). (LO 3.2)
+
+**Question 5.** Assumptions: independent pairs (participants), approximately normal differences (or a large sample). Representativeness: dropout in WALK depends on the last observed SBP and on arm, so participants with month-12 data are a selected group (MAR dropout). (LO 3.2)
+
+**Question 6.** The row labelled `arm` (contrasts orthogonal to the constant, so arm-by-visit). Greenhouse–Geisser corrected `r fmt_p(q6["arm", "G-G Pr"])`. A common error is to choose the `(Intercept)` row, which tests visit. (LO 3.2, 3.3)
+
+**Question 7.** b. Option a (equal variances) is neither necessary nor sufficient; d describes the pattern that usually *violates* sphericity. (LO 3.3)
+
+**Question 8.** $\epsilon = 1$ means sphericity holds exactly. The correction multiplies both numerator and denominator degrees of freedom by $\hat\epsilon$ (here `r f2(eps)`), which gives a larger p-value and protects against the excess false positives caused by non-sphericity. (LO 3.3)
+
+**Question 9.** Any three of: listwise deletion of participants with any missing visit (`r nrow(wide) - nrow(cc)` of `r nrow(wide)` in WALK); scheduled visits treated as fixed, actual times ignored; no time-varying covariates; no participant-specific slopes; omnibus tests rather than an effect estimate with a CI; requires equal covariance matrices across arms. (LO 3.3)
+
+**Question 10.** The analysis with the largest SE is follow-up only and the smallest is ANCOVA: `r ord$analysis[3]` is follow-up only, `r ord$analysis[2]` is change score and `r ord$analysis[1]` is ANCOVA. With $\rho$ near 0.7, variance is proportional to 1 (follow-up), $2(1-\rho) \approx 0.6$ (change) and $1-\rho^2 \approx 0.5$ (ANCOVA). (LO 3.4)
+
+**Question 11.** False. In a randomised trial both estimate the same treatment effect, because baseline means are equal in expectation; they differ in precision, and ANCOVA is at least as precise [@senn2006; @vickers2001]. (LO 3.4)
+
+**Question 12.** Lord's paradox. The groups differ at baseline and are not randomised. ANCOVA compares people with the same observed first measurement; because of measurement error and regression to the mean, such people from the higher-mean group tend to move up and those from the lower-mean group tend to move down, so ANCOVA finds a difference that the change score does not. The two analyses answer different questions. (LO 3.4)
+
+**Question 13.** Multiplicity (12 tests); inefficiency (each test ignores baseline and other visits); different subsets of participants at each visit because of dropout, so estimates are inconsistent and possibly biased. Probability of at least one false positive with 12 independent tests: $1 - 0.95^{12}$ = `r f2(1 - 0.95^12)`. (LO 3.5)

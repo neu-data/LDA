@@ -1,0 +1,153 @@
+---
+title: "R syntax quick reference"
+subtitle: "The course packages and the calls used most often"
+---
+
+```{r}
+#| label: setup
+#| include: false
+source(here::here("R", "setup.R"))
+walk  <- load_walk()
+clear <- load_clear() |> arrange(id, week)
+diary <- load_diary()
+```
+
+Every call on this sheet was run when it was built. Start each session with `source(here::here("R", "setup.R"))`, which loads the packages and the course helpers.
+
+## Data preparation (Module 2)
+
+::: {.cards}
+
+::: {.card}
+### Reshape and check
+```{r}
+wide <- walk |> select(id, arm, month_sched, sbp) |>
+  pivot_wider(names_from = month_sched, values_from = sbp,
+              names_prefix = "sbp_m")
+long <- wide |> pivot_longer(starts_with("sbp_m"), names_to = "visit",
+  names_prefix = "sbp_m", values_to = "sbp", values_drop_na = TRUE)
+check_long(walk, id, visit, "sbp")
+walk |> count(id, visit) |> filter(n > 1)     # duplicated keys
+```
+:::
+
+::: {.card}
+### Join, summarise, plot
+```{r}
+base <- load_walk("baseline")
+dat  <- left_join(select(walk, -arm), select(base, id, arm, sbp0),
+                  by = "id", relationship = "many-to-one")
+visit_flow(walk, id, month_sched, arm)
+plot_spaghetti(walk, month, sbp, id, group = arm, n_show = 30)
+plot_observed_means(walk, month_sched, sbp, arm)
+```
+:::
+
+:::
+
+## Model formulas
+
+| Formula piece | Meaning |
+|---|---|
+| `y ~ month * arm` | Main effects of time and arm plus their interaction (different slopes) |
+| `y ~ visit_f * arm` | Separate mean for every visit in every arm (time as a factor) |
+| `(1 | id)` | Random intercept for each participant (`lme4`, `glmmTMB`) |
+| `(1 + month | id)` | Correlated random intercept and slope |
+| `(1 | id) + (0 + month | id)` | Uncorrelated random intercept and slope |
+| `(1 | clinic) + (1 | clinic:id)` or `(1 | clinic/id)` | Participants nested in clinics |
+| `random = ~ 1 + month | id` | Random intercept and slope in `nlme::lme()` |
+| `offset(log(days))` | Exposure offset for rates |
+| `splines::ns(month, df = 3)` | Natural spline in time |
+
+## Fitting (Modules 4–9)
+
+::: {.cards}
+
+::: {.card}
+### Linear mixed models and GLS
+```{r}
+m  <- lmer(sbp ~ visit_f * arm + (1 + month | id), data = walk,
+           control = lmer_ctrl)                       # REML by default
+mL <- update(m, REML = FALSE)                         # ML
+l  <- lme(sbp ~ visit_f * arm, random = ~ 1 + month | id, data = walk,
+          correlation = corExp(form = ~ month | id, nugget = TRUE))
+g  <- gls(sbp ~ visit_f * arm, data = walk,
+          correlation = corCompSymm(form = ~ 1 | id),
+          weights = varIdent(form = ~ 1 | visit_f))
+```
+Correlation structures: `corCompSymm()`, `corAR1(form = ~ visit | id)`, `corExp(form = ~ month | id)`, `corSymm(form = ~ visit | id)`.
+:::
+
+::: {.card}
+### GEE and GLMMs
+```{r}
+gee <- geeglm(itch ~ week * arm, id = factor(id), waves = visit,
+              data = clear, family = binomial, corstr = "exchangeable")
+glmm <- glmer(itch ~ week * arm + (1 | id), data = clear,
+              family = binomial, nAGQ = 25)
+nb <- glmmTMB(migraine_days ~ post * arm + offset(log(days)) + (1 | id),
+              data = diary, family = nbinom2)
+```
+`corstr`: `"independence"`, `"exchangeable"`, `"ar1"`. `family`: `binomial`, `poisson`, `gaussian`; for glmmTMB also `nbinom2`, with `ziformula = ~ 1` for zero inflation.
+:::
+
+:::
+
+## Extracting results (Modules 4–8)
+
+::: {.cards}
+
+::: {.card}
+### Estimates, variance components, comparisons
+```{r}
+fixef_table(m)                      # estimates, SE, Satterthwaite df, CI, p
+VarCorr(m); icc_lmer(lmer(sbp ~ 1 + (1 | id), data = walk))
+fixef_table(glmm, exponentiate = TRUE)  # odds ratios
+anova(update(m, . ~ . - visit_f:arm), m) # ML refit, LRT for fixed effects
+AIC(l, g)
+```
+:::
+
+::: {.card}
+### emmeans: means, contrasts, predictions
+```{r}
+emm <- emmeans(m, ~ visit_f | arm)
+chg <- contrast(emm, list(chg12 = c(-1, 0, 0, 0, 0, 1)))
+contrast(chg, "trt.vs.ctrl", by = NULL, adjust = "none")
+emmeans(gee, ~ arm, at = list(week = 12), type = "response")
+emmeans(nb, ~ arm | post, offset = log(28), type = "response")
+predict(m, re.form = NA)            # population-average prediction
+```
+:::
+
+:::
+
+## Diagnostics, missing data and simulation (Modules 10–12)
+
+::: {.cards}
+
+::: {.card}
+### Diagnostics
+```{r}
+isSingular(m); m@optinfo$conv$lme4  # warnings recorded with the fit
+r <- simulateResiduals(glmm, n = 500, seed = 1)
+testDispersion(r)
+rg <- recalculateResiduals(simulateResiduals(glmm, n = 500,
+        simulateREs = "unconditional", seed = 1), group = clear$id)
+vg <- Variogram(l, form = ~ month | id, resType = "normalized")
+```
+:::
+
+::: {.card}
+### Multiple imputation and simulation
+```{r}
+wide2 <- load_walk("wide")
+imp <- mice(select(wide2, arm, age, sex, bmi, starts_with("sbp_m")),
+            m = 5, method = "norm", seed = 1, printFlag = FALSE)
+summary(pool(with(imp, lm(sbp_m12 ~ arm + sbp_m0))))
+d <- sim_two_arm(n_per_arm = 40, dropout = 0.1)   # one simulated trial
+sessionInfo()                                      # record versions
+```
+:::
+
+:::
